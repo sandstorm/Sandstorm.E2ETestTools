@@ -1,0 +1,76 @@
+e2eTestRoot = Sandstorm.E2ETestTools:StyleguidePage
+e2eTestRoot.@process.addToResult = ${fusionRenderingResult.setAndReturnRenderedPage(value)}
+
+prototype(Sandstorm.E2ETestTools:StyleguidePage) < prototype(Neos.Fusion:Join) {
+    doctype = '<!DOCTYPE html>'
+    doctype.@position = 'start 100'
+
+    # Only the opening html tag for the page. This is done to avoid deep nesting of Fusion paths for integrators.
+    htmlTag = Neos.Fusion:Tag {
+        @position = 'start'
+        tagName = 'html'
+        omitClosingTag = true
+    }
+
+    # The opening head tag for the page. This is done to avoid deep nesting of Fusion paths for integrators.
+    headTag = Neos.Fusion:Tag {
+        @position = 'after htmlTag'
+        tagName = 'head'
+        omitClosingTag = true
+    }
+
+    # The content of the head tag, integrators can add their own head content.
+    head = Neos.Fusion:Join {
+        @position = 'after headTag'
+
+        characterSetMetaTag = Neos.Fusion:Tag {
+            @position = 'start 10'
+            tagName = 'meta'
+            attributes {
+                charset = 'UTF-8'
+            }
+        }
+        # Link tags for stylesheets in the head should go here
+        stylesheets = Sandstorm.E2ETestTools:StyleguideStylesheets
+
+        # Script includes in the head should go here
+        javascripts = Sandstorm.E2ETestTools:StyleguideJavascripts {
+            @position = 'after stylesheets'
+        }
+    }
+
+    closingHeadTag = '</head>'
+    closingHeadTag.@position = 'after head'
+
+    # The opening body tag for the page. This is done to avoid deep nesting of Fusion paths for integrators.
+    bodyTag = Neos.Fusion:Tag {
+        @position = 'after closingHeadTag'
+        tagName = 'body'
+        omitClosingTag = true
+    }
+
+    # Content of the body tag. To be defined by the integrator.
+    body = Sandstorm.E2ETestTools:StyleguideCase
+    body.@process.wrapWithDiv = ${'<div class="sandstorm_e2etesttools_fullwrapper">' + value + '</div>'}
+
+
+    closingBodyTag = '</body>'
+    closingBodyTag.@position = 'end 100'
+
+    closingHtmlTag = '</html>'
+    closingHtmlTag.@position = 'end 200'
+}
+
+prototype(Sandstorm.E2ETestTools:StyleguideStylesheets) < prototype(Neos.Fusion:Join)
+
+prototype(Sandstorm.E2ETestTools:StyleguideJavascripts) < prototype(Neos.Fusion:Join)
+
+prototype(Sandstorm.E2ETestTools:StyleguideCase) < prototype(Neos.Fusion:Case) {
+    default {
+        @position = 'end 9999'
+        condition = true
+        // defined in FusionRenderingTrait::internalRender
+        renderPath = ${renderPath}
+        @process.addToResult = ${fusionRenderingResult.setAndReturnRenderedElement(value)}
+    }
+}

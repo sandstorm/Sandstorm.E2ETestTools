@@ -1,0 +1,23 @@
+{
+    "description": "",
+    "type": "neos-package",
+    "require": {
+        "neos/flow": "*",
+        "neos/behat": "^6.1 || dev-master",
+        "symfony/dom-crawler": "^5.2",
+        "symfony/css-selector": "^5.2"
+    },
+    "suggest": {
+    },
+    "name": "sandstorm/e2etesttools",
+    "autoload": {
+        "psr-4": {
+            "Sandstorm\\E2ETestTools\\": "Classes/"
+        }
+    },
+    "extra": {
+        "neos": {
+            "package-key": "Sandstorm.E2ETestTools"
+        }
+    }
+}

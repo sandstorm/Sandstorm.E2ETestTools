@@ -1,0 +1,6 @@
+Neos:
+
+  Neos:
+    fusion:
+      autoInclude:
+        Sandstorm.E2ETestTools: true

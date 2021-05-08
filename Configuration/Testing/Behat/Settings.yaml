@@ -1,0 +1,5 @@
+Neos:
+  Flow:
+    http:
+      # we want to be able to link to resources or nodes, so we need a base URI
+      baseUri: '/'
