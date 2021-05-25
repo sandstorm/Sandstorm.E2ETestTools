@@ -106,14 +106,19 @@ trait PlaywrightTrait
 
             // TODO: make "page" a specific API
             $base64Image = $this->playwrightConnector->execute($this->playwrightContext, sprintf('
-                const buffer = await vars.page.screenshot({path: "error_%s.png", fullPage: true});
-                return buffer.toString("base64");
+                if (vars && vars.page) {
+                    const buffer = await vars.page.screenshot({path: "error_%s.png", fullPage: true});
+                    return buffer.toString("base64");
+                }
+                return "";
             ', $errorScreenshotFileName));
-            $image = base64_decode($base64Image);
-            Files::createDirectoryRecursively('e2e-results');
-            file_put_contents(sprintf('e2e-results/error_%s.png', $errorScreenshotFileName), $image);
-            echo sprintf("You can find the file error_%s.png BOTH in the current PHP execution directory (where you started the tests from),\n", $errorScreenshotFileName);
-            echo "and as well in the e2e-testrunner/ folder.";
+            if (strlen($base64Image)) {
+                $image = base64_decode($base64Image);
+                Files::createDirectoryRecursively('e2e-results');
+                file_put_contents(sprintf('e2e-results/error_%s.png', $errorScreenshotFileName), $image);
+                echo sprintf("You can find the file error_%s.png BOTH in the current PHP execution directory (where you started the tests from),\n", $errorScreenshotFileName);
+                echo "and as well in the e2e-testrunner/ folder.";
+            }
         }
     }
 
