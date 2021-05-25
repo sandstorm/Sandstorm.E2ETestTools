@@ -98,6 +98,7 @@ const init = async () => {
                     vars: {},
                     script: []
                 };
+                currentlyKnownContexts[contextName].playwrightContext.setDefaultTimeout(15000); // 15 s
             }
 
             const payload = request.payload.toString('utf-8');
