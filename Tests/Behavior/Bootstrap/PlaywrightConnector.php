@@ -52,7 +52,7 @@ class PlaywrightConnector
     public function execute(string $contextName, string $playwrightJsCode)
     {
         $successResponse = $this->executeInternal($contextName, $playwrightJsCode);
-        return $successResponse['returnValue'];
+        return isset($successResponse['returnValue']) ? $successResponse['returnValue'] : null;
     }
 
     public function getCurrentJsCode(string $contextName)
