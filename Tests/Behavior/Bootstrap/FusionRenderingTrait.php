@@ -47,9 +47,33 @@ trait FusionRenderingTrait
      */
     public function iHaveASite($siteNodeName)
     {
+        $this->createAndPersistSite($siteNodeName);
+    }
+
+    /**
+     * @Given I have a site for Site Node :siteNodeName with name :siteName
+     */
+    public function iHaveASiteWithName($siteNodeName, $siteName)
+    {
+        $this->createAndPersistSite($siteNodeName, function ($site) use ($siteName) {
+            $site->setName($siteName);
+            return $site;
+        });
+    }
+
+    /**
+     * @param string $siteNodeName
+     * @param $mapper
+     * @throws \Neos\Flow\Persistence\Exception\IllegalObjectTypeException
+     */
+    protected function createAndPersistSite($siteNodeName, $mapper = null)
+    {
         $site = new Site($siteNodeName);
         $site->setState(Site::STATE_ONLINE);
         $site->setSiteResourcesPackageKey($this->sitePackageKey);
+        if ($mapper !== null) {
+            $site = $mapper($site);
+        }
         /** @var SiteRepository $siteRepository */
         $siteRepository = $this->objectManager->get(SiteRepository::class);
         $siteRepository->add($site);
