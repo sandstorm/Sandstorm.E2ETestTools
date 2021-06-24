@@ -35,7 +35,7 @@ trait NeosBackendControlTrait
             await vars.page.fill(`[placeholder="Username"]`, `%s`);
             await vars.page.fill(`[placeholder="Password"]`, `%s`);
             await vars.page.click(`button:has-text("Login")`);
-            await vars.page.waitForNavigation({timeout: 30000});
+            await vars.page.waitForNavigation();
         '// language=PHP
             , $username, $password));
     }
