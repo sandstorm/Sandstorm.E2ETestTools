@@ -2,6 +2,7 @@
 
 namespace Sandstorm\E2ETestTools\Tests\Behavior\Bootstrap;
 
+use Neos\Utility\Files;
 use PHPUnit\Framework\Assert;
 
 /**
@@ -64,6 +65,45 @@ class PlaywrightConnector
     public function setStepForDebugging(string $contextName, string $stepText)
     {
         $this->executeInternal($contextName, '// ' . $stepText);
+    }
+
+    public function startTracing(string $contextName, string $featureFile, string $scenarioName, string $featureFileLine) {
+        $this->execute($contextName, sprintf(
+        // language=JavaScript
+            '
+            // Finish tracing after scenario
+            //   - Feature: %s (line: %d)
+            //   - Scenario: %s
+            await context.tracing.start({ screenshots: true, snapshots: true });
+            '// language=PHP
+            , $featureFile, $featureFileLine, $scenarioName));
+    }
+
+    public function finishTracing(string $contextName, string $featureFile, string $scenarioName, string $featureFileLine, bool $keepTrace)
+    {
+        $traceReportZipFileName = 'report_' . preg_replace('/[^a-zA-Z_]/', '', basename($featureFile) . '_' . $scenarioName) . '.zip';
+        $traceReportZipBase64 = $this->execute($contextName, sprintf(
+        // language=JavaScript
+            '
+            // Finish tracing after scenario
+            //   - Feature: %s (line: %d)
+            //   - Scenario: %s
+            if ("%s" === "false") {
+                await context.tracing.stop();
+                return "";
+            } else {
+                await context.tracing.stop({ path: `%s` });
+                return await fs.readFile(`%s`, {encoding: `base64`});
+            }
+            '// language=PHP
+            , $featureFile, $featureFileLine, $scenarioName, $keepTrace ? 'true' : 'false', $traceReportZipFileName, $traceReportZipFileName));
+        if (strlen($traceReportZipBase64)) {
+            $traceReportZip = base64_decode($traceReportZipBase64);
+            Files::createDirectoryRecursively('e2e-results');
+            file_put_contents(sprintf('e2e-results/%s', $traceReportZipFileName), $traceReportZip);
+            echo sprintf("You can find the report trace file %s BOTH in the current PHP execution directory (where you started the tests from),\n", $traceReportZipFileName);
+            echo "and as well in the e2e-testrunner/ folder.";
+        }
     }
 
     private function executeInternal(string $contextName, string $playwrightJsCode)
