@@ -26,15 +26,18 @@ trait NeosBackendControlTrait
      */
     public function iLogIntoTheBackendUsingCredentials(string $username, string $password)
     {
-        $this->playwrightConnector->execute($this->playwrightContext, sprintf('
+        $this->playwrightConnector->execute($this->playwrightContext, sprintf(
+            // language=JavaScript
+            '
             vars.page = await context.newPage();
             await vars.page.goto("BASEURL/neos/");
 
-            await vars.page.fill("[placeholder=\"Username\"]", "%s");
-            await vars.page.fill("[placeholder=\"Password\"]", "%s");
-            await vars.page.click("button:has-text(\"Login\")");
+            await vars.page.fill(`[placeholder="Username"]`, `%s`);
+            await vars.page.fill(`[placeholder="Password"]`, `%s`);
+            await vars.page.click(`button:has-text("Login")`);
             await vars.page.waitForNavigation();
-        ', $username, $password));
+        '// language=PHP
+            , $username, $password));
     }
 
     /**
@@ -42,11 +45,14 @@ trait NeosBackendControlTrait
      */
     public function iClickTheMainMenuItem($menuItem)
     {
-        $this->playwrightConnector->execute($this->playwrightContext, sprintf('
+        $this->playwrightConnector->execute($this->playwrightContext, sprintf(
+        // language=JavaScript
+            '
             // open the main menu
             await vars.page.click(`[aria-label="Menu"]`);
             await vars.page.click(`button[role="button"]:has-text("%s")`);
-        ', $menuItem));
+        '// language=PHP
+            , $menuItem));
     }
 
     /**

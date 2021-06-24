@@ -2,6 +2,7 @@
 
 namespace Sandstorm\E2ETestTools\Tests\Behavior\Bootstrap;
 
+use Behat\Testwork\Tester\Result\TestResult;
 use Neos\Utility\Files;
 
 /**
@@ -41,12 +42,40 @@ use Neos\Utility\Files;
  */
 trait PlaywrightTrait
 {
+
+    /**
+     * Never write traces.
+     */
+    protected static $PLAYWRIGHT_TRACING_MODE_OFF = 0;
+
+    /**
+     * Always write traces after a scenario.
+     */
+    protected static $PLAYWRIGHT_TRACING_MODE_ALWAYS = 1;
+
+    /**
+     * Only write error traces when the scenario failed.
+     */
+    protected static $PLAYWRIGHT_TRACING_MODE_ON_ERROR = 2;
+
     /**
      * @var PlaywrightConnector
      */
     protected $playwrightConnector;
 
     protected ?string $playwrightContext = null;
+
+    // on_error per default
+    private int $playwrightTracingMode = 2;
+
+    /**
+     * This is the programmatic API, env var 'PLAYWRIGHT_TRACE_MODE' TODO !!!
+     * @param int $mode
+     */
+    protected final function setPlaywrightTracingMode(int $mode)
+    {
+        $this->playwrightTracingMode = $mode;
+    }
 
     public function setupPlaywright()
     {
@@ -84,6 +113,31 @@ trait PlaywrightTrait
     {
         $this->playwrightContext = (string)preg_replace('/[^a-zA-Z_]/', '', basename($event->getFeature()->getFile()) . '_' . $event->getScenario()->getTitle());
         $this->playwrightConnector->stopContext($this->playwrightContext);
+        if ($this->playwrightTracingMode !== self::$PLAYWRIGHT_TRACING_MODE_OFF) {
+            $this->playwrightConnector->startTracing(
+                $this->playwrightContext,
+                $event->getFeature()->getFile(),
+                $event->getScenario()->getTitle(),
+                $event->getScenario()->getLine());
+        }
+    }
+
+    /**
+     * @AfterScenario @playwright
+     */
+    public function playwrightAfterScenario(\Behat\Behat\Hook\Scope\AfterScenarioScope $event): void
+    {
+        if ($this->playwrightContext && $this->playwrightTracingMode !== self::$PLAYWRIGHT_TRACING_MODE_OFF) {
+            $keepTrace = ($this->playwrightTracingMode === self::$PLAYWRIGHT_TRACING_MODE_ON_ERROR && $event->getTestResult()->getResultCode() === TestResult::FAILED)
+                || $this->playwrightTracingMode === self::$PLAYWRIGHT_TRACING_MODE_ALWAYS;
+            $this->playwrightConnector->finishTracing(
+                $this->playwrightContext,
+                $event->getFeature()->getFile(),
+                $event->getScenario()->getTitle(),
+                $event->getScenario()->getLine(),
+                $keepTrace
+            );
+        }
     }
 
     /**
@@ -101,7 +155,7 @@ trait PlaywrightTrait
      */
     public function playwrightAfterStep(\Behat\Behat\Hook\Scope\AfterStepScope $event): void
     {
-        if ($this->playwrightContext && $event->getTestResult()->getResultCode() === \Behat\Testwork\Tester\Result\TestResult::FAILED) {
+        if ($this->playwrightContext && $event->getTestResult()->getResultCode() === TestResult::FAILED) {
             $errorScreenshotFileName = (string)preg_replace('/[^a-zA-Z_]/', '', basename($event->getFeature()->getFile()) . '_' . $event->getStep()->getText());
 
             // TODO: make "page" a specific API
