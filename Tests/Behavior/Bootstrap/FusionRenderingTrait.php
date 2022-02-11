@@ -27,6 +27,9 @@ use Sandstorm\E2ETestTools\FusionServiceForTesting;
 use Sandstorm\E2ETestTools\FusionRenderingResult;
 use Symfony\Component\DomCrawler\Crawler;
 
+/**
+ * This trait is only useful in NEOS applications; not in Symfony projects.
+ */
 trait FusionRenderingTrait
 {
     abstract public function getObjectManager(): ObjectManagerInterface;

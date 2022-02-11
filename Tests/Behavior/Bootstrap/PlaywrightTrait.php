@@ -6,6 +6,8 @@ use Behat\Testwork\Tester\Result\TestResult;
 use Neos\Utility\Files;
 
 /**
+ * This trait is useful both for Symfony and for Neos.
+ *
  * This trait should be included in your `FeatureContext` for integration with Playwright.
  *
  * For each Scenario, we use an extra playwright BrowserContext, but we reuse the same Playwright instance; so we

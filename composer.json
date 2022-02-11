@@ -2,17 +2,20 @@
     "description": "",
     "type": "neos-package",
     "require": {
-        "neos/flow": "*",
-        "neos/behat": "^6.1 || dev-master",
-        "symfony/dom-crawler": "^5.2",
-        "symfony/css-selector": "^5.2"
+        "symfony/dom-crawler": "^5.2 || ^6.0",
+        "symfony/css-selector": "^5.2 || ^6.0",
+        "guzzlehttp/psr7": "*",
+        "neos/utility-files": "*"
     },
     "license": "MIT",
     "suggest": {
+        "neos/flow": "*",
+        "neos/behat": "^6.1 || dev-master"
     },
     "name": "sandstorm/e2etesttools",
     "autoload": {
         "psr-4": {
+            "Sandstorm\\E2ETestTools\\Tests\\Behavior\\": "Tests/Behavior/",
             "Sandstorm\\E2ETestTools\\": "Classes/"
         }
     },

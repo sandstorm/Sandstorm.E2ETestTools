@@ -8,6 +8,9 @@ use Neos\Neos\Domain\Service\UserService;
 use PHPUnit\Framework\Assert;
 use function PHPUnit\Framework\assertEquals;
 
+/**
+ * This trait is only useful in NEOS applications; not in Symfony projects.
+ */
 trait NeosBackendControlTrait
 {
     abstract public function getObjectManager(): ObjectManagerInterface;

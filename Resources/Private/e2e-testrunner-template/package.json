@@ -1,8 +1,8 @@
 {
   "devDependencies": {
-    "playwright": "^1.10.0"
+    "playwright": "^1.18.0"
   },
   "dependencies": {
-    "@hapi/hapi": "^20.1.2"
+    "@hapi/hapi": "^20.2.1"
   }
 }

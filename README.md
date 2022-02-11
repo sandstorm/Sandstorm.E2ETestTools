@@ -1,6 +1,8 @@
 # End-To-End Test Tools
 
-... for Neos and Flow Projects
+... for Neos and Flow Projects.
+
+**for SYMFONY projects, see [README.Symfony.md](./README.Symfony.md).**
 
 We use [Playwright](https://playwright.dev) as browser orchestrator for tests involving a real browser. We use Behat
 as the test framework for writing all kinds of BDD tests.
