@@ -165,7 +165,7 @@ class PlaywrightConnector
 
         $curlResult = curl_exec($curlHandle);
         if ($curlResult === false) {
-            throw new \RuntimeException(sprintf('cURL reported error code %s with message "%s". Last requested URL was "%s" (%s).', curl_errno($curlHandle), curl_error($curlHandle), curl_getinfo($curlHandle, CURLINFO_EFFECTIVE_URL), $request->getMethod()), 1338906040);
+            throw new \RuntimeException(sprintf('cURL reported error code %s with message "%s". Last requested URL was "%s" (%s).', curl_errno($curlHandle), curl_error($curlHandle), curl_getinfo($curlHandle, CURLINFO_EFFECTIVE_URL), $method), 1338906040);
         }
 
         curl_close($curlHandle);
