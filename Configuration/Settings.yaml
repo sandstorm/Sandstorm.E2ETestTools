@@ -4,3 +4,11 @@ Neos:
     fusion:
       autoInclude:
         Sandstorm.E2ETestTools: true
+
+  Flow:
+    reflection:
+      # specify more tags to be ignored during reflection
+      ignoredTags:
+        'BeforeSuite': true
+        'AfterSuite': true
+        'playwright': true
