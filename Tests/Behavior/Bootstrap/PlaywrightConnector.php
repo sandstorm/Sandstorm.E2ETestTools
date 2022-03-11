@@ -114,8 +114,9 @@ class PlaywrightConnector
     private function executeInternal(string $contextName, string $playwrightJsCode)
     {
         $systemUnderTestUrl = $this->systemUnderTestUrl;
-        if ($this->urlModifier !== null) {
-            $systemUnderTestUrl = $this->urlModifier->call(null, [$systemUnderTestUrl]);
+        $modifier = $this->urlModifier;
+        if ($modifier !== null) {
+            $systemUnderTestUrl = $modifier($systemUnderTestUrl);
         }
 
         $playwrightJsCode = str_replace('BASEURL', $systemUnderTestUrl, $playwrightJsCode);
