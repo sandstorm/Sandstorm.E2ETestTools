@@ -123,6 +123,7 @@ trait PlaywrightTrait
     {
         $this->playwrightContext = (string)preg_replace('/[^a-zA-Z_]/', '', basename($event->getFeature()->getFile()) . '_' . $event->getScenario()->getTitle());
         $this->playwrightConnector->stopContext($this->playwrightContext);
+        $this->playwrightConnector->setSystemUnderTestUrlModifier(null);
         if ($this->playwrightTracingMode !== self::$PLAYWRIGHT_TRACING_MODE_OFF) {
             $this->playwrightConnector->startTracing(
                 $this->playwrightContext,

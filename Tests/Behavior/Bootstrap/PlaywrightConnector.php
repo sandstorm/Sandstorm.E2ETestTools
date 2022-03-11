@@ -16,7 +16,7 @@ class PlaywrightConnector
 
     private string $playwrightApiUrl;
     private string $systemUnderTestUrl;
-    private ?Closure $urlModifier = null;
+    private ?Closure $systemUnderTestUrlModifier = null;
 
     /**
      * @param string $playwrightApiUrl Playwright API URL, as seen from the perspective of the Behat test runner (inside the Docker container)
@@ -31,9 +31,9 @@ class PlaywrightConnector
     /**
      * @param ?Closure $urlModifier
      */
-    public function setUrlModifier(?Closure $urlModifier): void
+    public function setSystemUnderTestUrlModifier(?Closure $urlModifier): void
     {
-        $this->urlModifier = $urlModifier;
+        $this->systemUnderTestUrlModifier = $urlModifier;
     }
 
     public function stopContext(string $contextName)
@@ -114,7 +114,7 @@ class PlaywrightConnector
     private function executeInternal(string $contextName, string $playwrightJsCode)
     {
         $systemUnderTestUrl = $this->systemUnderTestUrl;
-        $modifier = $this->urlModifier;
+        $modifier = $this->systemUnderTestUrlModifier;
         if ($modifier !== null) {
             $systemUnderTestUrl = $modifier($systemUnderTestUrl);
         }
