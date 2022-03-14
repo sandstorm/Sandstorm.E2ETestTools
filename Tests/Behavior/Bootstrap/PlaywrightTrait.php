@@ -113,7 +113,7 @@ trait PlaywrightTrait
      * @param ?Closure $urlModifier
      */
     public function setUrlModifier(?Closure $urlModifier): void {
-        $this->playwrightConnector->setUrlModifier($urlModifier);
+        $this->playwrightConnector->setSystemUnderTestUrlModifier($urlModifier);
     }
 
     /**
