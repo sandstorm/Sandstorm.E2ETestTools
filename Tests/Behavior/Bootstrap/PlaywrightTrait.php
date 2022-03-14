@@ -3,6 +3,7 @@
 namespace Sandstorm\E2ETestTools\Tests\Behavior\Bootstrap;
 
 use Behat\Testwork\Tester\Result\TestResult;
+use Closure;
 use Neos\Utility\Files;
 
 /**
@@ -109,12 +110,20 @@ trait PlaywrightTrait
     }
 
     /**
+     * @param ?Closure $urlModifier
+     */
+    public function setSystemUnderTestUrlModifier(?Closure $urlModifier): void {
+        $this->playwrightConnector->setSystemUnderTestUrlModifier($urlModifier);
+    }
+
+    /**
      * @BeforeScenario @playwright
      */
     public function playwrightBeforeScenario(\Behat\Behat\Hook\Scope\BeforeScenarioScope $event): void
     {
         $this->playwrightContext = (string)preg_replace('/[^a-zA-Z_]/', '', basename($event->getFeature()->getFile()) . '_' . $event->getScenario()->getTitle());
         $this->playwrightConnector->stopContext($this->playwrightContext);
+        $this->playwrightConnector->setSystemUnderTestUrlModifier(null);
         if ($this->playwrightTracingMode !== self::$PLAYWRIGHT_TRACING_MODE_OFF) {
             $this->playwrightConnector->startTracing(
                 $this->playwrightContext,
@@ -200,7 +209,6 @@ trait PlaywrightTrait
         // we flush the output here so that we do not have it wrapped in another block; but it's directly copy/pastable
         ob_flush();
     }
-
 
     /**
      * @Then I do a screenshot :filename

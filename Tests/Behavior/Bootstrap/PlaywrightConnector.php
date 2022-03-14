@@ -2,6 +2,7 @@
 
 namespace Sandstorm\E2ETestTools\Tests\Behavior\Bootstrap;
 
+use Closure;
 use GuzzleHttp\Psr7\Message;
 use Neos\Utility\Files;
 
@@ -15,6 +16,7 @@ class PlaywrightConnector
 
     private string $playwrightApiUrl;
     private string $systemUnderTestUrl;
+    private ?Closure $systemUnderTestUrlModifier = null;
 
     /**
      * @param string $playwrightApiUrl Playwright API URL, as seen from the perspective of the Behat test runner (inside the Docker container)
@@ -24,6 +26,14 @@ class PlaywrightConnector
     {
         $this->playwrightApiUrl = $playwrightApiUrl;
         $this->systemUnderTestUrl = $systemUnderTestUrl;
+    }
+
+    /**
+     * @param ?Closure $urlModifier
+     */
+    public function setSystemUnderTestUrlModifier(?Closure $urlModifier): void
+    {
+        $this->systemUnderTestUrlModifier = $urlModifier;
     }
 
     public function stopContext(string $contextName)
@@ -103,7 +113,13 @@ class PlaywrightConnector
 
     private function executeInternal(string $contextName, string $playwrightJsCode)
     {
-        $playwrightJsCode = str_replace('BASEURL', $this->systemUnderTestUrl, $playwrightJsCode);
+        $systemUnderTestUrl = $this->systemUnderTestUrl;
+        $modifier = $this->systemUnderTestUrlModifier;
+        if ($modifier !== null) {
+            $systemUnderTestUrl = $modifier($systemUnderTestUrl);
+        }
+
+        $playwrightJsCode = str_replace('BASEURL', $systemUnderTestUrl, $playwrightJsCode);
         $response = $this->sendRequest('POST', $this->playwrightApiUrl . '/exec/' . $contextName, $playwrightJsCode);
         $statusCode = $response->getStatusCode();
         if ($statusCode === 500) {
