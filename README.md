@@ -625,7 +625,9 @@ Feature: Homepage Rendering
 This enables to generate **responsive, reproducible screenshots** of the different pages, and being able to re-generate
 this when the dummy data changes.
 
-### dynamically modification of SUT URL
+### dynamic modification of SUT URL via step
+
+By default, the SUT URL is configured statically via environment variable. In some cases, that is not sufficient.
 
 Use cases:
 
