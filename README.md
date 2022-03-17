@@ -625,21 +625,41 @@ Feature: Homepage Rendering
 This enables to generate **responsive, reproducible screenshots** of the different pages, and being able to re-generate
 this when the dummy data changes.
 
-### custom content dimension resolving based on host info
+### dynamically modification of SUT URL
+
+Use cases:
+
+#### custom content dimension resolving based on host info
 
 Let's say, your Neos project has a custom content dimension value resolver, f.e. by host name or subdomain.
 The SUT base URL is configured statically via environment variable. But in the mentioned special case, you need
 dynamic base URLs that are modified via your own custom steps.
+
+#### multi-site setup
+
+When your Neos application has multiple sites, the host name also needs to be defined via custom step. 
 
 The `PlaywrightConnector` has an API for that purpose:
 
 public API: `PlaywrightTrait#setSystemUnderTestUrlModifier(\Closure $urlModifier): void`
 delegates to internal: `PlaywrightConnector#setSystemUnderTestUrlModifier(\Closure $urlModifier): void`
 
+Note, that the modifier is reset after each scenario.
+
 You need to call that setter from your custom step, that could look like:
 
 ```php
 ...
+
+    /**
+     * @Given my base URL is :baseUrl
+     */
+    public function myBaseUrlIs($baseUrl)
+    {
+        $this->setSystemUnderTestUrlModifier(function (string $staticBaseUrl) use ($baseUrl) {
+            return $baseUrl;
+        });
+    }
 
     /**
      * @Given my subdomain is :subdomain
@@ -667,4 +687,3 @@ and behat call:
 Given my subdomain is "de"
 ```
 
-Note, that the modifier is reset after each scenario.
