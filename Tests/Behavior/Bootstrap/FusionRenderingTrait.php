@@ -111,8 +111,17 @@ trait FusionRenderingTrait
         Assert::assertEquals(1, count($this->currentNodes));
 
         $fusionRenderingResult = new FusionRenderingResult();
+        $node = $this->currentNodes[0];
+        try {
+            $documentNode = (new \Neos\Eel\FlowQuery\FlowQuery([$node]))->closest('[instanceof Neos.Neos:Document]')->get(0);
+        } catch (\Exception $e) {
+            $documentNode = null;
+        }
+
         $this->internalRender('e2eTestRoot', $additionalFusion->getRaw(), [
-            'node' => $this->currentNodes[0],
+            'node' => $node,
+            'documentNode' => $documentNode,
+            'site' => $documentNode,
             // both used in Root.fusion
             'fusionRenderingResult' => $fusionRenderingResult,
             'renderPath' => $fusionPath
