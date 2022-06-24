@@ -32,6 +32,8 @@ use Symfony\Component\DomCrawler\Crawler;
  */
 trait FusionRenderingTrait
 {
+    use PersistentResourceTrait;
+
     abstract public function getObjectManager(): ObjectManagerInterface;
 
     private string $sitePackageKey;
@@ -43,6 +45,7 @@ trait FusionRenderingTrait
         }
 
         $this->sitePackageKey = $sitePackageKey;
+        $this->PersistentResourceTrait_setupServices($this->getObjectManager());
     }
 
     /**
@@ -357,6 +360,7 @@ trait FusionRenderingTrait
                     throw new \Exception(sprintf('Could not get parent node with path %s to create node %s', $parentPath, $path));
                 }
 
+                $persistenceManager = $this->objectManager->get(PersistenceManagerInterface::class);
                 $node = $parentNode->createNode($name, $nodeType, $identifier);
 
                 if (isset($row['Properties']) && $row['Properties'] !== '') {
@@ -365,7 +369,15 @@ trait FusionRenderingTrait
                         throw new \Exception(sprintf('Error decoding json value "%s": %d', $row['Properties'], json_last_error()));
                     }
                     foreach ($properties as $propertyName => $propertyValue) {
-                        $node->setProperty($propertyName, $propertyValue);
+                        if (is_array($propertyValue) && isset($propertyValue['__flow_object_type'])) {
+                            $instance = $persistenceManager->getObjectByIdentifier(
+                                $propertyValue['__identifier'],
+                                $propertyValue['__flow_object_type'],
+                                true);
+                            $node->setProperty($propertyName, $instance);
+                        } else {
+                            $node->setProperty($propertyName, $propertyValue);
+                        }
                     }
                 }
 
@@ -377,7 +389,7 @@ trait FusionRenderingTrait
             }
 
             // Make sure we do not use cached instances
-            $this->objectManager->get(PersistenceManagerInterface::class)->persistAll();
+            $persistenceManager->persistAll();
             $this->resetNodeInstances();
         }
     }
