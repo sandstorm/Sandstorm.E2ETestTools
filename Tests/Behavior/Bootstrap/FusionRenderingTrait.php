@@ -27,6 +27,8 @@ use Sandstorm\E2ETestTools\FusionServiceForTesting;
 use Sandstorm\E2ETestTools\FusionRenderingResult;
 use Symfony\Component\DomCrawler\Crawler;
 
+require_once(__DIR__ . "/PersistentResourceTrait.php");
+
 /**
  * This trait is only useful in NEOS applications; not in Symfony projects.
  */
