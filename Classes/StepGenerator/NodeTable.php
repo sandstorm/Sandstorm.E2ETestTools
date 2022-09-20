@@ -3,6 +3,10 @@
 namespace Sandstorm\E2ETestTools\StepGenerator;
 
 use Neos\ContentRepository\Domain\Model\NodeInterface;
+use Neos\Media\Domain\Model\ImageInterface;
+use Neos\Media\Domain\Model\ResourceBasedInterface;
+use Neos\Utility\ObjectAccess;
+use Neos\Utility\TypeHandling;
 
 /**
  *
@@ -10,19 +14,23 @@ use Neos\ContentRepository\Domain\Model\NodeInterface;
  */
 class NodeTable
 {
-    private GherkinTable $gherkinTable;
+    private GherkinTable $nodeTable;
+    private PersistentResourceFixtures $persistentResourceFixtures;
+    private ImageTable $imageTable;
 
     private array $defaultProperties;
 
-    public function __construct(array $defaultProperties = [])
+    public function __construct(array $defaultProperties = [], ?string $fixtureBasePath = null, array $defaultPersistentResourceProperties = [], array $defaultImageProperties = [])
     {
         $this->defaultProperties = $defaultProperties;
-        $this->gherkinTable = new GherkinTable(array_merge([
+        $this->nodeTable = new GherkinTable(array_merge([
             'Path',
             'Node Type',
             'Properties',
             'HiddenInIndex'
         ], array_keys($defaultProperties)));
+        $this->persistentResourceFixtures = new PersistentResourceFixtures($fixtureBasePath, $defaultPersistentResourceProperties);
+        $this->imageTable = new ImageTable($this->persistentResourceFixtures, $defaultImageProperties);
     }
 
     public function addNode(NodeInterface $node): void
@@ -34,12 +42,37 @@ class NodeTable
         if ($node->isAutoCreated()) {
             return;
         }
-        $this->gherkinTable->addRow(array_merge($this->defaultProperties, [
+        $this->nodeTable->addRow(array_merge($this->defaultProperties, [
             'Path' => $node->getPath(),
             'Node Type' => $node->getNodeType()->getName(),
-            'Properties' => json_encode($node->getNodeData()->getProperties()),
+            'Properties' => $this->serializeNodeProperties($node),
             'HiddenInIndex' => $node->isHiddenInIndex() ? 'true' : 'false'
         ]));
+    }
+
+    private function serializeNodeProperties(NodeInterface $node): string
+    {
+        $properties = $node->getNodeData()->getProperties();
+        $propertiesSerialized = [];
+        foreach ($properties as $propertyName => $propertyValue) {
+            if ($propertyValue instanceof ResourceBasedInterface) {
+                $objectType = TypeHandling::getTypeForValue($propertyValue);
+                $objectIdentifier = ObjectAccess::getProperty($propertyValue, 'Persistence_Object_Identifier', true);
+                $serializedReference = [
+                    '__flow_object_type' => $objectType,
+                    '__identifier' => $objectIdentifier
+                ];
+                $propertiesSerialized[$propertyName] = $serializedReference;
+                // keep track of external resources that needs to be stored as fixtures later
+                if ($propertyValue instanceof ImageInterface) {
+                    // add image
+                    $this->imageTable->addImage($objectIdentifier, $propertyValue);
+                }
+            } else {
+                $propertiesSerialized[$propertyName] = $propertyValue;
+            }
+        }
+        return json_encode($propertiesSerialized);
     }
 
     /**
@@ -76,8 +109,13 @@ class NodeTable
 
     public function print(): void
     {
+        $this->persistentResourceFixtures->storeFixtures();
+
+        $this->imageTable->print();
+
         echo 'Given I have the following nodes:';
         echo "\n";
-        $this->gherkinTable->print();
+        $this->nodeTable->print();
     }
+
 }

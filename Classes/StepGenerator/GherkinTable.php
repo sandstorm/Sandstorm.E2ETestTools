@@ -50,10 +50,23 @@ class GherkinTable
             echo ' ';
             foreach ($row as $i => $value) {
                 echo ' | ';
-                echo str_pad($value, $this->maxColumnWidth[$i]);
+                echo self::escapeGherkinTableCellValue(str_pad($value, $this->maxColumnWidth[$i]));
             }
             echo ' |';
             echo "\n";
+        }
+    }
+
+    public function isEmpty(): bool {
+        return count($this->rows) === 0;
+    }
+
+    private static function escapeGherkinTableCellValue(?string $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        } else {
+            return str_replace('|', '\|', $value);
         }
     }
 }
