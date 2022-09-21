@@ -20,7 +20,12 @@ class NodeTable
 
     private array $defaultProperties;
 
-    public function __construct(array $defaultProperties = [], ?string $fixtureBasePath = null, array $defaultPersistentResourceProperties = [], array $defaultImageProperties = [])
+    public function __construct(
+        array $defaultProperties = [],
+        ?string $fixtureBasePath = null,
+        array $defaultPersistentResourceProperties = [],
+        array $defaultImageProperties = []
+    )
     {
         $this->defaultProperties = $defaultProperties;
         $this->nodeTable = new GherkinTable(array_merge([

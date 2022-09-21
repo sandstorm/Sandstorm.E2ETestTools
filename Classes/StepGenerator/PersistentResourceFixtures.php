@@ -24,7 +24,12 @@ class PersistentResourceFixtures
 
     public function __construct(?string $fixtureBasePath, array $defaultProperties = [])
     {
-        $this->fixtureBasePath = $fixtureBasePath . (str_ends_with($fixtureBasePath, '/') ? '' : '/');
+        if ($fixtureBasePath !== null) {
+            $this->fixtureBasePath = $fixtureBasePath . (str_ends_with($fixtureBasePath, '/') ? '' : '/');
+            if (!str_starts_with($fixtureBasePath, FLOW_PATH_PACKAGES)) {
+                throw new \Exception("fixtureBasePath must be sub dir of Flow packages directory '" . FLOW_PATH_PACKAGES . "'; but was: " . $fixtureBasePath);
+            }
+        }
         $this->defaultProperties = $defaultProperties;
     }
 
@@ -47,11 +52,12 @@ class PersistentResourceFixtures
                 'path' => $fixturePath
             ];
         }
+        $fixturePathRelativeToFlowRoot = substr($fixturePath, strlen(FLOW_PATH_PACKAGES));
         return array_merge($this->defaultProperties, [
             'Filename' => $persistentResource->getFilename(),
             'Collection' => $persistentResource->getCollectionName(),
             'Relative Publication Path' => $persistentResource->getRelativePublicationPath(),
-            'Path' => $fixturePath
+            'Path' => $fixturePathRelativeToFlowRoot
         ]);
     }
 

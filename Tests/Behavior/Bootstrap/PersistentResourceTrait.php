@@ -76,7 +76,7 @@ trait PersistentResourceTrait
     {
         foreach ($imageTable->getHash() as $rowNumber => $row) {
             $persistentResource = $this->PersistentResourceTrait_resourceManager->importResource(
-                fopen($row['Path'], 'r'),
+                fopen(FLOW_PATH_PACKAGES . $row['Path'], 'r'),
                 $row['Collection'],
             );
             $persistentResource->setFilename($row['Filename']);
