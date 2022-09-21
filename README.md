@@ -4,13 +4,12 @@
 
 **for SYMFONY projects, see [README.Symfony.md](./README.Symfony.md).**
 
-We use [Playwright](https://playwright.dev) as browser orchestrator for tests involving a real browser. We use Behat
-as the test framework for writing all kinds of BDD tests.
+We use [Playwright](https://playwright.dev) as browser orchestrator for tests involving a real browser. We use Behat as
+the test framework for writing all kinds of BDD tests.
 
 - a way to test Fusion code with Behat
 
-- Utilities for integrating the [Playwright](https://playwright.dev) browser orchestrator and the Behat test
-  framework
+- Utilities for integrating the [Playwright](https://playwright.dev) browser orchestrator and the Behat test framework
 
 <!-- TOC -->
 
@@ -51,7 +50,6 @@ The architecture for running behavioral tests is as follows:
    └────────────────────┘                            
 ```
 
-
 1) We add the Behat test runner to the Development or Production App Docker Container (SUT - System under Test), so that
    the Behat test runner can access any code from the application, and has the exact same environment, database, and
    library versions like the production application.
@@ -70,8 +68,8 @@ databases**: one for Testing, and the other one for Development.
 Additionally, the E2E tests need to reach the system wired to the *testing environment* through HTTP. This means we
 need **two web server ports** as well: One for development, and one for the testing context.
 
-This setup is somewhat complicated; so the following image helps to illustrate how the different contexts
-interact **during development time and during production/CI**:
+This setup is somewhat complicated; so the following image helps to illustrate how the different contexts interact **
+during development time and during production/CI**:
 
 ```                                                                                                             
                                                                                                                 
@@ -156,24 +154,23 @@ rm bin/selenium-server.jar # we do not need this
 
 - You should create a `Configuration/Development/Docker/Behat/Settings.yaml` with the following contents:
 
-  ```yaml
+```yaml
   Neos:
     Flow:
       persistence:
         backendOptions:
           dbname: '%env:DB_NEOS_DATABASE_E2ETEST%'
-  ```
+```
 
 - You should create a `Configuration/Production/Kubernetes/Behat/Settings.yaml` with the following contents:
 
-  ```yaml
+```yaml
   Neos:
     Flow:
       persistence:
         backendOptions:
           dbname: '%env:DB_NEOS_DATABASE_E2ETEST%'
-  ```
-
+```
 
 ## Setting up Playwright
 
@@ -183,7 +180,6 @@ name the folder `e2e-testrunner` (in our projects, usually one level ABOVE the N
 Additionally, you'll need the following `.gitlab-ci.yml` for *BUILDING*
 
 ```yaml
-
 package_app:
   stage: build
   image: docker-hub.sandstorm.de/docker-infrastructure/php-app/build:7.4-v2
@@ -299,8 +295,8 @@ e2e_test:
 
 ## Creating a FeatureContext
 
-The `FeatureContext` is the PHP class containing the step definitions for the Behat scenarios.
-We provide base traits you should use for various functionality. The skeleton of the `FeatureContext`
+The `FeatureContext` is the PHP class containing the step definitions for the Behat scenarios. We provide base traits
+you should use for various functionality. The skeleton of the `FeatureContext`
 should look as follows:
 
 ```php
@@ -356,6 +352,12 @@ class FeatureContext implements Context
         
         // !!! You need to add the Site Package Key here, so that we are able to load the Fusion code properly.
         $this->setupFusionRendering('Site.Package.Key.Here');
+        
+        // !!! Important for usage with Neos: you need to publish resources that are created from fixtures
+        $this->PersistentResourceTrait_registerResourcePersistedHook(function () {
+            // publish resources post persist hook for PersistentResources created by fixtures
+            // execute a: './flow resource:publish'
+        });
     }
 
     /**
@@ -398,9 +400,8 @@ node index.js
 # running for a very long time (e.g. a day).
 ```
 
-Second, **ensure the docker containers are running**; usually by `docker-compose build && docker-compose up -d`.
-Then, enter the `neos` container: `docker-compose exec neos /bin/bash` and run the following commands inside
-the container:
+Second, **ensure the docker containers are running**; usually by `docker-compose build && docker-compose up -d`. Then,
+enter the `neos` container: `docker-compose exec neos /bin/bash` and run the following commands inside the container:
 
 ```bash
 ./flow behat:setup
@@ -421,20 +422,22 @@ bin/behat -c Packages/Sites/[SITEPACKAGE_NAME]/Tests/Behavior/behat.yml.dist Pac
 bin/behat -c Packages/Sites/[SITEPACKAGE_NAME]/Tests/Behavior/behat.yml.dist Packages/Sites/[SITEPACKAGE_NAME]/Tests/Behavior/Features/WebsiteRendering.feature:27
 ```
 
-In case of exceptions, it might be helpful to run the tests with `--stop-on-failure`, which stops the test cases at the first
-error. Then, you can inspect the testing database and manually reproduce the bug.
+In case of exceptions, it might be helpful to run the tests with `--stop-on-failure`, which stops the test cases at the
+first error. Then, you can inspect the testing database and manually reproduce the bug.
 
-Additionally, `-vvv` is a helpful CLI flag (extra-verbose) - this displays the full exception stack trace in case of errors.
+Additionally, `-vvv` is a helpful CLI flag (extra-verbose) - this displays the full exception stack trace in case of
+errors.
 
-**For hints how to write Behat tests, we suggest to read [Sandstorm.E2ETestTools README](./Packages/Application/Sandstorm.E2ETestTools/README.md).**
+**For hints how to write Behat tests, we suggest to
+read [Sandstorm.E2ETestTools README](./Packages/Application/Sandstorm.E2ETestTools/README.md).**
 
 ## Style Guide
 
-If you use the Style Guide feature (`Then I store the Fusion output in the styleguide as "Button_Component_Basic"`), then
-your tests need to be annotated with `@playwright` and the playwright dev server needs to be running.
+If you use the Style Guide feature (`Then I store the Fusion output in the styleguide as "Button_Component_Basic"`),
+then your tests need to be annotated with `@playwright` and the playwright dev server needs to be running.
 
-You can then access the style guide using [127.0.0.1:8080/styleguide/](http://127.0.0.1:8080/styleguide/). The style guide
-contains BOTH HTML snapshots; and rendered images of the HTML.
+You can then access the style guide using [127.0.0.1:8080/styleguide/](http://127.0.0.1:8080/styleguide/). The style
+guide contains BOTH HTML snapshots; and rendered images of the HTML.
 
 # Writing Behat Tests
 
@@ -453,22 +456,22 @@ Some hints:
 @playwright
 Feature: Testcase for Button Component
 
-  Background:
-    Given I have a site for Site Node "site"
-    Given I have the following nodes:
-      | Identifier                           | Path               | Node Type                | Properties                   | Language |
-      | 5cb3a5f7-b501-40b2-b5a8-9de169ef1105 | /sites             | unstructured             | {}                           | de       |
-      | 5e312d5b-9559-4bd2-8251-0182e11b4950 | /sites/site        | PACKAGEKEY:Document.Page | {}                           | de       |
-      | 9cbaa2e2-d779-4936-aa02-0dab324da93e | /sites/site/nested | PACKAGEKEY:Document.Page | {"uriPathSegment": "nested"} | de       |
+    Background:
+        Given I have a site for Site Node "site"
+        Given I have the following nodes:
+            | Identifier                           | Path               | Node Type                | Properties                   | Language |
+            | 5cb3a5f7-b501-40b2-b5a8-9de169ef1105 | /sites             | unstructured             | {}                           | de       |
+            | 5e312d5b-9559-4bd2-8251-0182e11b4950 | /sites/site        | PACKAGEKEY:Document.Page | {}                           | de       |
+            | 9cbaa2e2-d779-4936-aa02-0dab324da93e | /sites/site/nested | PACKAGEKEY:Document.Page | {"uriPathSegment": "nested"} | de       |
 
 
-    Given I get a node by path "/sites/site" with the following context:
-      | Workspace | Dimension: language |
-      | live      | de                  |
+        Given I get a node by path "/sites/site" with the following context:
+            | Workspace | Dimension: language |
+            | live      | de                  |
 
 
-  Scenario: Basic Button (external link)
-    When I render the Fusion object "/testcase" with the current context node:
+    Scenario: Basic Button (external link)
+        When I render the Fusion object "/testcase" with the current context node:
     """
     testcase = PACKAGEKEY:Component.Button {
       text = "External Link"
@@ -476,15 +479,14 @@ Feature: Testcase for Button Component
       isExternalLink = true
     }
     """
-    Then in the fusion output, the inner HTML of CSS selector "a" matches "External Link"
-    Then in the fusion output, the attributes of CSS selector "a" are:
-      | Key    | Value              |
-      | class  | button             |
-      | href   | https://spiegel.de |
-      | target | _blank             |
-    Then I store the Fusion output in the styleguide as "Button_Component_Basic"
+        Then in the fusion output, the inner HTML of CSS selector "a" matches "External Link"
+        Then in the fusion output, the attributes of CSS selector "a" are:
+            | Key    | Value              |
+            | class  | button             |
+            | href   | https://spiegel.de |
+            | target | _blank             |
+        Then I store the Fusion output in the styleguide as "Button_Component_Basic"
 ```
-
 
 ## Fusion Integration Testcases
 
@@ -499,42 +501,43 @@ A test case can look like the following one:
 @playwright
 Feature: Testcase for Button Integration
 
-  Background:
-    Given I have a site for Site Node "site"
-    Given I have the following nodes:
-      | Identifier                           | Path               | Node Type                | Properties                   | Language |
-      | 5cb3a5f7-b501-40b2-b5a8-9de169ef1105 | /sites             | unstructured             | {}                           | de       |
-      | 5e312d5b-9559-4bd2-8251-0182e11b4950 | /sites/site        | PACKAGEKEY:Document.Page | {}                           | de       |
-      | 9cbaa2e2-d779-4936-aa02-0dab324da93e | /sites/site/nested | PACKAGEKEY:Document.Page | {"uriPathSegment": "nested"} | de       |
+    Background:
+        Given I have a site for Site Node "site"
+        Given I have the following nodes:
+            | Identifier                           | Path               | Node Type                | Properties                   | Language |
+            | 5cb3a5f7-b501-40b2-b5a8-9de169ef1105 | /sites             | unstructured             | {}                           | de       |
+            | 5e312d5b-9559-4bd2-8251-0182e11b4950 | /sites/site        | PACKAGEKEY:Document.Page | {}                           | de       |
+            | 9cbaa2e2-d779-4936-aa02-0dab324da93e | /sites/site/nested | PACKAGEKEY:Document.Page | {"uriPathSegment": "nested"} | de       |
 
 
-  Scenario: Secondary Button
-    Given I create the following nodes:
-      | Path                      | Node Type                 | Properties                                                                   | Language |
-      | /sites/site/main/testnode | PACKAGEKEY:Content.Button | {"type": "secondary", "link": "node://9cbaa2e2-d779-4936-aa02-0dab324da93e"} | de       |
-    Given I get a node by path "/sites/site/main/testnode" with the following context:
-      | Workspace | Dimension: language |
-      | live      | de                  |
+    Scenario: Secondary Button
+        Given I create the following nodes:
+            | Path                      | Node Type                 | Properties                                                                   | Language |
+            | /sites/site/main/testnode | PACKAGEKEY:Content.Button | {"type": "secondary", "link": "node://9cbaa2e2-d779-4936-aa02-0dab324da93e"} | de       |
+        Given I get a node by path "/sites/site/main/testnode" with the following context:
+            | Workspace | Dimension: language |
+            | live      | de                  |
 
-    When I render the Fusion object "/testcase" with the current context node:
+        When I render the Fusion object "/testcase" with the current context node:
     """
     testcase = PACKAGEKEY:Content.Button
     """
-    Then in the fusion output, the attributes of CSS selector "a" are:
-      | Key    | Value                    |
-      | href   | /de/nested               |
+        Then in the fusion output, the attributes of CSS selector "a" are:
+            | Key  | Value      |
+            | href | /de/nested |
 
-    Then I store the Fusion output in the styleguide as "Button_Integration_Secondary"
+        Then I store the Fusion output in the styleguide as "Button_Integration_Secondary"
 
 ```
 
 ## Full-Page Snapshot Testcases
 
-This tests a complete page rendering, and not just single components. It is meant mostly for visual checking; and most likely you'll work
-less with specific assertions.
+This tests a complete page rendering, and not just single components. It is meant mostly for visual checking; and most
+likely you'll work less with specific assertions.
 
-In this case, the rendering depends on many more nodes - so setting up the behat fixture with all the relevant nodes can be a bit tedious.
-Luckily, there are helpers in this package to help with the process. We suggest writing a CommandController like the following:
+In this case, the rendering depends on many more nodes - so setting up the behat fixture with all the relevant nodes can
+be a bit tedious. Luckily, there are helpers in this package to help with the process. We suggest writing a
+CommandController like the following:
 
 ```php
 <?php
@@ -545,19 +548,27 @@ use Neos\ContentRepository\Domain\Model\NodeInterface;
 use Neos\ContentRepository\Domain\Service\ContextFactoryInterface;
 use Neos\Flow\Annotations as Flow;
 use Neos\Flow\Cli\CommandController;
-use Sandstorm\E2ETestTools\StepGenerator\NodeTable;
+use Sandstorm\E2ETestTools\StepGenerator\NodeTableBuilderService;
 
 class StepGeneratorCommandController extends CommandController
 {
     /**
      * @Flow\Inject
-     * @var ContextFactoryInterface
      */
-    protected $contextFactory;
+    protected ContextFactoryInterface $contextFactory;
+
+    /**
+     * Main API for creating NodeTable instances to print BDD steps.
+     *
+     * @Flow\Inject
+     */
+    protected NodeTableBuilderService $nodeTableBuilderService;
 
     public function homepageCommand()
     {
-        $nodeTable = new NodeTable(['Language' => 'de']);
+        $nodeTable = $this->nodeTableBuilderService->nodeTable()
+            ->withDefaultNodeProperties(['Language' => 'de'])
+            ->build();
         $siteNode = $this->getSiteNode();
 
         $nodeTable->addParents($siteNode);
@@ -592,9 +603,9 @@ Now, when you run `./flow stepGenerator:homepage`, you'll get a table like the f
 
 ```gherkin
 Given I have the following nodes:
-  | Path   | Node Type    | Properties | HiddenInIndex | Language |
-  | /sites | unstructured | []         | false         | de       |
-  ... many more nodes here in this table ...
+    | Path   | Node Type    | Properties | HiddenInIndex | Language |
+    | /sites | unstructured | []         | false         | de       |
+    # ... many more nodes here in this table ...
 ```
 
 This is ready to be pasted into a test case like the following:
@@ -604,26 +615,82 @@ This is ready to be pasted into a test case like the following:
 @playwright
 Feature: Homepage Rendering
 
-  Scenario: Full Homepage Rendering
-    Given I have a site for Site Node "site"
+    Scenario: Full Homepage Rendering
+        Given I have a site for Site Node "site"
     # to regenerate, use: ./flow stepGenerator:homepage
-  Given I have the following nodes:
-    | Path   | Node Type    | Properties | HiddenInIndex | Language |
-    | /sites | unstructured | []         | false         | de       |
-    ... many more nodes here ...
+        Given I have the following nodes:
+            | Path   | Node Type    | Properties | HiddenInIndex | Language |
+            | /sites | unstructured | []         | false         | de       |
+    # ... many more nodes here ...
 
-    Given I get a node by path "/sites/site" with the following context:
-      | Workspace | Dimension: language |
-      | live      | de                  |
+        Given I get a node by path "/sites/site" with the following context:
+            | Workspace | Dimension: language |
+            | live      | de                  |
 
-    Given I accepted the Cookie Consent
-    When I render the page
-    Then I store the Fusion output in the styleguide as "Page_Homepage"
-    Then I store the Fusion output in the styleguide as "Page_Homepage_Mobile" using viewport width "320"
+        Given I accepted the Cookie Consent
+        When I render the page
+        Then I store the Fusion output in the styleguide as "Page_Homepage"
+        Then I store the Fusion output in the styleguide as "Page_Homepage_Mobile" using viewport width "320"
 ```
 
 This enables to generate **responsive, reproducible screenshots** of the different pages, and being able to re-generate
 this when the dummy data changes.
+
+### persistent resources in BDD tests
+
+In case, your node fixtures point to some assets from the Neos.Media module, you can generate fixtures for them as well.
+You need to pass the second parameter ($fixtureBasePath) when creating a NodeTable.
+
+You probably want to store you asset fixtures near your feature files.
+
+# TODO explain how to set fixture base path
+
+```php
+    // ... Step Generator Command Controller 
+
+    public function homepageCommand()
+    {
+        $nodeTable = $this->nodeTableBuilderService->nodeTable()
+            ->withDefaultNodeProperties(['Language' => 'de'])
+            // !!! Here you setup your directory for storing your fixture files.
+            // It will print a path relative to the Flow package directory.
+            //  -> most likely: Sites/Your.PackageKey/Tests/Behavior/Features/Homepage/Resources/someSHA1.png (depending on the type of the composer package)
+            ->withFixtureBasePath('Your.PackageKey', 'Tests/Behavior/Features/Homepage/Resources/')
+            ->build();
+        $siteNode = $this->getSiteNode();
+
+        $nodeTable->addParents($siteNode);
+        $nodeTable->addNode($siteNode);
+        $nodeTable->addNodesUnderneathExcludingAutoGeneratedChildNodes($siteNode, '!Neos.Neos:Document'); // we recurse into the content of the homepage
+        $nodeTable->addNodesUnderneathExcludingAutoGeneratedChildNodes($siteNode, 'Neos.Neos:Document'); // we render the remaining document nodes so we can have a menu rendered (but without content)
+
+        // when the table is printed, it includes other tables containing asset fixtures
+        $nodeTable->print();
+    }
+    
+    // ...
+
+```
+
+Let's say you have three images in your node data fixtures (node property of type `ImageInterface`). Your output could
+look like:
+
+```gherkin
+
+Given I have the following images:
+    | Image ID                             | Width | Height | Filename            | Collection | Relative Publication Path | Path                                                                                                        |
+    | 3a28c97c-58f1-45c5-b1ad-2f491c904467 |       |        | Map-circle-blue.svg | persistent |                           | Sites/Your.Package/Tests/Behavior/Features/Homepage/Resources/9600acebed149b1e0178b214a7f3a82bc7a829a4.svg  |
+    | 846d085f-091b-4d08-82bb-e5f04150c594 | 615   | 418    | cat_caviar.jpeg     | persistent |                           | Sites/Your.Package/Tests/Behavior/Features/Homepage/Resources/ee53c207588c199b4e5359f5e06d241b0d93b78e.jpeg |
+    | 3ca6e806-182a-4af2-9a60-50d2ff0bcbdb | 4500  | 4500   | mark-man-stock.png  | persistent |                           | Sites/Your.Package/Tests/Behavior/Features/Homepage/Resources/9784f58d2f6810b773807b3cfd56dcbe2b3a1c65.png  |
+Given I have the following nodes:
+    | Path | Node Type | Properties | HiddenInIndex | Language |
+    # ... nodes go here here with reference to Image ID in their serialized properties
+    # a property might look like: { ..., "myImageProperty":{"__flow_object_type":"Neos\\Media\\Domain\\Model\\Image","__identifier":"3a28c97c-58f1-45c5-b1ad-2f491c904467"}, ...
+```
+
+Note, that the `Path` column values are printed and read relative to the Flow package directory. That should keep your tests more or less environment independent.
+Usually, the files are stored inside a DistributionPackages/* package which is symlinked into the Flow package directory (and thus is readable from your Test and writable from your Command Controller).
+Also, those files should be added to git, since they are part of your test cases.
 
 ### dynamic modification of SUT URL via step
 
@@ -633,13 +700,13 @@ Use cases:
 
 #### custom content dimension resolving based on host info
 
-Let's say, your Neos project has a custom content dimension value resolver, f.e. by host name or subdomain.
-The SUT base URL is configured statically via environment variable. But in the mentioned special case, you need
-dynamic base URLs that are modified via your own custom steps.
+Let's say, your Neos project has a custom content dimension value resolver, f.e. by host name or subdomain. The SUT base
+URL is configured statically via environment variable. But in the mentioned special case, you need dynamic base URLs
+that are modified via your own custom steps.
 
 #### multi-site setup
 
-When your Neos application has multiple sites, the host name also needs to be defined via custom step. 
+When your Neos application has multiple sites, the host name also needs to be defined via custom step.
 
 The `PlaywrightConnector` has an API for that purpose:
 
