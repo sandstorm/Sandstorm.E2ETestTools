@@ -154,23 +154,23 @@ rm bin/selenium-server.jar # we do not need this
 
 - You should create a `Configuration/Development/Docker/Behat/Settings.yaml` with the following contents:
 
-  ```yaml
+```yaml
   Neos:
     Flow:
       persistence:
         backendOptions:
           dbname: '%env:DB_NEOS_DATABASE_E2ETEST%'
-  ```
+```
 
 - You should create a `Configuration/Production/Kubernetes/Behat/Settings.yaml` with the following contents:
 
-  ```yaml
+```yaml
   Neos:
     Flow:
       persistence:
         backendOptions:
           dbname: '%env:DB_NEOS_DATABASE_E2ETEST%'
-  ```
+```
 
 ## Setting up Playwright
 
@@ -180,48 +180,47 @@ name the folder `e2e-testrunner` (in our projects, usually one level ABOVE the N
 Additionally, you'll need the following `.gitlab-ci.yml` for *BUILDING*
 
 ```yaml
-
 package_app:
-    stage: build
-    image: docker-hub.sandstorm.de/docker-infrastructure/php-app/build:7.4-v2
-    interruptible: true
-    script:
-        - cd app
-        # NOTE: for E2E tests we HAVE also to install DEV dependencies; otherwise we won't be able to run behavioral tests then.
-        - COMPOSER_CACHE_DIR=.composer-cache composer install --dev --ignore-platform-reqs
-        - cd ..
+  stage: build
+  image: docker-hub.sandstorm.de/docker-infrastructure/php-app/build:7.4-v2
+  interruptible: true
+  script:
+    - cd app
+    # NOTE: for E2E tests we HAVE also to install DEV dependencies; otherwise we won't be able to run behavioral tests then.
+    - COMPOSER_CACHE_DIR=.composer-cache composer install --dev --ignore-platform-reqs
+    - cd ..
 
-        # set up Behat
-        - mkdir -p app/Build && cp -R app/Packages/Application/Neos.Behat/Resources/Private/Build/Behat app/Build/Behat
-        - cd app/Build/Behat && COMPOSER_CACHE_DIR=../../.composer-cache composer install && cd ../../../
+    # set up Behat
+    - mkdir -p app/Build && cp -R app/Packages/Application/Neos.Behat/Resources/Private/Build/Behat app/Build/Behat
+    - cd app/Build/Behat && COMPOSER_CACHE_DIR=../../.composer-cache composer install && cd ../../../
 
-        # build image
-        - docker login -u gitlab-ci-token -p $CI_BUILD_TOKEN $CI_REGISTRY
-        - docker build -t $CI_REGISTRY_IMAGE:$CI_BUILD_REF_SLUG .
-        - docker push $CI_REGISTRY_IMAGE:$CI_BUILD_REF_SLUG
-    tags:
-        - docker
-        - privileged
-    cache:
-        key: PROJECTNAME__composer
-        paths:
-            - app/.composer-cache
+    # build image
+    - docker login -u gitlab-ci-token -p $CI_BUILD_TOKEN $CI_REGISTRY
+    - docker build -t $CI_REGISTRY_IMAGE:$CI_BUILD_REF_SLUG .
+    - docker push $CI_REGISTRY_IMAGE:$CI_BUILD_REF_SLUG
+  tags:
+    - docker
+    - privileged
+  cache:
+    key: PROJECTNAME__composer
+    paths:
+      - app/.composer-cache
 
 
 
 build_e2e_testrunner:
-    stage: build
-    image: docker-hub.sandstorm.de/docker-infrastructure/php-app/build:7.4-v2
-    interruptible: true
-    script:
-        - cd e2e-testrunner
-        - docker login -u gitlab-ci-token -p $CI_BUILD_TOKEN $CI_REGISTRY
-        - docker build -t $CI_REGISTRY_IMAGE:$CI_BUILD_REF_SLUG-e2e-testrunner .
-        - docker push $CI_REGISTRY_IMAGE:$CI_BUILD_REF_SLUG-e2e-testrunner
-        - cd ..
-    tags:
-        - docker
-        - privileged
+  stage: build
+  image: docker-hub.sandstorm.de/docker-infrastructure/php-app/build:7.4-v2
+  interruptible: true
+  script:
+    - cd e2e-testrunner
+    - docker login -u gitlab-ci-token -p $CI_BUILD_TOKEN $CI_REGISTRY
+    - docker build -t $CI_REGISTRY_IMAGE:$CI_BUILD_REF_SLUG-e2e-testrunner .
+    - docker push $CI_REGISTRY_IMAGE:$CI_BUILD_REF_SLUG-e2e-testrunner
+    - cd ..
+  tags:
+    - docker
+    - privileged
 ```
 
 Then, for *running* the tests, you'll need something like the following snippet in `.gitlab-ci.yml`.
@@ -235,63 +234,63 @@ main job) and all related services to the `variables` section of the test job.
 
 ```yaml
 e2e_test:
-    stage: test
-    interruptible: true
-    # we're running this job inside the production image we've just built previously
-    image:
-        name: $CI_REGISTRY_IMAGE:$CI_BUILD_REF_SLUG
-        # we may need to override the entrypoint here
-        entrypoint: [ "" ]
-    dependencies: [ ] # we do not need any artifacts from prior steps
-    variables:
-        # service mariadb
-        MYSQL_USER: 'ci_user'
-        MYSQL_PASSWORD: 'ci_db_password'
-        MYSQL_DATABASE: 'ci_test'
+  stage: test
+  interruptible: true
+  # we're running this job inside the production image we've just built previously
+  image:
+    name: $CI_REGISTRY_IMAGE:$CI_BUILD_REF_SLUG
+    # we may need to override the entrypoint here
+    entrypoint: [ "" ]
+  dependencies: [ ] # we do not need any artifacts from prior steps
+  variables:
+    # service mariadb
+    MYSQL_USER: 'ci_user'
+    MYSQL_PASSWORD: 'ci_db_password'
+    MYSQL_DATABASE: 'ci_test'
 
-        # System under Test
-        FLOW_CONTEXT: 'Production/Kubernetes'
-        DB_NEOS_HOST: 'mariadb'
-        DB_NEOS_PORT: '3306'
-        DB_NEOS_USER: '${MYSQL_USER}'
-        DB_NEOS_PASSWORD: '${MYSQL_PASSWORD}'
-        DB_NEOS_DATABASE: '${MYSQL_DATABASE}'
-    services:
-        -   name: mariadb:10.5
-        # here, we make the e2e-testrunner available
-        -   name: $CI_REGISTRY_IMAGE:$CI_BUILD_REF_SLUG-e2e-testrunner
-            alias: e2e-testrunner
-    script:
-        # ADJUST: the following lines must be adjusted to match the *entrypoint*
-        - cd /app && ./flow doctrine:migrate
-        # make E2E Test Server available (port 9090)
-        - ln -s /etc/nginx/nginx-e2etest-server-prod.conf /etc/nginx/conf.d/nginx-e2etest-server-prod.conf
+    # System under Test
+    FLOW_CONTEXT: 'Production/Kubernetes'
+    DB_NEOS_HOST: 'mariadb'
+    DB_NEOS_PORT: '3306'
+    DB_NEOS_USER: '${MYSQL_USER}'
+    DB_NEOS_PASSWORD: '${MYSQL_PASSWORD}'
+    DB_NEOS_DATABASE: '${MYSQL_DATABASE}'
+  services:
+    - name: mariadb:10.5
+    # here, we make the e2e-testrunner available
+    - name: $CI_REGISTRY_IMAGE:$CI_BUILD_REF_SLUG-e2e-testrunner
+      alias: e2e-testrunner
+  script:
+    # ADJUST: the following lines must be adjusted to match the *entrypoint*
+    - cd /app && ./flow doctrine:migrate
+    # make E2E Test Server available (port 9090)
+    - ln -s /etc/nginx/nginx-e2etest-server-prod.conf /etc/nginx/conf.d/nginx-e2etest-server-prod.conf
 
-        - /bin/sh /start.sh &
-        # the playwright API URL does not need to be adjusted as long as the service alias for playwright is `e2e-testrunner`.
-        - export PLAYWRIGHT_API_URL=http://e2e-testrunner:3000
+    - /bin/sh /start.sh &
+    # the playwright API URL does not need to be adjusted as long as the service alias for playwright is `e2e-testrunner`.
+    - export PLAYWRIGHT_API_URL=http://e2e-testrunner:3000
 
-        # ADJUST: you might need to adjust the SUT URL; and the wait URL below
-        - export SYSTEM_UNDER_TEST_URL_FOR_PLAYWRIGHT=http://$(hostname -i):9090
-        - |
-            # now wait until system under test is up and running
-            until $(curl --output /dev/null --silent --head --fail http://127.0.0.1:9090); do
-                printf '.'
-                sleep 5
-            done
+    # ADJUST: you might need to adjust the SUT URL; and the wait URL below
+    - export SYSTEM_UNDER_TEST_URL_FOR_PLAYWRIGHT=http://$(hostname -i):9090
+    - |
+      # now wait until system under test is up and running
+      until $(curl --output /dev/null --silent --head --fail http://127.0.0.1:9090); do
+          printf '.'
+          sleep 5
+      done
 
-        # actually run the tests
-        # ADJUST: use your pacakge key here
-        - cd /app && rm -Rf e2e-results && mkdir e2e-results && bin/behat     --format junit --out e2e-results       --format pretty --out std       -c Packages/Application/PACKAGEKEY/Tests/Behavior/behat.yml.dist
-        - cp -R /app/e2e-results $CI_PROJECT_DIR/e2e-results
-        - cp -R /app/Web/styleguide $CI_PROJECT_DIR/styleguide
-    artifacts:
-        expire_in: 4 weeks
-        paths:
-            - e2e-results
-            - styleguide
-        reports:
-            junit: e2e-results/behat.xml
+    # actually run the tests
+    # ADJUST: use your pacakge key here
+    - cd /app && rm -Rf e2e-results && mkdir e2e-results && bin/behat     --format junit --out e2e-results       --format pretty --out std       -c Packages/Application/PACKAGEKEY/Tests/Behavior/behat.yml.dist
+    - cp -R /app/e2e-results $CI_PROJECT_DIR/e2e-results
+    - cp -R /app/Web/styleguide $CI_PROJECT_DIR/styleguide
+  artifacts:
+    expire_in: 4 weeks
+    paths:
+      - e2e-results
+      - styleguide
+    reports:
+      junit: e2e-results/behat.xml
 ```
 
 ## Creating a FeatureContext
@@ -604,9 +603,9 @@ Now, when you run `./flow stepGenerator:homepage`, you'll get a table like the f
 
 ```gherkin
 Given I have the following nodes:
-| Path   | Node Type    | Properties | HiddenInIndex | Language |
-| /sites | unstructured | []         | false         | de       |
-... many more nodes here in this table ...
+    | Path   | Node Type    | Properties | HiddenInIndex | Language |
+    | /sites | unstructured | []         | false         | de       |
+    # ... many more nodes here in this table ...
 ```
 
 This is ready to be pasted into a test case like the following:
