@@ -549,19 +549,27 @@ use Neos\ContentRepository\Domain\Model\NodeInterface;
 use Neos\ContentRepository\Domain\Service\ContextFactoryInterface;
 use Neos\Flow\Annotations as Flow;
 use Neos\Flow\Cli\CommandController;
-use Sandstorm\E2ETestTools\StepGenerator\NodeTable;
+use Sandstorm\E2ETestTools\StepGenerator\NodeTableBuilderService;
 
 class StepGeneratorCommandController extends CommandController
 {
     /**
      * @Flow\Inject
-     * @var ContextFactoryInterface
      */
-    protected $contextFactory;
+    protected ContextFactoryInterface $contextFactory;
+
+    /**
+     * Main API for creating NodeTable instances to print BDD steps.
+     *
+     * @Flow\Inject
+     */
+    protected NodeTableBuilderService $nodeTableBuilderService;
 
     public function homepageCommand()
     {
-        $nodeTable = new NodeTable(['Language' => 'de']);
+        $nodeTable = $this->nodeTableBuilderService->nodeTable()
+            ->withDefaultNodeProperties(['Language' => 'de'])
+            ->build();
         $siteNode = $this->getSiteNode();
 
         $nodeTable->addParents($siteNode);
@@ -614,7 +622,7 @@ Feature: Homepage Rendering
         Given I have the following nodes:
             | Path   | Node Type    | Properties | HiddenInIndex | Language |
             | /sites | unstructured | []         | false         | de       |
-    ... many more nodes here ...
+    # ... many more nodes here ...
 
         Given I get a node by path "/sites/site" with the following context:
             | Workspace | Dimension: language |
@@ -643,12 +651,13 @@ You probably want to store you asset fixtures near your feature files.
 
     public function homepageCommand()
     {
-        $fixtureBasePath = TODO !!!! FIX DOC !!!!
-        $nodeTable = new NodeTable(
-            ['Language' => 'de'],
-            // !!! here we set the base path
-            $fixtureBasePath
-        );
+        $nodeTable = $this->nodeTableBuilderService->nodeTable()
+            ->withDefaultNodeProperties(['Language' => 'de'])
+            // !!! Here you setup your directory for storing your fixture files.
+            // It will print a path relative to the Flow package directory.
+            //  -> most likely: Sites/Your.PackageKey/Tests/Behavior/Features/Homepage/Resources/someSHA1.png (depending on the type of the composer package)
+            ->withFixtureBasePath('Your.PackageKey', 'Tests/Behavior/Features/Homepage/Resources/')
+            ->build();
         $siteNode = $this->getSiteNode();
 
         $nodeTable->addParents($siteNode);
@@ -670,14 +679,19 @@ look like:
 ```gherkin
 
 Given I have the following images:
-    | Image ID                             | Width | Height | Filename            | Collection | Relative Publication Path | Path                                                                                                                                     |
-    | 3a28c97c-58f1-45c5-b1ad-2f491c904467 |       |        | Map-circle-blue.svg | persistent |                           | /app/Packages/Sites/Your.Package/Tests/Behavior/Features/Frontend/Resources/LogoCollection/9600acebed149b1e0178b214a7f3a82bc7a829a4.svg  |
-    | 846d085f-091b-4d08-82bb-e5f04150c594 | 615   | 418    | cat_caviar.jpeg     | persistent |                           | /app/Packages/Sites/Your.Package/Tests/Behavior/Features/Frontend/Resources/LogoCollection/ee53c207588c199b4e5359f5e06d241b0d93b78e.jpeg |
-    | 3ca6e806-182a-4af2-9a60-50d2ff0bcbdb | 4500  | 4500   | mark-man-stock.png  | persistent |                           | /app/Packages/Sites/Your.Package/Tests/Behavior/Features/Frontend/Resources/LogoCollection/9784f58d2f6810b773807b3cfd56dcbe2b3a1c65.png  |
+    | Image ID                             | Width | Height | Filename            | Collection | Relative Publication Path | Path                                                                                                        |
+    | 3a28c97c-58f1-45c5-b1ad-2f491c904467 |       |        | Map-circle-blue.svg | persistent |                           | Sites/Your.Package/Tests/Behavior/Features/Homepage/Resources/9600acebed149b1e0178b214a7f3a82bc7a829a4.svg  |
+    | 846d085f-091b-4d08-82bb-e5f04150c594 | 615   | 418    | cat_caviar.jpeg     | persistent |                           | Sites/Your.Package/Tests/Behavior/Features/Homepage/Resources/ee53c207588c199b4e5359f5e06d241b0d93b78e.jpeg |
+    | 3ca6e806-182a-4af2-9a60-50d2ff0bcbdb | 4500  | 4500   | mark-man-stock.png  | persistent |                           | Sites/Your.Package/Tests/Behavior/Features/Homepage/Resources/9784f58d2f6810b773807b3cfd56dcbe2b3a1c65.png  |
 Given I have the following nodes:
     | Path | Node Type | Properties | HiddenInIndex | Language |
     # ... nodes go here here with reference to Image ID in their serialized properties
+    # a property might look like: { ..., "myImageProperty":{"__flow_object_type":"Neos\\Media\\Domain\\Model\\Image","__identifier":"3a28c97c-58f1-45c5-b1ad-2f491c904467"}, ...
 ```
+
+Note, that the `Path` column values are printed and read relative to the Flow package directory. That should keep your tests more or less environment independent.
+Usually, the files are stored inside a DistributionPackages/* package which is symlinked into the Flow package directory (and thus is readable from your Test and writable from your Command Controller).
+Also, those files should be added to git, since they are part of your test cases.
 
 ### dynamic modification of SUT URL via step
 

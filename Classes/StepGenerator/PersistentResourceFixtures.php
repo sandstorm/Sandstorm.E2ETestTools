@@ -29,6 +29,8 @@ class PersistentResourceFixtures
             if (!str_starts_with($fixtureBasePath, FLOW_PATH_PACKAGES)) {
                 throw new \Exception("fixtureBasePath must be sub dir of Flow packages directory '" . FLOW_PATH_PACKAGES . "'; but was: " . $fixtureBasePath);
             }
+        } else {
+            $this->fixtureBasePath = null;
         }
         $this->defaultProperties = $defaultProperties;
     }
