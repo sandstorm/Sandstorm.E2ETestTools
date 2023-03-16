@@ -1,0 +1,14 @@
+roles:
+  # this is necessary to allow the test runner to create fixtures when neos
+  # acl package is installed
+  'Neos.Flow:Everybody':
+      privileges:
+        -
+          privilegeTarget: 'Sandstorm.NeosAcl:EditAllNodes'
+          permission: GRANT
+        -
+          privilegeTarget: 'Sandstorm.NeosAcl:CreateAllNodes'
+          permission: GRANT
+        -
+          privilegeTarget: 'Sandstorm.NeosAcl:RemoveAllNodes'
+          permission: GRANT
