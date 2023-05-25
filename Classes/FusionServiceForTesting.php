@@ -3,6 +3,7 @@
 namespace Sandstorm\E2ETestTools;
 
 use Neos\Flow\Annotations as Flow;
+use Neos\Fusion\Core\FusionSourceCodeCollection;
 use Neos\Neos\Domain\Service\FusionService;
 use Sandstorm\E2ETestTools\Tests\Behavior\Bootstrap\FusionRenderingTrait;
 
@@ -21,17 +22,18 @@ class FusionServiceForTesting extends FusionService
     public function getMergedFusionObjectTreeForPackage(string $siteResourcesPackageKey, string $extraFusionCode)
     {
         $siteRootFusionPathAndFilename = sprintf($this->siteRootFusionPattern, $siteResourcesPackageKey);
-        $siteRootFusionCode = $this->readExternalFusionFile($siteRootFusionPathAndFilename);
 
-        $mergedFusionCode = '';
-        $mergedFusionCode .= $this->generateNodeTypeDefinitions();
-        $mergedFusionCode .= $this->getFusionIncludes($this->prepareAutoIncludeFusion());
-        $mergedFusionCode .= $this->getFusionIncludes($this->prependFusionIncludes);
-        $mergedFusionCode .= $siteRootFusionCode;
-        $mergedFusionCode .= $this->getFusionIncludes($this->appendFusionIncludes);
-
-        $mergedFusionCode .= $extraFusionCode;
-
-        return $this->fusionParser->parse($mergedFusionCode, $siteRootFusionPathAndFilename);
+        return $this->fusionParser->parseFromSource(
+            $this->fusionSourceCodeFactory->createFromNodeTypeDefinitions()
+                ->union(
+                    $this->fusionSourceCodeFactory->createFromAutoIncludes()
+                )
+                ->union(
+                    FusionSourceCodeCollection::tryFromFilePath($siteRootFusionPathAndFilename)
+                )
+                ->union(
+                    FusionSourceCodeCollection::fromString($extraFusionCode)
+                )
+        );
     }
 }
