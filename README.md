@@ -756,3 +756,23 @@ and behat call:
 Given my subdomain is "de"
 ```
 
+## Usage for Site Packages that use Sandstorm.NeosAcl
+
+add this to your Policy.yaml in the `Testing/Behat` context:
+
+```yaml
+roles:
+  # this is necessary to allow the test runner to create fixtures when neos
+  # acl package is installed
+  'Neos.Flow:Everybody':
+      privileges:
+        -
+          privilegeTarget: 'Sandstorm.NeosAcl:EditAllNodes'
+          permission: GRANT
+        -
+          privilegeTarget: 'Sandstorm.NeosAcl:CreateAllNodes'
+          permission: GRANT
+        -
+          privilegeTarget: 'Sandstorm.NeosAcl:RemoveAllNodes'
+          permission: GRANT
+```
