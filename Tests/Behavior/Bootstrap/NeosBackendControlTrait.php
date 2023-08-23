@@ -76,7 +76,7 @@ trait NeosBackendControlTrait
         $this->playwrightConnector->execute($this->playwrightContext, sprintf(
         // language=JavaScript
             '
-            await vars.page.click(`body div[class^=style__leftSideBar__top___] div[role=button]:has(span:has-text("%s"))`);
+            await vars.page.locator("body div[class*=leftSideBar__top]").getByRole("button", {name: "%s"}).click();
             await vars.page.waitForSelector(`div#neos-Inspector`);
             vars.neosContentFrame = await vars.page.frame(`neos-content-main`);
         '// language=PHP
