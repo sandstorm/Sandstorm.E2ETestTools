@@ -363,7 +363,10 @@ trait FusionRenderingTrait
                 }
 
                 $persistenceManager = $this->objectManager->get(PersistenceManagerInterface::class);
-                $node = $parentNode->createNode($name, $nodeType, $identifier);
+                $node = $parentNode->getNode($name);
+                if ($node === null) {
+                    $node = $parentNode->createNode($name, $nodeType, $identifier);
+                }
 
                 if (isset($row['Properties']) && $row['Properties'] !== '') {
                     $properties = json_decode($row['Properties'], true);
