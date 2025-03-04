@@ -43,7 +43,10 @@ class PlaywrightConnector
         if ($statusCode !== 404 && $statusCode !== 200) {
             // an error occurred
 
-            throw new \RuntimeException('Unable to stop playwright. Status code was: ' . $statusCode . ' - body contents: ' . $response->getBody()->getContents());
+            throw new \RuntimeException(
+                'Unable to stop playwright. Status code was: ' . $statusCode . ' - body contents: ' . $response->getBody(
+                )->getContents()
+            );
         }
     }
 
@@ -71,24 +74,47 @@ class PlaywrightConnector
         $this->executeInternal($contextName, '// ' . $stepText);
     }
 
-    public function startTracing(string $contextName, string $featureFile, string $scenarioName, string $featureFileLine) {
-        $this->execute($contextName, sprintf(
-        // language=JavaScript
-            '
+    public function startTracing(
+        string $contextName,
+        string $featureFile,
+        string $scenarioName,
+        string $featureFileLine
+    ) {
+        $this->execute(
+            $contextName,
+            sprintf(
+            // language=JavaScript
+                '
             // Finish tracing after scenario
             //   - Feature: %s (line: %d)
             //   - Scenario: %s
             await context.tracing.start({ screenshots: true, snapshots: true });
             '// language=PHP
-            , $featureFile, $featureFileLine, $scenarioName));
+                ,
+                $featureFile,
+                $featureFileLine,
+                $scenarioName
+            )
+        );
     }
 
-    public function finishTracing(string $contextName, string $featureFile, string $scenarioName, string $featureFileLine, bool $keepTrace)
-    {
-        $traceReportZipFileName = 'report_' . preg_replace('/[^a-zA-Z_]/', '', basename($featureFile) . '_' . $scenarioName) . '.zip';
-        $traceReportZipBase64 = $this->execute($contextName, sprintf(
-        // language=JavaScript
-            '
+    public function finishTracing(
+        string $contextName,
+        string $featureFile,
+        string $scenarioName,
+        string $featureFileLine,
+        bool $keepTrace
+    ) {
+        $traceReportZipFileName = 'report_' . preg_replace(
+                '/[^a-zA-Z_]/',
+                '',
+                basename($featureFile) . '_' . $scenarioName
+            ) . '.zip';
+        $traceReportZipBase64 = $this->execute(
+            $contextName,
+            sprintf(
+            // language=JavaScript
+                '
             // Finish tracing after scenario
             //   - Feature: %s (line: %d)
             //   - Scenario: %s
@@ -101,12 +127,23 @@ class PlaywrightConnector
                 return await fs.readFileSync(`%s`, `base64`);
             }
             '// language=PHP
-            , $featureFile, $featureFileLine, $scenarioName, $keepTrace ? 'true' : 'false', $traceReportZipFileName, $traceReportZipFileName));
+                ,
+                $featureFile,
+                $featureFileLine,
+                $scenarioName,
+                $keepTrace ? 'true' : 'false',
+                $traceReportZipFileName,
+                $traceReportZipFileName
+            )
+        );
         if (strlen($traceReportZipBase64)) {
             $traceReportZip = base64_decode($traceReportZipBase64);
             Files::createDirectoryRecursively('e2e-results');
             file_put_contents(sprintf('e2e-results/%s', $traceReportZipFileName), $traceReportZip);
-            echo sprintf("You can find the report trace file %s BOTH in the current PHP execution directory (where you started the tests from),\n", $traceReportZipFileName);
+            echo sprintf(
+                "You can find the report trace file %s BOTH in the current PHP execution directory (where you started the tests from),\n",
+                $traceReportZipFileName
+            );
             echo "and as well in the e2e-testrunner/ folder.";
         }
     }
@@ -126,28 +163,52 @@ class PlaywrightConnector
             $bodyContents = $response->getBody()->getContents();
             $errorResponse = json_decode($bodyContents, true);
             if ($errorResponse === false) {
-                throw new \RuntimeException('Error executing playwright. Status code was: ' . $statusCode . ' - body contents: ' . $bodyContents);
+                throw new \RuntimeException(
+                    'Error executing playwright. Status code was: ' . $statusCode . ' - body contents: ' . $bodyContents
+                );
             }
 
-            throw new \RuntimeException(sprintf("Error executing playwright script - error was: %s. \n\n Full script: \n %s", $errorResponse['error'], $errorResponse['js']));
+            throw new \RuntimeException(
+                sprintf(
+                    "Error executing playwright script - error was: %s. \n\n Full script: \n %s",
+                    $errorResponse['error'],
+                    $errorResponse['js']
+                )
+            );
         } elseif ($statusCode === 200) {
             $bodyContents = $response->getBody()->getContents();
             $successResponse = json_decode($bodyContents, true);
             if ($successResponse === false) {
-                throw new \RuntimeException('Could not deserialize Playwright response, despite 200 status code. - body contents: ' . $bodyContents);
+                throw new \RuntimeException(
+                    'Could not deserialize Playwright response, despite 200 status code. - body contents: ' . $bodyContents
+                );
             }
             return $successResponse;
         } else {
             $bodyContents = $response->getBody()->getContents();
-            throw new \RuntimeException('Error executing playwright. Status code was: ' . $statusCode . ' - body contents: ' . $bodyContents);
+            throw new \RuntimeException(
+                'Error executing playwright. Status code was: ' . $statusCode . ' - body contents: ' . $bodyContents
+            );
         }
     }
-    private function sendRequest(string $method, string $requestUri, string $content = '') {
+
+    private function sendRequest(string $method, string $requestUri, string $content = '')
+    {
         if (!extension_loaded('curl')) {
-            throw new Http\Exception('CurlEngine requires the PHP CURL extension to be installed and loaded.', 1346319808);
+            throw new Http\Exception(
+                'CurlEngine requires the PHP CURL extension to be installed and loaded.',
+                1346319808
+            );
         }
 
         $curlHandle = curl_init((string)$requestUri);
+
+        $pauseEnv = getenv('PAUSE_FOR_DEBUGGING');
+        if ($pauseEnv !== 'true') {
+            $timeout = 30;
+        } else {
+            $timeout = 100000;
+        }
 
         $options = [
             CURLOPT_RETURNTRANSFER => true,
@@ -155,7 +216,7 @@ class PlaywrightConnector
             CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
             CURLOPT_FRESH_CONNECT => true,
             CURLOPT_FORBID_REUSE => true,
-            CURLOPT_TIMEOUT => 30,
+            CURLOPT_TIMEOUT => $timeout,
         ];
         curl_setopt_array($curlHandle, $options);
 
@@ -181,7 +242,15 @@ class PlaywrightConnector
 
         $curlResult = curl_exec($curlHandle);
         if ($curlResult === false) {
-            throw new \RuntimeException(sprintf('cURL reported error code %s with message "%s". Last requested URL was "%s" (%s).', curl_errno($curlHandle), curl_error($curlHandle), curl_getinfo($curlHandle, CURLINFO_EFFECTIVE_URL), $method), 1338906040);
+            throw new \RuntimeException(
+                sprintf(
+                    'cURL reported error code %s with message "%s". Last requested URL was "%s" (%s).',
+                    curl_errno($curlHandle),
+                    curl_error($curlHandle),
+                    curl_getinfo($curlHandle, CURLINFO_EFFECTIVE_URL),
+                    $method
+                ), 1338906040
+            );
         }
 
         curl_close($curlHandle);

@@ -16,15 +16,15 @@ the test framework for writing all kinds of BDD tests.
 - [End-To-End Test Tools](#end-to-end-test-tools)
 - [Architecture](#architecture)
 - [Installation and Setup Instructions](#installation-and-setup-instructions)
-    - [Setting up Playwright](#setting-up-playwright)
-    - [Creating a FeatureContext](#creating-a-featurecontext)
-    - [Loading CSS and JavaScript for the Styleguide](#loading-css-and-javascript-for-the-styleguide)
+  - [Setting up Playwright](#setting-up-playwright)
+  - [Creating a FeatureContext](#creating-a-featurecontext)
+  - [Loading CSS and JavaScript for the Styleguide](#loading-css-and-javascript-for-the-styleguide)
 - [Running Behat Tests](#running-behat-tests)
-    - [Style Guide](#style-guide)
+  - [Style Guide](#style-guide)
 - [Writing Behat Tests](#writing-behat-tests)
-    - [Fusion Component Testcases](#fusion-component-testcases)
-    - [Fusion Integration Testcases](#fusion-integration-testcases)
-    - [Full-Page Snapshot Testcases](#full-page-snapshot-testcases)
+  - [Fusion Component Testcases](#fusion-component-testcases)
+  - [Fusion Integration Testcases](#fusion-integration-testcases)
+  - [Full-Page Snapshot Testcases](#full-page-snapshot-testcases)
 
 <!-- /TOC -->
 
@@ -377,7 +377,7 @@ and `Sandstorm.E2ETestTools:StyleguideJavascripts` prototypes, e.g. in the follo
 
 ```neosfusion
 prototype(Sandstorm.E2ETestTools:StyleguideStylesheets) {
-    headerAssets = PACKAGEKEY:Resources.HeaderAssets
+  headerAssets = PACKAGEKEY:Resources.HeaderAssets
 }
 ```
 
@@ -456,22 +456,22 @@ Some hints:
 @playwright
 Feature: Testcase for Button Component
 
-    Background:
-        Given I have a site for Site Node "site"
-        Given I have the following nodes:
-            | Identifier                           | Path               | Node Type                | Properties                   | Language |
-            | 5cb3a5f7-b501-40b2-b5a8-9de169ef1105 | /sites             | unstructured             | {}                           | de       |
-            | 5e312d5b-9559-4bd2-8251-0182e11b4950 | /sites/site        | PACKAGEKEY:Document.Page | {}                           | de       |
-            | 9cbaa2e2-d779-4936-aa02-0dab324da93e | /sites/site/nested | PACKAGEKEY:Document.Page | {"uriPathSegment": "nested"} | de       |
+  Background:
+    Given I have a site for Site Node "site"
+    Given I have the following nodes:
+      | Identifier                           | Path               | Node Type                | Properties                   | Language |
+      | 5cb3a5f7-b501-40b2-b5a8-9de169ef1105 | /sites             | unstructured             | {}                           | de       |
+      | 5e312d5b-9559-4bd2-8251-0182e11b4950 | /sites/site        | PACKAGEKEY:Document.Page | {}                           | de       |
+      | 9cbaa2e2-d779-4936-aa02-0dab324da93e | /sites/site/nested | PACKAGEKEY:Document.Page | {"uriPathSegment": "nested"} | de       |
 
 
-        Given I get a node by path "/sites/site" with the following context:
-            | Workspace | Dimension: language |
-            | live      | de                  |
+    Given I get a node by path "/sites/site" with the following context:
+      | Workspace | Dimension: language |
+      | live      | de                  |
 
 
-    Scenario: Basic Button (external link)
-        When I render the Fusion object "/testcase" with the current context node:
+  Scenario: Basic Button (external link)
+    When I render the Fusion object "/testcase" with the current context node:
     """
     testcase = PACKAGEKEY:Component.Button {
       text = "External Link"
@@ -479,13 +479,13 @@ Feature: Testcase for Button Component
       isExternalLink = true
     }
     """
-        Then in the fusion output, the inner HTML of CSS selector "a" matches "External Link"
-        Then in the fusion output, the attributes of CSS selector "a" are:
-            | Key    | Value              |
-            | class  | button             |
-            | href   | https://spiegel.de |
-            | target | _blank             |
-        Then I store the Fusion output in the styleguide as "Button_Component_Basic"
+    Then in the fusion output, the inner HTML of CSS selector "a" matches "External Link"
+    Then in the fusion output, the attributes of CSS selector "a" are:
+      | Key    | Value              |
+      | class  | button             |
+      | href   | https://spiegel.de |
+      | target | _blank             |
+    Then I store the Fusion output in the styleguide as "Button_Component_Basic"
 ```
 
 ## Fusion Integration Testcases
@@ -501,32 +501,32 @@ A test case can look like the following one:
 @playwright
 Feature: Testcase for Button Integration
 
-    Background:
-        Given I have a site for Site Node "site"
-        Given I have the following nodes:
-            | Identifier                           | Path               | Node Type                | Properties                   | Language |
-            | 5cb3a5f7-b501-40b2-b5a8-9de169ef1105 | /sites             | unstructured             | {}                           | de       |
-            | 5e312d5b-9559-4bd2-8251-0182e11b4950 | /sites/site        | PACKAGEKEY:Document.Page | {}                           | de       |
-            | 9cbaa2e2-d779-4936-aa02-0dab324da93e | /sites/site/nested | PACKAGEKEY:Document.Page | {"uriPathSegment": "nested"} | de       |
+  Background:
+    Given I have a site for Site Node "site"
+    Given I have the following nodes:
+      | Identifier                           | Path               | Node Type                | Properties                   | Language |
+      | 5cb3a5f7-b501-40b2-b5a8-9de169ef1105 | /sites             | unstructured             | {}                           | de       |
+      | 5e312d5b-9559-4bd2-8251-0182e11b4950 | /sites/site        | PACKAGEKEY:Document.Page | {}                           | de       |
+      | 9cbaa2e2-d779-4936-aa02-0dab324da93e | /sites/site/nested | PACKAGEKEY:Document.Page | {"uriPathSegment": "nested"} | de       |
 
 
-    Scenario: Secondary Button
-        Given I create the following nodes:
-            | Path                      | Node Type                 | Properties                                                                   | Language |
-            | /sites/site/main/testnode | PACKAGEKEY:Content.Button | {"type": "secondary", "link": "node://9cbaa2e2-d779-4936-aa02-0dab324da93e"} | de       |
-        Given I get a node by path "/sites/site/main/testnode" with the following context:
-            | Workspace | Dimension: language |
-            | live      | de                  |
+  Scenario: Secondary Button
+    Given I create the following nodes:
+      | Path                      | Node Type                 | Properties                                                                   | Language |
+      | /sites/site/main/testnode | PACKAGEKEY:Content.Button | {"type": "secondary", "link": "node://9cbaa2e2-d779-4936-aa02-0dab324da93e"} | de       |
+    Given I get a node by path "/sites/site/main/testnode" with the following context:
+      | Workspace | Dimension: language |
+      | live      | de                  |
 
-        When I render the Fusion object "/testcase" with the current context node:
+    When I render the Fusion object "/testcase" with the current context node:
     """
     testcase = PACKAGEKEY:Content.Button
     """
-        Then in the fusion output, the attributes of CSS selector "a" are:
-            | Key  | Value      |
-            | href | /de/nested |
+    Then in the fusion output, the attributes of CSS selector "a" are:
+      | Key  | Value      |
+      | href | /de/nested |
 
-        Then I store the Fusion output in the styleguide as "Button_Integration_Secondary"
+    Then I store the Fusion output in the styleguide as "Button_Integration_Secondary"
 
 ```
 
@@ -603,8 +603,8 @@ Now, when you run `./flow stepGenerator:homepage`, you'll get a table like the f
 
 ```gherkin
 Given I have the following nodes:
-    | Path   | Node Type    | Properties | HiddenInIndex | Language |
-    | /sites | unstructured | []         | false         | de       |
+| Path   | Node Type    | Properties | HiddenInIndex | Language |
+| /sites | unstructured | []         | false         | de       |
     # ... many more nodes here in this table ...
 ```
 
@@ -615,22 +615,22 @@ This is ready to be pasted into a test case like the following:
 @playwright
 Feature: Homepage Rendering
 
-    Scenario: Full Homepage Rendering
-        Given I have a site for Site Node "site"
+  Scenario: Full Homepage Rendering
+    Given I have a site for Site Node "site"
     # to regenerate, use: ./flow stepGenerator:homepage
-        Given I have the following nodes:
-            | Path   | Node Type    | Properties | HiddenInIndex | Language |
-            | /sites | unstructured | []         | false         | de       |
+    Given I have the following nodes:
+      | Path   | Node Type    | Properties | HiddenInIndex | Language |
+      | /sites | unstructured | []         | false         | de       |
     # ... many more nodes here ...
 
-        Given I get a node by path "/sites/site" with the following context:
-            | Workspace | Dimension: language |
-            | live      | de                  |
+    Given I get a node by path "/sites/site" with the following context:
+      | Workspace | Dimension: language |
+      | live      | de                  |
 
-        Given I accepted the Cookie Consent
-        When I render the page
-        Then I store the Fusion output in the styleguide as "Page_Homepage"
-        Then I store the Fusion output in the styleguide as "Page_Homepage_Mobile" using viewport width "320"
+    Given I accepted the Cookie Consent
+    When I render the page
+    Then I store the Fusion output in the styleguide as "Page_Homepage"
+    Then I store the Fusion output in the styleguide as "Page_Homepage_Mobile" using viewport width "320"
 ```
 
 This enables to generate **responsive, reproducible screenshots** of the different pages, and being able to re-generate
@@ -678,18 +678,20 @@ look like:
 ```gherkin
 
 Given I have the following images:
-    | Image ID                             | Width | Height | Filename            | Collection | Relative Publication Path | Path                                                                                                        |
-    | 3a28c97c-58f1-45c5-b1ad-2f491c904467 |       |        | Map-circle-blue.svg | persistent |                           | Sites/Your.Package/Tests/Behavior/Features/Homepage/Resources/9600acebed149b1e0178b214a7f3a82bc7a829a4.svg  |
-    | 846d085f-091b-4d08-82bb-e5f04150c594 | 615   | 418    | cat_caviar.jpeg     | persistent |                           | Sites/Your.Package/Tests/Behavior/Features/Homepage/Resources/ee53c207588c199b4e5359f5e06d241b0d93b78e.jpeg |
-    | 3ca6e806-182a-4af2-9a60-50d2ff0bcbdb | 4500  | 4500   | mark-man-stock.png  | persistent |                           | Sites/Your.Package/Tests/Behavior/Features/Homepage/Resources/9784f58d2f6810b773807b3cfd56dcbe2b3a1c65.png  |
+| Image ID                             | Width | Height | Filename            | Collection | Relative Publication Path | Path                                                                                                        |
+| 3a28c97c-58f1-45c5-b1ad-2f491c904467 |       |        | Map-circle-blue.svg | persistent |                           | Sites/Your.Package/Tests/Behavior/Features/Homepage/Resources/9600acebed149b1e0178b214a7f3a82bc7a829a4.svg  |
+| 846d085f-091b-4d08-82bb-e5f04150c594 | 615   | 418    | cat_caviar.jpeg     | persistent |                           | Sites/Your.Package/Tests/Behavior/Features/Homepage/Resources/ee53c207588c199b4e5359f5e06d241b0d93b78e.jpeg |
+| 3ca6e806-182a-4af2-9a60-50d2ff0bcbdb | 4500  | 4500   | mark-man-stock.png  | persistent |                           | Sites/Your.Package/Tests/Behavior/Features/Homepage/Resources/9784f58d2f6810b773807b3cfd56dcbe2b3a1c65.png  |
 Given I have the following nodes:
-    | Path | Node Type | Properties | HiddenInIndex | Language |
+| Path | Node Type | Properties | HiddenInIndex | Language |
     # ... nodes go here here with reference to Image ID in their serialized properties
     # a property might look like: { ..., "myImageProperty":{"__flow_object_type":"Neos\\Media\\Domain\\Model\\Image","__identifier":"3a28c97c-58f1-45c5-b1ad-2f491c904467"}, ...
 ```
 
-Note, that the `Path` column values are printed and read relative to the Flow package directory. That should keep your tests more or less environment independent.
-Usually, the files are stored inside a DistributionPackages/* package which is symlinked into the Flow package directory (and thus is readable from your Test and writable from your Command Controller).
+Note, that the `Path` column values are printed and read relative to the Flow package directory. That should keep your
+tests more or less environment independent.
+Usually, the files are stored inside a DistributionPackages/* package which is symlinked into the Flow package
+directory (and thus is readable from your Test and writable from your Command Controller).
 Also, those files should be added to git, since they are part of your test cases.
 
 ### dynamic modification of SUT URL via step
@@ -765,14 +767,16 @@ roles:
   # this is necessary to allow the test runner to create fixtures when neos
   # acl package is installed
   'Neos.Flow:Everybody':
-      privileges:
-        -
-          privilegeTarget: 'Sandstorm.NeosAcl:EditAllNodes'
-          permission: GRANT
-        -
-          privilegeTarget: 'Sandstorm.NeosAcl:CreateAllNodes'
-          permission: GRANT
-        -
-          privilegeTarget: 'Sandstorm.NeosAcl:RemoveAllNodes'
-          permission: GRANT
+    privileges:
+      - privilegeTarget: 'Sandstorm.NeosAcl:EditAllNodes'
+        permission: GRANT
+      - privilegeTarget: 'Sandstorm.NeosAcl:CreateAllNodes'
+        permission: GRANT
+      - privilegeTarget: 'Sandstorm.NeosAcl:RemoveAllNodes'
+        permission: GRANT
 ```
+
+## pause for debugging
+
+If you want to use the pause functionality of playwright, please start the test with
+`PAUSE_FOR_DEBUGGING=true` to prevent curl timeouts when communicating with the e2e-testrunner.
