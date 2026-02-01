@@ -5,7 +5,8 @@
         "symfony/dom-crawler": "^5.2 || ^6.0",
         "symfony/css-selector": "^5.2 || ^6.0",
         "guzzlehttp/psr7": "*",
-        "neos/utility-files": "*"
+        "neos/utility-files": "*",
+        "neos/neos-ui": "*"
     },
     "license": "MIT",
     "suggest": {
@@ -22,6 +23,11 @@
     "extra": {
         "neos": {
             "package-key": "Sandstorm.E2ETestTools"
+        }
+    },
+    "config": {
+        "allow-plugins": {
+            "neos/composer-plugin": true
         }
     }
 }

@@ -1,0 +1,20 @@
+{
+    "name": "export-node-button-editor",
+    "scripts": {
+        "build": "node build.js",
+        "watch": "node build.js --watch"
+    },
+    "devDependencies": {
+        "@neos-project/neos-ui-extensibility": "^8.3.5",
+        "@types/prop-types": "^15.7.15",
+        "@types/react": "^19.2.9",
+        "esbuild": "^0.19.12",
+        "esbuild-sass-plugin": "^2.16.1",
+        "prop-types": "^15.8.1",
+        "typescript": "^5.3.3"
+    },
+    "dependencies": {
+        "@neos-project/react-ui-components": "8.3.5",
+        "react": "^16.0.0"
+    }
+}
