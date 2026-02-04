@@ -5,8 +5,9 @@
         "symfony/dom-crawler": "^5.2 || ^6.0",
         "symfony/css-selector": "^5.2 || ^6.0",
         "guzzlehttp/psr7": "*",
-        "neos/utility-files": "*",
-        "neos/neos-ui": "*"
+        "neos/utility-files": "^8.4",
+        "neos/neos-ui": "^8.4",
+        "symfony/yaml": "^6.4"
     },
     "license": "MIT",
     "suggest": {
