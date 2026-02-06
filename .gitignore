@@ -4,5 +4,5 @@ composer.lock
 node_modules/
 Packages/
 .DS_Store
-Documentation/*.bkp
+*.bkp
 Resources/Public
