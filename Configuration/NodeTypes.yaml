@@ -1,19 +1,13 @@
 #
 #
 #
-'Neos.Neos:Node':
-  #ui:
-  #  inspector:
-  #    tabs:
-  #      metadata:
+'Neos.Neos:Document':
   properties:
     __e2eTest:
-      # type: boolean
       ui:
         inspector:
           label: 'BUTTON'
           group: general
           position: end
           editor: 'Sandstorm.E2ETestTools/Inspector/Editors/ExportNodeButton'
-          #editorOptions:
 

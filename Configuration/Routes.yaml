@@ -7,3 +7,16 @@
     '@controller': 'NodeExport'
     '@action': 'index'
     '@format': 'json'
+
+-
+  name: 'Site Export'
+  uriPattern: 'api/export-node'
+  defaults:
+    '@package': 'Sandstorm.E2ETestTools'
+    '@controller': 'NodeExport'
+    '@action': 'index'
+    '@format': 'json'
+
+
+
+

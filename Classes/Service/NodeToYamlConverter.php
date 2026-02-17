@@ -3,9 +3,9 @@
 namespace Sandstorm\E2ETestTools\Service;
 
 use Doctrine\Common\Collections\Collection;
-use Neos\ContentRepository\Domain\Model\Node;
 use Neos\ContentRepository\Domain\Model\NodeInterface;
 use Neos\Media\Domain\Model\AssetInterface;
+use Sandstorm\E2ETestTools\DTO\NodeTreeElement;
 
 class NodeToYamlConverter
 {
@@ -68,20 +68,24 @@ class NodeToYamlConverter
     }
 
     /**
-    */
-    public function nodeToArray(Node $node): array
+     * Get NodeTreeElement from Node
+     *
+     * @param NodeInterface $node
+     * @return NodeTreeElement
+     */
+    public function nodeToNodeTreeElement(NodeInterface $node): NodeTreeElement
     {
         $properties = [];
         foreach ($node->getPropertyNames() as $name) {
             $properties[$name] = $this->normalizeYamlValue($node->getProperty($name));
         }
 
-        return [
-            'path' => $node->getPath(),
-            'type' => $node->getNodeTypeName()->getValue(),
-            'properties' => $properties,
-            'dimensions' => $node->getDimensions(),
-            'children' => []
-        ];
+        return new NodeTreeElement(
+            path: $node->getPath(),
+            type: $node->getNodeTypeName()->getValue(),
+            properties: $properties,
+            dimensions: $node->getDimensions(),
+            children: []
+        );
     }
 }

@@ -34,7 +34,7 @@ export default class ExportNodeButton extends PureComponent {
       .join('/');
 
     // @ts-ignore
-    const redirectUri = baseUri + "/api/export-node/" + this.props.nodeIdentifier;
+    const redirectUri = baseUri + "/api/export-node/" + (this.props.nodeIdentifier || '');
     console.log(redirectUri);
     window.location.href = redirectUri;
   };
@@ -43,7 +43,7 @@ export default class ExportNodeButton extends PureComponent {
     return <button
       onClick={this.exportNodeButtonOnClick}
       // @ts-ignore
-      disabled={this.props.nodeIdentifier == undefined}
+      //disabled={this.props.nodeIdentifier == undefined}
     >Export Node</button>;
   }
 }

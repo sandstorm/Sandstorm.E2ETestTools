@@ -15,6 +15,7 @@ class E2ECommandController extends CommandController
         $this->execute('cp -n ./Packages/Application/Sandstorm.E2ETestTools/Tests/Behavior/Bootstrap/FeatureContext.php.default ./DistributionPackages/' . $sitePackageKey . '/Tests/Behavior/Bootstrap/FeatureContext.php || echo "FeatureContext.php already exists."');
         $this->execute('sed -i "s/Site.Package.Key.Here/' . $sitePackageKey . '/g" ./DistributionPackages/' . $sitePackageKey . '/Tests/Behavior/Bootstrap/FeatureContext.php');
         $this->execute('cp -n ./Packages/Application/Sandstorm.E2ETestTools/Tests/Behavior/behat.yml ./DistributionPackages/' . $sitePackageKey . '/Tests/Behavior/behat.yml || echo "behat.yml already exists."');
+        $this->execute('cd e2e-testrunner && npm install && node index.js');
         $this->execute('./flow e2e:fix');
     }
 

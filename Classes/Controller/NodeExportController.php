@@ -21,12 +21,14 @@ class NodeExportController extends ActionController
     protected NodeExportService $nodeExportService;
 
     /**
+     * Listens to routes: `api/export-node/{identifier}` and `api/export-node/`
      */
-    public function indexAction(string $identifier)
+    public function indexAction(?string $identifier = null)
     {
         $this->view = null;
 
         $node = $this->nodeExportService->getNeosNodeFromIdentifier($identifier);
+
         $nodeTree = $this->nodeExportService->getNodeTreeArrayByNode($node);
 
         $yaml =  Yaml::dump($nodeTree, 9999, 4);
