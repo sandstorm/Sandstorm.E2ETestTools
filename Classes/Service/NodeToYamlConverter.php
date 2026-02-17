@@ -71,14 +71,16 @@ class NodeToYamlConverter
     */
     public function nodeToArray(Node $node): array
     {
-        $out = [];
+        $properties = [];
         foreach ($node->getPropertyNames() as $name) {
-            $out[$name] = $this->normalizeYamlValue($node->getProperty($name));
+            $properties[$name] = $this->normalizeYamlValue($node->getProperty($name));
         }
 
         return [
+            'path' => $node->getPath(),
             'type' => $node->getNodeTypeName()->getValue(),
-            'properties' => $out,
+            'properties' => $properties,
+            'dimensions' => $node->getDimensions(),
             'children' => []
         ];
     }

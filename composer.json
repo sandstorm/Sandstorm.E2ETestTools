@@ -7,7 +7,9 @@
         "guzzlehttp/psr7": "*",
         "neos/utility-files": "^8.4",
         "neos/neos-ui": "^8.4",
-        "symfony/yaml": "^6.4"
+        "symfony/yaml": "^6.4",
+        "neos/behat": "^8.4",
+        "ext-readline": "*"
     },
     "license": "MIT",
     "suggest": {
@@ -17,7 +19,8 @@
     "name": "sandstorm/e2etesttools",
     "autoload": {
         "psr-4": {
-            "Sandstorm\\E2ETestTools\\Tests\\Behavior\\": "Tests/Behavior/",
+            "Sandstorm\\E2ETestTools\\Tests\\Behavior\\Bootstrap\\": "Tests/Behavior/Bootstrap/",
+            "Sandstorm\\E2ETestTools\\Tests\\": "Tests/",
             "Sandstorm\\E2ETestTools\\": "Classes/"
         }
     },

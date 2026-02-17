@@ -398,27 +398,4 @@ trait FusionRenderingTrait
             $this->resetNodeInstances();
         }
     }
-
-    /**
-     * @Given I have the following nodes from file :fileName
-     * @When I create the following nodes from file :fileName
-     */
-    public function iHaveTheFollowingNodesFromFile($fileName): void
-    {
-
-    }
-
-    /**
-     * @When /^I overwrite node properties with following values:$/
-     */
-    public function iOverwriteNodePropertiesWithFollowingValues($fileName, $table): void
-    {
-    }
-
-    /**
-     * @When /^I overwrite placeholders with following values:$/
-     */
-    public function iOverwritePlaceholdersWithFollowingValues($fileName, $table): void
-    {
-    }
 }
