@@ -1,0 +1,9 @@
+## Node Export ------------------------------------------------------------------------
+-
+  name: 'Node Export'
+  uriPattern: 'api/export-node/{identifier}'
+  defaults:
+    '@package': 'Sandstorm.E2ETestTools'
+    '@controller': 'NodeExport'
+    '@action': 'index'
+    '@format': 'json'

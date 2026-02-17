@@ -1,11 +1,25 @@
 Neos:
-
   Neos:
     fusion:
       autoInclude:
         Sandstorm.E2ETestTools: true
+    Ui:
+      resources:
+        javascript:
+          'Sandstorm.E2ETestTools/ExportNodeButton':
+            resource: resource://Sandstorm.E2ETestTools/Public/ExportNodeButton/Plugin.js
+        stylesheets:
+          'Sandstorm.E2ETestTools/ExportNodeButton':
+            resource: 'resource://Sandstorm.E2ETestTools/Public/ExportNodeButton/Plugin.css'
 
   Flow:
+    mvc:
+      routes:
+        'Sandstorm.E2ETestTools':
+          position: 'before Neos.Neos'
+          variables:
+            pageSeparator: '~p'
+            defaultUriSuffix: '.html'
     reflection:
       # specify more tags to be ignored during reflection
       ignoredTags:

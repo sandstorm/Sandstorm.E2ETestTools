@@ -1,0 +1,27 @@
+{
+    "compilerOptions": {
+        "sourceMap": true,
+        "noImplicitAny": true,
+        "esModuleInterop": true,
+        "module": "commonjs",
+        "target": "ES2017",
+        "jsx": "react",
+        "moduleResolution": "node",
+        "experimentalDecorators": true,
+        "strictNullChecks": true,
+        "downlevelIteration": true,
+        "lib": [
+            "es2017",
+            "dom",
+            "dom.iterable"
+        ],
+        "types": [],
+        "baseUrl": "./",
+        "declaration": true,
+        "outDir": "./lib"
+    },
+    "exclude": [
+        "lib",
+        "node_modules"
+    ]
+}
