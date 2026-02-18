@@ -10,29 +10,17 @@ use Symfony\Component\Yaml\Yaml;
 trait NodeImportTrait
 {
     /**
-     * @Given I have the following nodes from file :fileName
-     * @When I create the following nodes from file :fileName
+     * =======================================================================
+     * ========================= Utility methods =============================
+     * =======================================================================
      */
-    public function iHaveTheFollowingNodesFromFile(string $fileName): void
-    {
-        $this->executeFlowCommand("cache:flushone --identifier Neos_Fusion_Content ", "flush Fusion cache");
-        $this->executeFlowCommand("cache:warmup", "warmup Fusion cache");
 
-        $pwd = $this->getAbsoluteFixturePathFromFileName($fileName);
-        try {
-            $yaml = Yaml::parseFile($pwd);
-        } catch (\Exception $e) {
-            throw new \RuntimeException("YAML file not found. Path: " . $pwd . " \n Error Message: " . $e);
-        }
-        if (!is_array($yaml) || !isset($yaml['nodes']) || !is_array($yaml['nodes'])) {
-            throw new \RuntimeException('Invalid YAML structure. Expected top-level key "nodes". Path: ' . $pwd);
-        }
-
-        $table = $this->createTableNodeFromYamlArray($yaml);
-
-        $this->iHaveTheFollowingNodes($table);
-    }
-
+    /**
+     * Convert a via Symfony parsed yaml to Gherkin TableNode
+     *
+     * @param array $yamlArray parsed yaml
+     * @return TableNode
+     */
     private function createTableNodeFromYamlArray(array $yamlArray): TableNode
     {
         $tableRows = [];
@@ -59,15 +47,44 @@ trait NodeImportTrait
     }
 
     /**
-     * Get the
+     * Get absolute fixture file path from to test file relative path
+     *
+     * @param string $relativeFilePath relative file path to test file
+     * @return string absolute fixture file path
      */
-    private function getAbsoluteFixturePathFromFileName(string $fileName): string
+    private function getAbsoluteFixturePathFromFileName(string $relativeFilePath): string
     {
         $pwdParts = explode("/", $this->getCurrentTestFilePath());
-        $pwdParts[count($pwdParts) - 1] = $fileName;
+        $pwdParts[count($pwdParts) - 1] = $relativeFilePath;
         return implode("/", $pwdParts);
     }
 
+    /**
+     * =======================================================================
+     * =========================== Test steps ================================
+     * =======================================================================
+     */
+
+    /**
+     * @Given I have the following nodes from file :fileName
+     * @When I create the following nodes from file :fileName
+     */
+    public function iHaveTheFollowingNodesFromFile(string $fileName): void
+    {
+        $pwd = $this->getAbsoluteFixturePathFromFileName($fileName);
+        try {
+            $yaml = Yaml::parseFile($pwd);
+        } catch (\Exception $e) {
+            throw new \RuntimeException("YAML file not found. Path: " . $pwd . " \n Error Message: " . $e);
+        }
+        if (!is_array($yaml) || !isset($yaml['nodes']) || !is_array($yaml['nodes'])) {
+            throw new \RuntimeException('Invalid YAML structure. Expected top-level key "nodes". Path: ' . $pwd);
+        }
+
+        $table = $this->createTableNodeFromYamlArray($yaml);
+
+        $this->iHaveTheFollowingNodes($table);
+    }
 
     /**
      * @When /^I overwrite node properties with following values:$/

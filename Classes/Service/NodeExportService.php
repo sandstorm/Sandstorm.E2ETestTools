@@ -54,7 +54,7 @@ class NodeExportService
             'currentSite' => $site
         ]);
 
-        if (!$identifier) {
+        if ($identifier == null) {
             return $contentContext->getRootNode();
         }
 

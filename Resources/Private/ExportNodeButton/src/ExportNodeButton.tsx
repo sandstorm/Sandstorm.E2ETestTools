@@ -5,45 +5,37 @@ import {connect} from 'react-redux';
 
 // @ts-ignore
 @connect(state => {
-  const nodeContextPath = state.cr.nodes.focused.contextPaths[0];
+    const nodeContextPath = state.cr.nodes.focused.contextPaths[0];
 
-  return {
-    nodeIdentifier: state.cr.nodes.byContextPath[nodeContextPath]?.identifier,
-    currentUri: state.ui.contentCanvas.src
-  };
+    return {
+        nodeIdentifier: state.cr.nodes.byContextPath[nodeContextPath]?.identifier,
+        currentUri: state.ui.contentCanvas.src
+    };
 })
 
 export default class ExportNodeButton extends PureComponent {
-  static propTypes = {
-    value: PropTypes.string,
-    commit: PropTypes.func.isRequired,
-    nodeIdentifier: PropTypes.string,
-    currentUri: PropTypes.string,
-  };
+    static propTypes = {
+        value: PropTypes.string,
+        commit: PropTypes.func.isRequired,
+        nodeIdentifier: PropTypes.string,
+        currentUri: PropTypes.string,
+    };
 
-  exportNodeButtonOnClick = () => {
-    // @ts-ignore
-    console.log(this.props.nodeIdentifier);
-    // @ts-ignore
-    console.log(this.props.currentUri);
-    // @ts-ignore
-    const parts = this.props.currentUri.split('/');
-    const neosIndex = parts.indexOf('neos');
-    const baseUri = parts
-      .slice(0, neosIndex === -1 ? parts.length : neosIndex)
-      .join('/');
+    exportNodeButtonOnClick = () => {
+        // @ts-ignore
+        const parts = this.props.currentUri.split('/');
+        const neosIndex = parts.indexOf('neos');
+        const baseUri = parts
+            .slice(0, neosIndex === -1 ? parts.length : neosIndex)
+            .join('/');
 
-    // @ts-ignore
-    const redirectUri = baseUri + "/api/export-node/" + (this.props.nodeIdentifier || '');
-    console.log(redirectUri);
-    window.location.href = redirectUri;
-  };
+        // @ts-ignore
+        window.location.href = baseUri + "/api/export-node/" + (this.props.nodeIdentifier ?? '');
+    };
 
-  render() {
-    return <button
-      onClick={this.exportNodeButtonOnClick}
-      // @ts-ignore
-      //disabled={this.props.nodeIdentifier == undefined}
-    >Export Node</button>;
-  }
+    render() {
+        return <button
+            onClick={this.exportNodeButtonOnClick}
+        >Export Node</button>;
+    }
 }

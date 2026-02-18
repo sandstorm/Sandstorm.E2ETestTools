@@ -86,14 +86,10 @@
     constructor() {
       super(...arguments);
       this.exportNodeButtonOnClick = () => {
-        console.log(this.props.nodeIdentifier);
-        console.log(this.props.currentUri);
         const parts = this.props.currentUri.split("/");
         const neosIndex = parts.indexOf("neos");
         const baseUri = parts.slice(0, neosIndex === -1 ? parts.length : neosIndex).join("/");
-        const redirectUri = baseUri + "/api/export-node/" + this.props.nodeIdentifier;
-        console.log(redirectUri);
-        window.location.href = redirectUri;
+        window.location.href = baseUri + "/api/export-node/" + (this.props.nodeIdentifier ?? "");
       };
     }
     render() {
