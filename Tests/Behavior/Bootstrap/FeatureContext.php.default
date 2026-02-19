@@ -46,6 +46,8 @@ class FeatureContext implements Context
     use PersistentResourceTrait;
     use NodeImportTrait;
 
+    protected string $flowContextForSystemUnderTest = "Testing/Behat";
+
     protected string $currentTestFilePath;
 
     public function getCurrentTestFilePath(): string
@@ -98,6 +100,21 @@ class FeatureContext implements Context
     {
         return $this->objectManager;
     }
+
+    protected function executeFlowCommand(string $command, string $errorDescription): bool
+    {
+        $output = [];
+        $resultCode = -100;
+        exec("FLOW_CONTEXT=$this->flowContextForSystemUnderTest ./flow $command", $output, $resultCode);
+        if ($resultCode !== 0) {
+            echo "ERROR: could not $errorDescription";
+            echo print_r($output, true);
+            return false;
+        }
+        print_r($output);
+        return true;
+    }
+
 
     /**
      * @Then /^I should see some output from behat$/

@@ -63,10 +63,17 @@ trait FusionRenderingTrait
      */
     public function iHaveASiteWithName($siteNodeName, $siteName)
     {
-        $this->createAndPersistSite($siteNodeName, function ($site) use ($siteName) {
-            $site->setName($siteName);
-            return $site;
-        });
+        /** @var SiteRepository $siteRepository */
+        $siteRepository = $this->objectManager->get(SiteRepository::class);
+        if (
+            $siteRepository->findOneByNodeName($siteNodeName) != null
+            && $siteRepository->findDefault()?->getNodeName() != $siteNodeName
+        ) {
+            $this->createAndPersistSite($siteNodeName, function ($site) use ($siteName) {
+                $site->setName($siteName);
+                return $site;
+            });
+        }
     }
 
     /**
@@ -391,6 +398,7 @@ trait FusionRenderingTrait
                 if (isset($row['HiddenInIndex']) && $row['HiddenInIndex'] === 'true') {
                     $node->setHiddenInIndex(true);
                 }
+
             }
 
             // Make sure we do not use cached instances
