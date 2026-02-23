@@ -66,7 +66,7 @@ trait FusionRenderingTrait
         /** @var SiteRepository $siteRepository */
         $siteRepository = $this->objectManager->get(SiteRepository::class);
         if (
-            $siteRepository->findOneByNodeName($siteNodeName) != null
+            $siteRepository->findOneByNodeName($siteNodeName) == null
             && $siteRepository->findDefault()?->getNodeName() != $siteNodeName
         ) {
             $this->createAndPersistSite($siteNodeName, function ($site) use ($siteName) {
@@ -388,6 +388,9 @@ trait FusionRenderingTrait
                                 true);
                             $node->setProperty($propertyName, $instance);
                         } else {
+                            if (is_array($propertyValue)) {
+                                $propertyValue = json_encode($propertyValue);
+                            }
                             $node->setProperty($propertyName, $propertyValue);
                         }
                     }
