@@ -130,5 +130,18 @@ class FeatureContext implements Context
     {
         return $this->objectManager->get($className);
     }
+
+    /**
+     * @When /^I pause for debugging$/
+     */
+    public function iPauseForDebugging(): void
+    {
+        $this->playwrightConnector->execute(
+            $this->expectPlaywrightContext(),
+            <<<JS
+                await vars.page.pause();
+            JS
+        );
+    }
 }
 
