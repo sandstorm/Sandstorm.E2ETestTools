@@ -6,17 +6,12 @@ use Neos\Flow\Cli\CommandController;
 
 class E2ECommandController extends CommandController
 {
-
     public function setupCommand(): void
     {
         $sitePackageKey = readline("Enter your site package key, e.g.: Your.SitePackageKey \n");
         $this->execute('./flow e2e:fix');
         $this->execute('./flow behat:setup');
         $this->execute('./flow behat:kickstart ' . $sitePackageKey . ' http://127.0.0.1:8081');
-        $this->execute('cp -n ./Packages/Application/Sandstorm.E2ETestTools/Tests/Behavior/Bootstrap/FeatureContext.php.default ./DistributionPackages/' . $sitePackageKey . '/Tests/Behavior/Bootstrap/FeatureContext.php || echo "FeatureContext.php already exists."');
-        $this->execute('sed -i "s/Site.Package.Key.Here/' . $sitePackageKey . '/g" ./DistributionPackages/' . $sitePackageKey . '/Tests/Behavior/Bootstrap/FeatureContext.php');
-        $this->execute('cp -n ./Packages/Application/Sandstorm.E2ETestTools/Tests/Behavior/behat.yml ./DistributionPackages/' . $sitePackageKey . '/Tests/Behavior/behat.yml || echo "behat.yml already exists."');
-        $this->execute('cd e2e-testrunner && npm install && node index.js');
     }
 
     /**
@@ -41,7 +36,7 @@ class E2ECommandController extends CommandController
     public function fixCommand(): void
     {
         $this->execute('cd ./Build/Behat && composer install');
-        $this->execute( "FLOW_CONTEXT=Production/E2E-SUT ./flow flow:doctrine:compileproxies");
+        $this->execute("FLOW_CONTEXT=Production/E2E-SUT ./flow flow:doctrine:compileproxies");
     }
 
     /**
