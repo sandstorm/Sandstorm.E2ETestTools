@@ -143,5 +143,22 @@ class FeatureContext implements Context
             JS
         );
     }
+
+    /**
+     * @Then I should see the page title :title
+     */
+    public function iShouldSeeThePageTitle($title): void
+    {
+        $actualTitle = $this->playwrightConnector->execute(
+            $this->expectPlaywrightContext(),
+            <<<JS
+            try {
+                await expect(vars.page).toHaveTitle(expected, { timeout: 10000 });
+            } catch (exception) {}
+            return await vars.page.title();
+            JS
+        );
+        assertEquals($title, $actualTitle, "page titles do not match");
+    }
 }
 

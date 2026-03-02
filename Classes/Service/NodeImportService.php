@@ -24,9 +24,10 @@ class NodeImportService
      * Convert a via Symfony parsed yaml to Gherkin TableNode
      *
      * @param array $yamlArray parsed yaml
+     * @param array $overwrites optional  to overwrite node properties
      * @return TableNode
      */
-    public static function createTableNodeFromYamlArray(array $yamlArray): TableNode
+    public static function createTableNodeFromYamlArray(array $yamlArray, array $overwrites = []): TableNode
     {
         $tableRows = [];
 
@@ -38,25 +39,34 @@ class NodeImportService
         ];
 
         foreach ($yamlArray['nodes'] as $identifier => $nodeArray) {
-            NodeImportService::recursiveCreateTableRowFromChildren($identifier, $nodeArray,$tableRows);
+            NodeImportService::recursiveCreateTableRowFromChildren($identifier, $nodeArray, $tableRows, $overwrites);
         }
 
         return new TableNode($tableRows);
     }
 
-    private static function recursiveCreateTableRowFromChildren(string $identifier, array $nodeArray, array &$rows): void
+    /**
+     * @param string $identifier
+     * @param array $nodeArray
+     * @param array $rows
+     * @param array $overwrites - optional array with property overwrites - ['identifier => [...], ...]
+     */
+    private static function recursiveCreateTableRowFromChildren(string $identifier, array $nodeArray, array &$rows, array $overwrites = []): void
     {
+        $properties = $overwrites[$identifier]
+            ? array_merge($nodeArray['properties'], $overwrites[$identifier])
+            : $nodeArray['properties'];
+
         $node = [];
         $node['Path'] = $nodeArray['path'] ?: '/';
         $node['Node Type'] = $nodeArray['type'];
-        $node['Properties'] = json_encode($nodeArray['properties']);
+        $node['Properties'] = json_encode($properties);
         $node['HiddenInIndex'] = "false";
 
         $rows[] = $node;
 
         foreach ($nodeArray['children'] as $identifier => $child) {
-            NodeImportService::recursiveCreateTableRowFromChildren($identifier, $child, $rows);
+            NodeImportService::recursiveCreateTableRowFromChildren($identifier, $child, $rows, $overwrites);
         }
     }
-
 }
