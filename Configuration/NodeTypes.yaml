@@ -1,13 +1,35 @@
-#
-#
-#
 'Neos.Neos:Document':
+  ui:
+    inspector:
+      groups:
+        export:
+          label: 'Export'
+          position: 200
+          tab: meta
   properties:
     __e2eTest:
       ui:
         inspector:
           label: 'BUTTON'
-          group: general
+          tab: meta
+          group: export
+          position: end
+          editor: 'Sandstorm.E2ETestTools/Inspector/Editors/ExportNodeButton'
+'Neos.Neos:Node':
+  ui:
+    inspector:
+      groups:
+        export:
+          label: 'Export'
+          position: 200
+          tab: meta
+  properties:
+    __e2eTest:
+      ui:
+        inspector:
+          label: 'BUTTON'
+          tab: meta
+          group: export
           position: end
           editor: 'Sandstorm.E2ETestTools/Inspector/Editors/ExportNodeButton'
 
