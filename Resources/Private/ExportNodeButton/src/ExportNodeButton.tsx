@@ -35,6 +35,7 @@ export default class ExportNodeButton extends PureComponent {
 
     render() {
         return <button
+            className={"neos-button-primary"}
             onClick={this.exportNodeButtonOnClick}
         >Export Node</button>;
     }

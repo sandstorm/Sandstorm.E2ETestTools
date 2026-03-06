@@ -96,6 +96,7 @@
       return /* @__PURE__ */ import_react.default.createElement(
         "button",
         {
+          className: "neos-button-primary",
           onClick: this.exportNodeButtonOnClick
         },
         "Export Node"
