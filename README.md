@@ -135,6 +135,9 @@ during development time and during production/CI**:
 
 > This is MANDATORY to read for people who want to integrate BDD into the project.
 
+- either copy .mise.toml and update it, then run `mise run e2e:setup`
+- or do the following:
+
 ```
 composer require sandstorm/e2etesttools @dev
 ./flow behat:setup
@@ -296,79 +299,11 @@ e2e_test:
 ## Creating a FeatureContext
 
 The `FeatureContext` is the PHP class containing the step definitions for the Behat scenarios. We provide base traits
-you should use for various functionality. The skeleton of the `FeatureContext`
-should look as follows:
-
-```php
-<?php
-
-use Behat\Behat\Context\Context;
-use Neos\Behat\Tests\Behat\FlowContextTrait;
-use Neos\ContentRepository\Tests\Behavior\Features\Bootstrap\NodeOperationsTrait;
-use Neos\Flow\ObjectManagement\ObjectManagerInterface;
-use Neos\Flow\Tests\Behavior\Features\Bootstrap\SecurityOperationsTrait;
-use Sandstorm\E2ETestTools\Tests\Behavior\Bootstrap\FusionRenderingTrait;
-use Sandstorm\E2ETestTools\Tests\Behavior\Bootstrap\PlaywrightTrait;
-
-require_once(__DIR__ . '/../../../../../../Packages/Application/Neos.Behat/Tests/Behat/FlowContextTrait.php');
-require_once(__DIR__ . '/../../../../../../Packages/Application/Neos.ContentRepository/Tests/Behavior/Features/Bootstrap/NodeOperationsTrait.php');
-require_once(__DIR__ . '/../../../../../../Packages/Framework/Neos.Flow/Tests/Behavior/Features/Bootstrap/SecurityOperationsTrait.php');
-require_once(__DIR__ . '/../../../../../../Packages/Application/Sandstorm.E2ETestTools/Tests/Behavior/Bootstrap/FusionRenderingTrait.php');
-require_once(__DIR__ . '/../../../../../../Packages/Application/Sandstorm.E2ETestTools/Tests/Behavior/Bootstrap/PlaywrightTrait.php');
-
-class FeatureContext implements Context
-{
-    // This is for integration with Flow (so you have access to $this->objectManager of Flow).  (part of Neos.Behat)
-    use FlowContextTrait;
-    
-    // prerequisite of NodeOperationsTrait (part of Neos.Flow)
-    use SecurityOperationsTrait;
-    
-    // create Nodes etc. in Behat tests (part of Neos.ContentRepository)
-    use NodeOperationsTrait {
-        // take overridden "iHaveTheFollowingNodes" from FusionRenderingTrait
-        FusionRenderingTrait::iHaveTheFollowingNodes insteadof NodeOperationsTrait;
-    }
-    
-    // Render Fusion code and Styleguide (part of Sandstorm.E2ETestTools)
-    use FusionRenderingTrait;
-    
-    // Browser Automation
-    use PlaywrightTrait;
-
-    /**
-     * @var ObjectManagerInterface
-     */
-    protected $objectManager;
-
-    public function __construct()
-    {
-        if (self::$bootstrap === null) {
-            self::$bootstrap = $this->initializeFlow();
-        }
-        $this->objectManager = self::$bootstrap->getObjectManager();
-        $this->setupSecurity();
-        $this->setupPlaywright();
-        
-        // !!! You need to add the Site Package Key here, so that we are able to load the Fusion code properly.
-        $this->setupFusionRendering('Site.Package.Key.Here');
-        
-        // !!! Important for usage with Neos: you need to publish resources that are created from fixtures
-        $this->PersistentResourceTrait_registerResourcePersistedHook(function () {
-            // publish resources post persist hook for PersistentResources created by fixtures
-            // execute a: './flow resource:publish'
-        });
-    }
-
-    /**
-     * @return ObjectManagerInterface
-     */
-    public function getObjectManager(): ObjectManagerInterface
-    {
-        return $this->objectManager;
-    }
-}
-```
+you should use for various functionality. 
+We provide a working skeleton for you to use under `Tests/Behavior/Bootstrap/FeatureContext.php.default`
+Copy this file as your `FeatureContext.php` to your project `Tests/Behavior/Bootstrap/FeatureContext.php`
+`cp -R ./Packages/Application/Sandstorm.E2ETestTools/Tests/Behavior/Bootstrap/FeatureContext.php.default ./DistributionPackages/<Your.PackageName>/Tests/Behavior/Bootstrap/FeatureContext.php`
+Inside the file, check the paths to the provided Sandstorm traits and update if necessary.
 
 ## Loading CSS and JavaScript for the Styleguide
 
@@ -442,6 +377,36 @@ guide contains BOTH HTML snapshots; and rendered images of the HTML.
 # Writing Behat Tests
 
 Here, we try to give examples for common Behat scenarios; such that you can easily get started.
+
+## Fixture Setup
+
+The Sandstorm.E2ETestTools Package provides inline, delegated and hybrid fixture setups.
+We recommend using a hybrid approach.
+
+### Delegated / Hybrid
+
+In your Neos Backend, select a node you want to test, go to the meta tab and click "export node".
+This will download a yaml file containing all the selected node's parents and all descendants of the 
+nearest document parent (in case of dependencies as such references). Afterwards, move the downloaded yaml file into
+test directory and use them in your .feature file like such:
+```gherkin
+Given I have a site for Site Node "www-my-site" with name "www.my.side"
+And I have the following nodes from file "relative-path-from-test-file-to.yaml"
+```
+
+Also, you can override node properties inline:
+```gherkin
+Given I have the following nodes from file "relative-path-from-test-file-to.yaml" with overwrites
+| identifier                           | property      | value |
+| 5cb3a5f7-b501-40b2-b5a8-9de169ef1105 | title         | Foo   |
+```
+
+### Inline
+```gherkin
+Given I have the following nodes:
+| Identifier                           | Path               | Node Type                | Properties                   | Language |
+| 5cb3a5f7-b501-40b2-b5a8-9de169ef1105 | /sites             | unstructured             | {}                           | de       |
+```
 
 ## Fusion Component Testcases
 

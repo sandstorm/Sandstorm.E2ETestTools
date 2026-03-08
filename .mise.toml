@@ -1,0 +1,46 @@
+# TODO:
+# - Update PACKAGE_NAME
+# - check neos:exec entrypoint
+# - check neos:exec container name
+
+[env]
+PACKAGE_NAME = 'Your.Package'
+
+[tasks."neos:exec"]
+usage = '''
+arg "<command>" help="command to execute in docker container"
+flag "-w --entrypoint <entrypoint>" default="/app"
+'''
+run = [
+  'docker compose exec -w {{usage.entrypoint}} neos-php bash -c "{{usage.command}}"',
+]
+
+[tasks."test:e2e"]
+# optional argument
+# undefined => run all e2e tests
+# MyFile.feature => run test file
+# MyFile.feature:123 => run test scenario
+usage = 'arg "[specification]" default="" help="Description"'
+run = [
+  'mise run neos:exec "PAUSE_FOR_DEBUGGING=true FLOW_CONTEXT=Production/E2E-SUT ./bin/behat -c ./DistributionPackages/$PACKAGE_NAME/Tests/Behavior/behat.yml {{usage.specification}} -vvv"',
+]
+
+[tasks."e2e:setup"]
+run = [
+  'mise run neos:exec "./flow behat:setup"',
+  'mise run neos:exec "./flow behat:kickstart $PACKAGE_NAME http://127.0.0.1:8081"',
+  'mise run neos:exec "./flow e2e:fix"',
+  'cd e2e-testrunner && npm install',
+]
+
+[tasks."e2e:playwright"]
+run = [
+  'cd e2e-testrunner && node index.js',
+]
+
+[tasks."cache:flush"]
+run = 'mise run neos:exec "./flow flow:cache:flush"'
+
+[tasks."cache:flush:e2e"]
+run = 'mise run neos:exec "FLOW_CONTEXT=Production/E2E-SUT ./flow flow:cache:flush"'
+
