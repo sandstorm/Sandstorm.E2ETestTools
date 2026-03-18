@@ -14,126 +14,25 @@ the test framework for writing all kinds of BDD tests.
 <!-- TOC -->
 
 - [End-To-End Test Tools](#end-to-end-test-tools)
-- [Architecture](#architecture)
 - [Installation and Setup Instructions](#installation-and-setup-instructions)
   - [Setting up Playwright](#setting-up-playwright)
   - [Creating a FeatureContext](#creating-a-featurecontext)
   - [Loading CSS and JavaScript for the Styleguide](#loading-css-and-javascript-for-the-styleguide)
+  - [Pipeline Setup](#pipeline-setup) 
 - [Running Behat Tests](#running-behat-tests)
   - [Style Guide](#style-guide)
 - [Writing Behat Tests](#writing-behat-tests)
   - [Fusion Component Testcases](#fusion-component-testcases)
   - [Fusion Integration Testcases](#fusion-integration-testcases)
   - [Full-Page Snapshot Testcases](#full-page-snapshot-testcases)
+- [Architecture](#architecture)
 
 <!-- /TOC -->
 
-# Architecture
-
-> We suggest to skim this part roughly to get an overview of the general architecture.
-> As long as you do not do in-depth modifications, you do not need to read it in detail.
-
-The architecture for running behavioral tests is as follows:
-
-```                                                                                              
-   ╔╦══════════════════╦╗   1  ┌────────────────────┐
-   ║│Behat Test Runner ├╬──────▶   E2E-Testrunner   │
-   ║└──────────────────┘║      │(Playwright Server -│
-   ║ Application Docker ║      │  Chrome Browser)   │
-   ║  Container (SUT)   ║◀─────┤                    │
-   ╚══════════╦═════════╝   2  └────────────────────┘
-              │                                      
-             3│                                      
-   ┌──────────▼─────────┐                            
-   │other services (DB, │                            
-   │    Redis, ...)     │                            
-   └────────────────────┘                            
-```
-
-1) We add the Behat test runner to the Development or Production App Docker Container (SUT - System under Test), so that
-   the Behat test runner can access any code from the application, and has the exact same environment, database, and
-   library versions like the production application.
-
-2) The E2E Testrunner wraps Playwright (which is a browser orchestrator) and exposes a HTTP API. It is running as
-   associated service. Behat communicates to the test runner via HTTP (1).
-
-3) Then, the testrunner calls the unmodified application via HTTP (2).
-
-4) The application then calls other services like Redis and the database - just as usual.
-
-There is one catch with big implications, though: **The E2E tests need full control over the database** to work
-reliably. As we do not want to clear our development database each time we run our tests, we need to **use two
-databases**: one for Testing, and the other one for Development.
-
-Additionally, the E2E tests need to reach the system wired to the *testing environment* through HTTP. This means we
-need **two web server ports** as well: One for development, and one for the testing context.
-
-This setup is somewhat complicated; so the following image helps to illustrate how the different contexts interact **
-during development time and during production/CI**:
-
-```                                                                                                             
-                                                                                                                
-                                                                                                                
-                               Main Development Web                                              Behat CLI      
-                               Server (usually port         Web Server used by                  (bin/behat)     
-                                      8080)                Behat Tests (usually                        │        
-                                                                Port 9090)                             │        
-                                         │                                                             │        
-                                         │                           ┌────────────────┐                │        
-                                         │                           │                │                │        
-                                         │                           ▼                │                ▼        
-                                         │       ╔═════════════════════════╗        ╔══════════════════════════╗
-    ######  ####### #     #              │       ║Development/Docker/Behat ║        ║  Testing/Behat Context   ║
-    #     # #       #     #              │       ║         Context         ║        ║                          ║
-    #     # #       #     #              │       ║                         ║        ║ behat tests executed as  ║
-    #     # #####   #     #              │       ║   only overrides the    ║        ║ this context; so config  ║
-    #     # #        #   #               │       ║      database name      ║        ║       should match       ║
-    #     # #         # #                │       ╚═════════════════════════╝        ║ Development/Docker/Behat ║
-    ######  #######    #                 │                                          ║                          ║
-                                         ▼                                          ║                          ║
-                                        ╔══════════════════════════════════╗        ║                          ║
-                                        ║    Development/Docker Context    ║        ║                          ║
-                                        ║                                  ║        ║                          ║
-                                        ║ contains the main configuration  ║        ║                          ║
-                                        ║             for DEV              ║        ║                          ║
-                                        ╚══════════════════════════════════╝        ╚══════════════════════════╝
-                                                                                                                
-                                                                                                                
-                                                                                                                
-                                                                                                                
-                                                                                                                
-                                                                                                                
-                                                                                                                
-                                                                                                                
-                                                                                                                
-                               Main Production Web                                              Behat CLI      
-                               Server (usually port         Web Server used by                  (bin/behat)     
-                                      8080)                Behat Tests (usually                        │        
-                                                                Port 9090)                             │        
-                                         │                                                             │        
-                                         │                           ┌────────────────┐                │        
-                                         │                           │                │                │        
-          #####  ###                     │                           ▼                │                ▼        
-         #     #  #                      │       ╔═════════════════════════╗        ╔══════════════════════════╗
-         #        #                      │       ║Production/Kubernetes/Beh║        ║  Testing/Behat Context   ║
-         #        #                      │       ║       at Context        ║        ║                          ║
-         #        #                      │       ║                         ║        ║ behat tests executed as  ║
-         #     #  #                      │       ║   only overrides the    ║        ║ this context; so config  ║
-          #####  ###                     │       ║      database name      ║        ║       should match       ║
-                                         │       ╚═════════════════════════╝        ║Development/Kubernetes/Beh║
-                                         │                                          ║            at            ║
-                                         ▼                                          ║                          ║
-                                        ╔══════════════════════════════════╗        ║                          ║
-                                        ║  Development/Kubernetes Context  ║        ║                          ║
-                                        ║                                  ║        ║                          ║
-                                        ║ contains the main configuration  ║        ║                          ║
-                                        ║             for PROD             ║        ║                          ║
-                                        ╚══════════════════════════════════╝        ╚══════════════════════════╝
-```                                                                                                             
-
 # Installation and Setup Instructions
 
-> This is MANDATORY to read for people who want to integrate BDD into the project.
+- either copy .mise.toml and update it, then run `mise run e2e:setup`
+- or do the following:
 
 ```
 composer require sandstorm/e2etesttools @dev
@@ -176,199 +75,18 @@ rm bin/selenium-server.jar # we do not need this
 
 We suggest copying `Resources/Private/e2e-testrunner-template` of this package to the root of the Git Repository and
 name the folder `e2e-testrunner` (in our projects, usually one level ABOVE the Neos Root Directory).
+Also, make sure you have installed playwright on your device.
+`npx playwright install`
 
-Additionally, you'll need the following `.gitlab-ci.yml` for *BUILDING*
-
-```yaml
-package_app:
-  stage: build
-  image: docker-hub.sandstorm.de/docker-infrastructure/php-app/build:7.4-v2
-  interruptible: true
-  script:
-    - cd app
-    # NOTE: for E2E tests we HAVE also to install DEV dependencies; otherwise we won't be able to run behavioral tests then.
-    - COMPOSER_CACHE_DIR=.composer-cache composer install --dev --ignore-platform-reqs
-    - cd ..
-
-    # set up Behat
-    - mkdir -p app/Build && cp -R app/Packages/Application/Neos.Behat/Resources/Private/Build/Behat app/Build/Behat
-    - cd app/Build/Behat && COMPOSER_CACHE_DIR=../../.composer-cache composer install && cd ../../../
-
-    # build image
-    - docker login -u gitlab-ci-token -p $CI_BUILD_TOKEN $CI_REGISTRY
-    - docker build -t $CI_REGISTRY_IMAGE:$CI_BUILD_REF_SLUG .
-    - docker push $CI_REGISTRY_IMAGE:$CI_BUILD_REF_SLUG
-  tags:
-    - docker
-    - privileged
-  cache:
-    key: PROJECTNAME__composer
-    paths:
-      - app/.composer-cache
-
-
-
-build_e2e_testrunner:
-  stage: build
-  image: docker-hub.sandstorm.de/docker-infrastructure/php-app/build:7.4-v2
-  interruptible: true
-  script:
-    - cd e2e-testrunner
-    - docker login -u gitlab-ci-token -p $CI_BUILD_TOKEN $CI_REGISTRY
-    - docker build -t $CI_REGISTRY_IMAGE:$CI_BUILD_REF_SLUG-e2e-testrunner .
-    - docker push $CI_REGISTRY_IMAGE:$CI_BUILD_REF_SLUG-e2e-testrunner
-    - cd ..
-  tags:
-    - docker
-    - privileged
-```
-
-Then, for *running* the tests, you'll need something like the following snippet in `.gitlab-ci.yml`.
-
-Every related service (like redis, database, ...) needs to be started using a `servives` entry. Ensure the Docker image
-version of the service matches the development and production image from `docker-compose.yml`.
-
-The *environment variables* of the job are passed on to *all services* - so all connected services and the main job
-share the same environment variables. Thus, you need to add the environment variables for BOTH the SUT (which is the
-main job) and all related services to the `variables` section of the test job.
-
-```yaml
-e2e_test:
-  stage: test
-  interruptible: true
-  # we're running this job inside the production image we've just built previously
-  image:
-    name: $CI_REGISTRY_IMAGE:$CI_BUILD_REF_SLUG
-    # we may need to override the entrypoint here
-    entrypoint: [ "" ]
-  dependencies: [ ] # we do not need any artifacts from prior steps
-  variables:
-    # service mariadb
-    MYSQL_USER: 'ci_user'
-    MYSQL_PASSWORD: 'ci_db_password'
-    MYSQL_DATABASE: 'ci_test'
-
-    # System under Test
-    FLOW_CONTEXT: 'Production/Kubernetes'
-    DB_NEOS_HOST: 'mariadb'
-    DB_NEOS_PORT: '3306'
-    DB_NEOS_USER: '${MYSQL_USER}'
-    DB_NEOS_PASSWORD: '${MYSQL_PASSWORD}'
-    DB_NEOS_DATABASE: '${MYSQL_DATABASE}'
-  services:
-    - name: mariadb:10.5
-    # here, we make the e2e-testrunner available
-    - name: $CI_REGISTRY_IMAGE:$CI_BUILD_REF_SLUG-e2e-testrunner
-      alias: e2e-testrunner
-  script:
-    # ADJUST: the following lines must be adjusted to match the *entrypoint*
-    - cd /app && ./flow doctrine:migrate
-    # make E2E Test Server available (port 9090)
-    - ln -s /etc/nginx/nginx-e2etest-server-prod.conf /etc/nginx/conf.d/nginx-e2etest-server-prod.conf
-
-    - /bin/sh /start.sh &
-    # the playwright API URL does not need to be adjusted as long as the service alias for playwright is `e2e-testrunner`.
-    - export PLAYWRIGHT_API_URL=http://e2e-testrunner:3000
-
-    # ADJUST: you might need to adjust the SUT URL; and the wait URL below
-    - export SYSTEM_UNDER_TEST_URL_FOR_PLAYWRIGHT=http://$(hostname -i):9090
-    - |
-      # now wait until system under test is up and running
-      until $(curl --output /dev/null --silent --head --fail http://127.0.0.1:9090); do
-          printf '.'
-          sleep 5
-      done
-
-    # actually run the tests
-    # ADJUST: use your pacakge key here
-    - cd /app && rm -Rf e2e-results && mkdir e2e-results && bin/behat     --format junit --out e2e-results       --format pretty --out std       -c Packages/Application/PACKAGEKEY/Tests/Behavior/behat.yml.dist
-    - cp -R /app/e2e-results $CI_PROJECT_DIR/e2e-results
-    - cp -R /app/Web/styleguide $CI_PROJECT_DIR/styleguide
-  artifacts:
-    expire_in: 4 weeks
-    paths:
-      - e2e-results
-      - styleguide
-    reports:
-      junit: e2e-results/behat.xml
-```
 
 ## Creating a FeatureContext
 
 The `FeatureContext` is the PHP class containing the step definitions for the Behat scenarios. We provide base traits
-you should use for various functionality. The skeleton of the `FeatureContext`
-should look as follows:
-
-```php
-<?php
-
-use Behat\Behat\Context\Context;
-use Neos\Behat\Tests\Behat\FlowContextTrait;
-use Neos\ContentRepository\Tests\Behavior\Features\Bootstrap\NodeOperationsTrait;
-use Neos\Flow\ObjectManagement\ObjectManagerInterface;
-use Neos\Flow\Tests\Behavior\Features\Bootstrap\SecurityOperationsTrait;
-use Sandstorm\E2ETestTools\Tests\Behavior\Bootstrap\FusionRenderingTrait;
-use Sandstorm\E2ETestTools\Tests\Behavior\Bootstrap\PlaywrightTrait;
-
-require_once(__DIR__ . '/../../../../../../Packages/Application/Neos.Behat/Tests/Behat/FlowContextTrait.php');
-require_once(__DIR__ . '/../../../../../../Packages/Application/Neos.ContentRepository/Tests/Behavior/Features/Bootstrap/NodeOperationsTrait.php');
-require_once(__DIR__ . '/../../../../../../Packages/Framework/Neos.Flow/Tests/Behavior/Features/Bootstrap/SecurityOperationsTrait.php');
-require_once(__DIR__ . '/../../../../../../Packages/Application/Sandstorm.E2ETestTools/Tests/Behavior/Bootstrap/FusionRenderingTrait.php');
-require_once(__DIR__ . '/../../../../../../Packages/Application/Sandstorm.E2ETestTools/Tests/Behavior/Bootstrap/PlaywrightTrait.php');
-
-class FeatureContext implements Context
-{
-    // This is for integration with Flow (so you have access to $this->objectManager of Flow).  (part of Neos.Behat)
-    use FlowContextTrait;
-    
-    // prerequisite of NodeOperationsTrait (part of Neos.Flow)
-    use SecurityOperationsTrait;
-    
-    // create Nodes etc. in Behat tests (part of Neos.ContentRepository)
-    use NodeOperationsTrait {
-        // take overridden "iHaveTheFollowingNodes" from FusionRenderingTrait
-        FusionRenderingTrait::iHaveTheFollowingNodes insteadof NodeOperationsTrait;
-    }
-    
-    // Render Fusion code and Styleguide (part of Sandstorm.E2ETestTools)
-    use FusionRenderingTrait;
-    
-    // Browser Automation
-    use PlaywrightTrait;
-
-    /**
-     * @var ObjectManagerInterface
-     */
-    protected $objectManager;
-
-    public function __construct()
-    {
-        if (self::$bootstrap === null) {
-            self::$bootstrap = $this->initializeFlow();
-        }
-        $this->objectManager = self::$bootstrap->getObjectManager();
-        $this->setupSecurity();
-        $this->setupPlaywright();
-        
-        // !!! You need to add the Site Package Key here, so that we are able to load the Fusion code properly.
-        $this->setupFusionRendering('Site.Package.Key.Here');
-        
-        // !!! Important for usage with Neos: you need to publish resources that are created from fixtures
-        $this->PersistentResourceTrait_registerResourcePersistedHook(function () {
-            // publish resources post persist hook for PersistentResources created by fixtures
-            // execute a: './flow resource:publish'
-        });
-    }
-
-    /**
-     * @return ObjectManagerInterface
-     */
-    public function getObjectManager(): ObjectManagerInterface
-    {
-        return $this->objectManager;
-    }
-}
-```
+you should use for various functionality. 
+We provide a working skeleton for you to use under `Tests/Behavior/Bootstrap/FeatureContext.php.default`
+Copy this file as your `FeatureContext.php` to your project `Tests/Behavior/Bootstrap/FeatureContext.php`
+`cp -R ./Packages/Application/Sandstorm.E2ETestTools/Tests/Behavior/Bootstrap/FeatureContext.php.default ./DistributionPackages/<Your.PackageName>/Tests/Behavior/Bootstrap/FeatureContext.php`
+Inside the file, check the paths to the provided Sandstorm traits and update if necessary.
 
 ## Loading CSS and JavaScript for the Styleguide
 
@@ -383,6 +101,18 @@ prototype(Sandstorm.E2ETestTools:StyleguideStylesheets) {
 
 > Additionally, the base URL needs to be configured correctly. This package sets it to "/" in the `Testing/Behat`
 > context which will work in most cases out of the box.
+
+## Pipeline Setup
+We provide a skeleton to run e2e tests in your gitlab pipeline.
+Add the provided lines from our `.gitlab-ci.yml` to yours and adjust accordingly.
+
+Every related service (like redis, database, ...) needs to be started using a `servives` entry. Ensure the Docker image
+version of the service matches the development and production image from `docker-compose.yml`.
+
+The *environment variables* of the job are passed on to *all services* - so all connected services and the main job
+share the same environment variables. Thus, you need to add the environment variables for BOTH the SUT (which is the
+main job) and all related services to the `variables` section of the test job.
+
 
 # Running Behat Tests
 
@@ -442,6 +172,36 @@ guide contains BOTH HTML snapshots; and rendered images of the HTML.
 # Writing Behat Tests
 
 Here, we try to give examples for common Behat scenarios; such that you can easily get started.
+
+## Fixture Setup
+
+The Sandstorm.E2ETestTools Package provides inline, delegated and hybrid fixture setups.
+We recommend using a hybrid approach.
+
+### Delegated / Hybrid
+
+In your Neos Backend, select a node you want to test, go to the meta tab and click "export node".
+This will download a yaml file containing all the selected node's parents and all descendants of the 
+nearest document parent (in case of dependencies as such references). Afterwards, move the downloaded yaml file into
+test directory and use them in your .feature file like such:
+```gherkin
+Given I have a site for Site Node "www-my-site" with name "www.my.side"
+And I have the following nodes from file "relative-path-from-test-file-to.yaml"
+```
+
+Also, you can override node properties inline:
+```gherkin
+Given I have the following nodes from file "relative-path-from-test-file-to.yaml" with overwrites
+| identifier                           | property      | value |
+| 5cb3a5f7-b501-40b2-b5a8-9de169ef1105 | title         | Foo   |
+```
+
+### Inline
+```gherkin
+Given I have the following nodes:
+| Identifier                           | Path               | Node Type                | Properties                   | Language |
+| 5cb3a5f7-b501-40b2-b5a8-9de169ef1105 | /sites             | unstructured             | {}                           | de       |
+```
 
 ## Fusion Component Testcases
 
@@ -780,3 +540,107 @@ roles:
 
 If you want to use the pause functionality of playwright, please start the test with
 `PAUSE_FOR_DEBUGGING=true` to prevent curl timeouts when communicating with the e2e-testrunner.
+
+
+# Architecture
+
+> We suggest to skim this part roughly to get an overview of the general architecture.
+> As long as you do not do in-depth modifications, you do not need to read it in detail.
+
+The architecture for running behavioral tests is as follows:
+
+```                                                                                              
+   ╔╦══════════════════╦╗   1  ┌────────────────────┐
+   ║│Behat Test Runner ├╬──────▶   E2E-Testrunner   │
+   ║└──────────────────┘║      │(Playwright Server -│
+   ║ Application Docker ║      │  Chrome Browser)   │
+   ║  Container (SUT)   ║◀─────┤                    │
+   ╚══════════╦═════════╝   2  └────────────────────┘
+              │                                      
+             3│                                      
+   ┌──────────▼─────────┐                            
+   │other services (DB, │                            
+   │    Redis, ...)     │                            
+   └────────────────────┘                            
+```
+
+1) We add the Behat test runner to the Development or Production App Docker Container (SUT - System under Test), so that
+   the Behat test runner can access any code from the application, and has the exact same environment, database, and
+   library versions like the production application.
+
+2) The E2E Testrunner wraps Playwright (which is a browser orchestrator) and exposes a HTTP API. It is running as
+   associated service. Behat communicates to the test runner via HTTP (1).
+
+3) Then, the testrunner calls the unmodified application via HTTP (2).
+
+4) The application then calls other services like Redis and the database - just as usual.
+
+There is one catch with big implications, though: **The E2E tests need full control over the database** to work
+reliably. As we do not want to clear our development database each time we run our tests, we need to **use two
+databases**: one for Testing, and the other one for Development.
+
+Additionally, the E2E tests need to reach the system wired to the *testing environment* through HTTP. This means we
+need **two web server ports** as well: One for development, and one for the testing context.
+
+This setup is somewhat complicated; so the following image helps to illustrate how the different contexts interact **
+during development time and during production/CI**:
+
+```                                                                                                             
+                                                                                                                
+                                                                                                                
+                               Main Development Web                                              Behat CLI      
+                               Server (usually port         Web Server used by                  (bin/behat)     
+                                      8080)                Behat Tests (usually                        │        
+                                                                Port 9090)                             │        
+                                         │                                                             │        
+                                         │                           ┌────────────────┐                │        
+                                         │                           │                │                │        
+                                         │                           ▼                │                ▼        
+                                         │       ╔═════════════════════════╗        ╔══════════════════════════╗
+    ######  ####### #     #              │       ║Development/Docker/Behat ║        ║  Testing/Behat Context   ║
+    #     # #       #     #              │       ║         Context         ║        ║                          ║
+    #     # #       #     #              │       ║                         ║        ║ behat tests executed as  ║
+    #     # #####   #     #              │       ║   only overrides the    ║        ║ this context; so config  ║
+    #     # #        #   #               │       ║      database name      ║        ║       should match       ║
+    #     # #         # #                │       ╚═════════════════════════╝        ║ Development/Docker/Behat ║
+    ######  #######    #                 │                                          ║                          ║
+                                         ▼                                          ║                          ║
+                                        ╔══════════════════════════════════╗        ║                          ║
+                                        ║    Development/Docker Context    ║        ║                          ║
+                                        ║                                  ║        ║                          ║
+                                        ║ contains the main configuration  ║        ║                          ║
+                                        ║             for DEV              ║        ║                          ║
+                                        ╚══════════════════════════════════╝        ╚══════════════════════════╝
+                                                                                                                
+                                                                                                                
+                                                                                                                
+                                                                                                                
+                                                                                                                
+                                                                                                                
+                                                                                                                
+                                                                                                                
+                                                                                                                
+                               Main Production Web                                              Behat CLI      
+                               Server (usually port         Web Server used by                  (bin/behat)     
+                                      8080)                Behat Tests (usually                        │        
+                                                                Port 9090)                             │        
+                                         │                                                             │        
+                                         │                           ┌────────────────┐                │        
+                                         │                           │                │                │        
+          #####  ###                     │                           ▼                │                ▼        
+         #     #  #                      │       ╔═════════════════════════╗        ╔══════════════════════════╗
+         #        #                      │       ║Production/Kubernetes/Beh║        ║  Testing/Behat Context   ║
+         #        #                      │       ║       at Context        ║        ║                          ║
+         #        #                      │       ║                         ║        ║ behat tests executed as  ║
+         #     #  #                      │       ║   only overrides the    ║        ║ this context; so config  ║
+          #####  ###                     │       ║      database name      ║        ║       should match       ║
+                                         │       ╚═════════════════════════╝        ║Development/Kubernetes/Beh║
+                                         │                                          ║            at            ║
+                                         ▼                                          ║                          ║
+                                        ╔══════════════════════════════════╗        ║                          ║
+                                        ║  Development/Kubernetes Context  ║        ║                          ║
+                                        ║                                  ║        ║                          ║
+                                        ║ contains the main configuration  ║        ║                          ║
+                                        ║             for PROD             ║        ║                          ║
+                                        ╚══════════════════════════════════╝        ╚══════════════════════════╝
+```              

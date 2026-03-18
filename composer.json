@@ -5,7 +5,11 @@
         "symfony/dom-crawler": "^5.2 || ^6.0",
         "symfony/css-selector": "^5.2 || ^6.0",
         "guzzlehttp/psr7": "*",
-        "neos/utility-files": "*"
+        "neos/utility-files": "^8.4",
+        "neos/neos-ui": "^8.4",
+        "symfony/yaml": "^6.4",
+        "neos/behat": "^8.3",
+        "ext-readline": "*"
     },
     "license": "MIT",
     "suggest": {
@@ -15,13 +19,19 @@
     "name": "sandstorm/e2etesttools",
     "autoload": {
         "psr-4": {
-            "Sandstorm\\E2ETestTools\\Tests\\Behavior\\": "Tests/Behavior/",
-            "Sandstorm\\E2ETestTools\\": "Classes/"
+            "Sandstorm\\E2ETestTools\\": "Classes/",
+            "Sandstorm\\E2ETestTools\\Tests\\": "Tests/",
+            "Sandstorm\\E2ETestTools\\Tests\\Behavior\\Bootstrap\\": "Tests/Behavior/Bootstrap/"
         }
     },
     "extra": {
         "neos": {
             "package-key": "Sandstorm.E2ETestTools"
+        }
+    },
+    "config": {
+        "allow-plugins": {
+            "neos/composer-plugin": true
         }
     }
 }

@@ -1,3 +1,7 @@
 .idea
 vendor/
 composer.lock
+node_modules/
+Packages/
+.DS_Store
+*.bkp
