@@ -388,10 +388,8 @@ trait FusionRenderingTrait
                                 true);
                             $node->setProperty($propertyName, $instance);
                         } else {
-                            if (is_array($propertyValue)) {
-                                $propertyValue = json_encode($propertyValue);
-                            }
-                            $node->setProperty($propertyName, $propertyValue);
+                            $value = $this->jsonEncodeNodeProperty($propertyValue);
+                            $node->setProperty($propertyName, $value);
                         }
                     }
                 }
@@ -408,5 +406,18 @@ trait FusionRenderingTrait
             $persistenceManager->persistAll();
             $this->resetNodeInstances();
         }
+    }
+
+    private function jsonEncodeNodeProperty(mixed $propertyArray): string
+    {
+        if (!is_array($propertyArray)) {
+            return $propertyArray;
+        }
+
+        foreach ($propertyArray as $key => $value) {
+            $propertyArray[$key] = $this->jsonEncodeNodeProperty($value);
+        }
+
+        return json_encode($propertyArray);
     }
 }
