@@ -84,6 +84,10 @@ trait PersistentResourceTrait
             $image = new Image($persistentResource);
             $image->refresh();
 
+            if (!empty($row['Copyright Notice'])) {
+                $image->setCopyrightNotice($row['Copyright Notice']);
+            }
+
             ObjectAccess::setProperty($image, 'Persistence_Object_Identifier', $row['Image ID'], true);
             $this->PersistentResourceTrait_assetRepository->add($image);
         }
