@@ -388,9 +388,6 @@ trait FusionRenderingTrait
                                 true);
                             $node->setProperty($propertyName, $instance);
                         } else {
-                            if (is_array($propertyValue)) {
-                                $propertyValue = json_encode($propertyValue);
-                            }
                             $node->setProperty($propertyName, $propertyValue);
                         }
                     }
