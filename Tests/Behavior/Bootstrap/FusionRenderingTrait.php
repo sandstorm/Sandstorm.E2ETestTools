@@ -483,7 +483,8 @@ trait FusionRenderingTrait
                         $parentNodeAggregateId,
                         NodeName::fromString($childName)
                     );
-                } else {
+                }
+            } else {
                 $parentNodeAggregateId = NodeAggregateId::fromString($parentValue);
             }
 
