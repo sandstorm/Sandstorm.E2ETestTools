@@ -5,11 +5,13 @@
         "symfony/dom-crawler": "^5.2 || ^6.0",
         "symfony/css-selector": "^5.2 || ^6.0",
         "guzzlehttp/psr7": "*",
-        "neos/utility-files": "^8.4",
-        "neos/neos-ui": "^8.4",
         "symfony/yaml": "^6.4",
-        "neos/behat": "^8.3",
-        "ext-readline": "*"
+        "ext-readline": "*",
+        "neos/contentgraph-doctrinedbaladapter": "^9.0",
+        "neos/neos-ui": "^9.0",
+        "neos/flow": "^9.0",
+        "neos/utility-files": "9.1.1",
+        "neos/behat": "^9.0"
     },
     "license": "MIT",
     "suggest": {

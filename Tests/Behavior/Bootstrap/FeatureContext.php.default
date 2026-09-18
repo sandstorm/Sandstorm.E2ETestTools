@@ -1,78 +1,70 @@
 <?php
 
+declare(strict_types=1);
+
 use Behat\Behat\Context\Context;
 use Behat\Behat\Hook\Scope\BeforeScenarioScope;
-use Behat\Testwork\Hook\Scope\BeforeSuiteScope;
-use Neos\Behat\Tests\Behat\FlowContextTrait;
+use Neos\Behat\FlowBootstrapTrait;
+use Neos\Behat\FlowEntitiesTrait;
 use Neos\Flow\ObjectManagement\ObjectManagerInterface;
 use Sandstorm\E2ETestTools\Tests\Behavior\Bootstrap\FusionRenderingTrait;
-use Sandstorm\E2ETestTools\Tests\Behavior\Bootstrap\NodeImportTrait;
-use Sandstorm\E2ETestTools\Tests\Behavior\Bootstrap\PersistentResourceTrait;
+use Sandstorm\E2ETestTools\Tests\Behavior\Bootstrap\NeosBackendControlTrait;
 use Sandstorm\E2ETestTools\Tests\Behavior\Bootstrap\PlaywrightTrait;
-use Neos\ContentRepository\Tests\Behavior\Features\Bootstrap\NodeOperationsTrait;
-use Neos\Flow\Tests\Behavior\Features\Bootstrap\SecurityOperationsTrait;
 
-
-require_once(__DIR__ . '/../../../../../Packages/Application/Neos.Behat/Tests/Behat/FlowContextTrait.php');
-require_once(__DIR__ . '/../../../../../Packages/Application/Neos.ContentRepository/Tests/Behavior/Features/Bootstrap/NodeOperationsTrait.php');
-require_once(__DIR__ . '/../../../../../Packages/Framework/Neos.Flow/Tests/Behavior/Features/Bootstrap/SecurityOperationsTrait.php');
-require_once(__DIR__ . '/../../../../../Packages/Application/Sandstorm.E2ETestTools/Tests/Behavior/Bootstrap/NodeImportTrait.php');
-require_once(__DIR__ . '/../../../../../Packages/Application/Sandstorm.E2ETestTools/Tests/Behavior/Bootstrap/FusionRenderingTrait.php');
-require_once(__DIR__ . '/../../../../../Packages/Application/Sandstorm.E2ETestTools/Tests/Behavior/Bootstrap/PlaywrightTrait.php');
+require_once(__DIR__ . '/../../../../../../Packages/Application/Sandstorm.E2ETestTools/Tests/Behavior/Bootstrap/PlaywrightTrait.php');
+require_once(__DIR__ . '/../../../../../../Packages/Application/Sandstorm.E2ETestTools/Tests/Behavior/Bootstrap/NeosBackendControlTrait.php');
+require_once(__DIR__ . '/../../../../../../Packages/Application/Sandstorm.E2ETestTools/Tests/Behavior/Bootstrap/FusionRenderingTrait.php');
 
 /**
  * This class is copied to new projects when setting up behat E2E tests via Sandstorm.E2ETestTools
  */
 class FeatureContext implements Context
 {
-    // This is for integration with Flow (so you have access to $this->objectManager of Flow).  (part of Neos.Behat)
-    use FlowContextTrait;
+    // Bootstraps Flow and provides getObject() (part of Neos.Behat)
+    use FlowBootstrapTrait;
 
-    // prerequisite of NodeOperationsTrait (part of Neos.Flow)
-    use SecurityOperationsTrait;
-
-    // create Nodes etc. in Behat tests (part of Neos.ContentRepository)
-    use NodeOperationsTrait {
-        // take overridden "iHaveTheFollowingNodes" from FusionRenderingTrait
-        FusionRenderingTrait::iHaveTheFollowingNodes insteadof NodeOperationsTrait;
-    }
-
-    // Render Fusion code and Styleguide (part of Sandstorm.E2ETestTools)
-    use FusionRenderingTrait;
+    // Truncates Flow entity tables before each @flowEntities scenario (part of Neos.Behat)
+    use FlowEntitiesTrait;
 
     // Browser Automation
     use PlaywrightTrait;
 
-    use PersistentResourceTrait;
-    use NodeImportTrait;
+    // Render Fusion code and Styleguide; create nodes via Neos 9 CR API (part of Sandstorm.E2ETestTools)
+    use FusionRenderingTrait;
 
-    protected string $flowContextForSystemUnderTest = "Testing/Behat";
+    use NeosBackendControlTrait;
+
+    //TODO
+
+
+
+
 
     protected string $currentTestFilePath;
+
+    protected string $flowContextForSystemUnderTest = 'Testing/Behat';
 
     public function getCurrentTestFilePath(): string
     {
         return $this->currentTestFilePath;
     }
 
+
     public function __construct()
     {
-        if (self::$bootstrap === null) {
-            self::$bootstrap = $this->initializeFlow();
-        }
-        $this->objectManager = self::$bootstrap->getObjectManager();
-        $this->setupSecurity();
+        self::bootstrapFlow();
         $this->setupPlaywright();
 
         // !!! You need to add the Site Package Key here, so that we are able to load the Fusion code properly.
         $this->setupFusionRendering('Site.Package.Key.Here');
 
-        // !!! Important for usage with Neos: you need to publish resources that are created from fixtures
-        $this->PersistentResourceTrait_registerResourcePersistedHook(function () {
-            // publish resources post persist hook for PersistentResources created by fixtures
-            // execute a: './flow resource:publish'
-            exec('./flow resource:publish');
-        });
+        // TODO: Still important in Neos 9? If so: how?
+        //// !!! Important for usage with Neos: you need to publish resources that are created from fixtures
+        //$this->PersistentResourceTrait_registerResourcePersistedHook(function () {
+        //    // publish resources post persist hook for PersistentResources created by fixtures
+        //    // execute a: './flow resource:publish'
+        //    exec('./flow resource:publish');
+        //});
     }
 
     /**
@@ -84,21 +76,26 @@ class FeatureContext implements Context
     }
 
     /**
-     * @BeforeScenario @fixtures
+     * @BeforeScenario @flowEntities
      */
     public function beforeScenario(BeforeScenarioScope $scope): void
     {
         $this->currentTestFilePath = $scope->getFeature()->getFile();
+        $this->setupContentRepository();
     }
-
-    /**
-     * @var ObjectManagerInterface
-     */
-    protected $objectManager;
 
     public function getObjectManager(): ObjectManagerInterface
     {
-        return $this->objectManager;
+        return self::$bootstrap->getObjectManager();
+    }
+
+    /**
+     * @BeforeScenario @flowEntities
+     */
+    public function beforeFixturesScenario(BeforeScenarioScope $scope): void
+    {
+        $this->currentTestFilePath = $scope->getFeature()->getFile();
+        $this->setupContentRepository();
     }
 
     protected function executeFlowCommand(string $command, string $errorDescription): bool
@@ -115,7 +112,6 @@ class FeatureContext implements Context
         return true;
     }
 
-
     /**
      * @Then /^I should see some output from behat$/
      * @return bool
@@ -124,11 +120,6 @@ class FeatureContext implements Context
     {
         $this->printDebug('Can you see me?');
         return true;
-    }
-
-    private function getObject(string $className): object
-    {
-        return $this->objectManager->get($className);
     }
 
     /**
@@ -161,4 +152,3 @@ class FeatureContext implements Context
         assertEquals($title, $actualTitle, "page titles do not match");
     }
 }
-

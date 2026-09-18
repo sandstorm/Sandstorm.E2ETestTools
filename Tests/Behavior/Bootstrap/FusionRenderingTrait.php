@@ -5,10 +5,34 @@ namespace Sandstorm\E2ETestTools\Tests\Behavior\Bootstrap;
 use Behat\Behat\Hook\Scope\BeforeScenarioScope;
 use Behat\Gherkin\Node\PyStringNode;
 use Behat\Gherkin\Node\TableNode;
+use Behat\Step\Given;
 use Behat\Testwork\Hook\Scope\AfterSuiteScope;
 use Behat\Testwork\Hook\Scope\BeforeSuiteScope;
 use GuzzleHttp\Psr7\ServerRequest;
-use Neos\ContentRepository\Domain\Service\NodeTypeManager;
+use Neos\ContentRepository\Core\ContentRepository;
+use Neos\ContentRepository\Core\DimensionSpace\DimensionSpacePoint;
+use Neos\ContentRepository\Core\DimensionSpace\OriginDimensionSpacePoint;
+use Neos\ContentRepository\Core\Factory\ContentRepositoryServiceFactoryDependencies;
+use Neos\ContentRepository\Core\Factory\ContentRepositoryServiceFactoryInterface;
+use Neos\ContentRepository\Core\Factory\ContentRepositoryServiceInterface;
+use Neos\ContentRepository\Core\Feature\NodeCreation\Command\CreateNodeAggregateWithNode;
+use Neos\ContentRepository\Core\Feature\NodeModification\Dto\PropertyValuesToWrite;
+use Neos\ContentRepository\Core\Feature\NodeModification\Dto\SerializedPropertyValue;
+use Neos\ContentRepository\Core\Feature\NodeReferencing\Command\SetNodeReferences;
+use Neos\ContentRepository\Core\Feature\NodeReferencing\Dto\NodeReferencesForName;
+use Neos\ContentRepository\Core\Feature\NodeReferencing\Dto\NodeReferencesToWrite;
+use Neos\ContentRepository\Core\Feature\RootNodeCreation\Command\CreateRootNodeAggregateWithNode;
+use Neos\ContentRepository\Core\Infrastructure\Property\PropertyConverter;
+use Neos\ContentRepository\Core\NodeType\NodeTypeName;
+use Neos\ContentRepository\Core\Service\ContentRepositoryMaintainerFactory;
+use Neos\ContentRepository\Core\SharedModel\ContentRepository\ContentRepositoryId;
+use Neos\ContentRepository\Core\SharedModel\Node\NodeAggregateId;
+use Neos\ContentRepository\Core\SharedModel\Node\NodeAggregateIds;
+use Neos\ContentRepository\Core\SharedModel\Node\NodeName;
+use Neos\ContentRepository\Core\SharedModel\Node\ReferenceName;
+use Neos\ContentRepository\Core\SharedModel\Workspace\WorkspaceName;
+use Neos\ContentRepositoryRegistry\ContentRepositoryRegistry;
+use Neos\Flow\Cache\CacheManager;
 use Neos\Flow\Http\ServerRequestAttributes;
 use Neos\Flow\Mvc\ActionRequest;
 use Neos\Flow\Mvc\ActionResponse;
@@ -20,7 +44,12 @@ use Neos\Flow\ObjectManagement\ObjectManagerInterface;
 use Neos\Flow\Persistence\PersistenceManagerInterface;
 use Neos\Fusion\Core\Runtime;
 use Neos\Neos\Domain\Model\Site;
+use Neos\Neos\Domain\Model\WorkspaceDescription;
+use Neos\Neos\Domain\Model\WorkspaceRoleAssignments;
+use Neos\Neos\Domain\Model\WorkspaceTitle;
 use Neos\Neos\Domain\Repository\SiteRepository;
+use Neos\Neos\Domain\Repository\WorkspaceMetadataAndRoleRepository;
+use Neos\Neos\Domain\Service\WorkspaceService;
 use Neos\Utility\Files;
 use PHPUnit\Framework\Assert;
 use Sandstorm\E2ETestTools\FusionServiceForTesting;
@@ -40,12 +69,14 @@ trait FusionRenderingTrait
 
     private string $sitePackageKey;
 
+    private ContentRepository $contentRepository;
+
+    private PropertyConverter $propertyConverter;
+
+    private NodeAggregateId $sitesNodeAggregateId;
+
     public function setupFusionRendering(string $sitePackageKey)
     {
-        if (!property_exists($this, 'securityInitialized') || $this->securityInitialized !== true) {
-            throw new \RuntimeException('You need to run setupSecurity() from SecurityOperationsTrait before calling this method.');
-        }
-
         $this->sitePackageKey = $sitePackageKey;
         $this->PersistentResourceTrait_setupServices($this->getObjectManager());
     }
@@ -64,7 +95,7 @@ trait FusionRenderingTrait
     public function iHaveASiteWithName($siteNodeName, $siteName)
     {
         /** @var SiteRepository $siteRepository */
-        $siteRepository = $this->objectManager->get(SiteRepository::class);
+        $siteRepository = $this->getObjectManager()->get(SiteRepository::class);
         if (
             $siteRepository->findOneByNodeName($siteNodeName) == null
             && $siteRepository->findDefault()?->getNodeName() != $siteNodeName
@@ -76,11 +107,6 @@ trait FusionRenderingTrait
         }
     }
 
-    /**
-     * @param string $siteNodeName
-     * @param $mapper
-     * @throws \Neos\Flow\Persistence\Exception\IllegalObjectTypeException
-     */
     protected function createAndPersistSite($siteNodeName, $mapper = null)
     {
         $site = new Site($siteNodeName);
@@ -90,10 +116,74 @@ trait FusionRenderingTrait
             $site = $mapper($site);
         }
         /** @var SiteRepository $siteRepository */
-        $siteRepository = $this->objectManager->get(SiteRepository::class);
+        $siteRepository = $this->getObjectManager()->get(SiteRepository::class);
         $siteRepository->add($site);
 
-        $this->persistAll();
+        $this->getObjectManager()->get(PersistenceManagerInterface::class)->persistAll();
+    }
+
+    /**
+     * Initialize the Neos 9 content repository for a test scenario.
+     *
+     * Prunes all CR event streams, creates the live workspace and the Neos.Neos:Sites root node.
+     * Must be called before any node creation steps (e.g. from a @BeforeScenario hook).
+     */
+    public function setupContentRepository(): void
+    {
+        /** @var ContentRepositoryRegistry $registry */
+        $registry = $this->getObjectManager()->get(ContentRepositoryRegistry::class);
+        $crId = ContentRepositoryId::fromString('default');
+
+        $maintainer = $registry->buildService($crId, new ContentRepositoryMaintainerFactory());
+
+        $setupError = $maintainer->setUp();
+        if ($setupError !== null) {
+            throw new \RuntimeException('CR setUp failed: ' . $setupError->getMessage());
+        }
+
+        $pruneError = $maintainer->prune();
+        if ($pruneError !== null) {
+            throw new \RuntimeException('CR prune failed: ' . $pruneError->getMessage());
+        }
+        $workspaceMetadataAndRoleRepository = $this->getObjectManager()->get(WorkspaceMetadataAndRoleRepository::class);
+        $workspaceMetadataAndRoleRepository->pruneWorkspaceMetadata($crId);
+        $workspaceMetadataAndRoleRepository->pruneRoleAssignments($crId);
+
+        $this->contentRepository = $registry->get($crId);
+
+        $this->propertyConverter = $registry->buildService(
+            $crId,
+            new class implements ContentRepositoryServiceFactoryInterface {
+                public function build(ContentRepositoryServiceFactoryDependencies $deps): ContentRepositoryServiceInterface {
+                    return new class($deps->propertyConverter) implements ContentRepositoryServiceInterface {
+                        public function __construct(public readonly PropertyConverter $converter) {}
+                    };
+                }
+            }
+        )->converter;
+
+        $liveWorkspace = $this->contentRepository->findWorkspaceByName(WorkspaceName::forLive());
+        if ($liveWorkspace === null) {
+            $this->getObjectManager()->get(WorkspaceService::class)->createRootWorkspace(
+                $crId,
+                WorkspaceName::forLive(),
+                WorkspaceTitle::fromString('live'),
+                WorkspaceDescription::createEmpty(),
+                WorkspaceRoleAssignments::createForLiveWorkspace()
+            );
+        }
+
+        $this->sitesNodeAggregateId = NodeAggregateId::fromString('sites');
+        $this->contentRepository->handle(CreateRootNodeAggregateWithNode::create(
+            WorkspaceName::forLive(),
+            $this->sitesNodeAggregateId,
+            NodeTypeName::fromString('Neos.Neos:Sites')
+        ));
+
+        $cacheManager = $this->getObjectManager()->get(CacheManager::class);
+        foreach (['Flow_Mvc_Routing_Route', 'Flow_Mvc_Routing_Resolve', 'Neos_Fusion_Content'] as $cacheIdentifier) {
+            $cacheManager->getCache($cacheIdentifier)->flush();
+        }
     }
 
     /**
@@ -120,6 +210,7 @@ trait FusionRenderingTrait
      */
     public function iRenderTheFusionObjectWithNode($fusionPath, PyStringNode $additionalFusion)
     {
+        // NOTE: $this->currentNodes is not available in Neos 9 — this step requires additional setup
         Assert::assertEquals(1, count($this->currentNodes));
 
         $fusionRenderingResult = new FusionRenderingResult();
@@ -147,6 +238,7 @@ trait FusionRenderingTrait
      */
     public function iRenderThePage()
     {
+        // NOTE: $this->currentNodes is not available in Neos 9 — this step requires additional setup
         $fusionRenderingResult = new FusionRenderingResult();
         $additionalFusion = "
             prototype(Neos.Neos:Page) {
@@ -323,87 +415,146 @@ trait FusionRenderingTrait
         }
     }
 
+    /**
+     * Deserialises fixture property values from their JSON-decoded form to the PHP types
+     * expected by Neos 9 CR, using the same Symfony Serializer normalizer stack that the
+     * event store uses when reading properties back.
+     *
+     * Feature files should express values in the event-store serialised form:
+     *   - scalars (string/int/float/bool) as-is
+     *   - DateTime as ISO 8601 string, e.g. "2022-08-02T00:00:00+00:00"
+     *   - Doctrine entities as {"__flow_object_type":"…","__identifier":"uuid"}
+     *   - null or omitted key to leave a property unset
+     */
+    private function deserializePropertyValues(array $properties, string $nodeTypeName): array
+    {
+        $nodeType = $this->contentRepository->getNodeTypeManager()->getNodeType($nodeTypeName);
+
+        foreach ($properties as $propertyName => $value) {
+            if ($value === null) {
+                continue;
+            }
+            $declaredType = $nodeType->getPropertyType($propertyName);
+            $properties[$propertyName] = $this->propertyConverter->deserializePropertyValue(
+                SerializedPropertyValue::create($value, $declaredType)
+            );
+        }
+
+        return $properties;
+    }
 
     /**
-     * This is an EXTENDED version of the one in NodeTrait;
-     * so we can support "HiddenInIndex".
+     * Creates nodes in the content repository from a Gherkin table.
      *
-     * @Given /^I have the following nodes:$/
-     * @When /^I create the following nodes:$/
+     * Supported columns: NodeAggregateId, Parent, Node Type, Properties (JSON), Language
+     * The /sites root node is created automatically by setupContentRepository() and must not be repeated here.
      */
-    public function iHaveTheFollowingNodes($table)
+    #[Given("I have the following nodes in site :siteName:")]
+    #[Given("I create the following nodes in site :siteName:")]
+    public function iHaveTheFollowingNodesInSite(string $siteName, $table)
     {
-        if ($this->isolated === true) {
-            $this->callStepInSubProcess(__METHOD__, sprintf(' %s %s', escapeshellarg(\Neos\Flow\Tests\Functional\Command\TableNode::class), escapeshellarg(json_encode($table->getHash()))), true);
-        } else {
-            /** @var \Neos\ContentRepository\Domain\Service\NodeTypeManager $nodeTypeManager */
-            $nodeTypeManager = $this->getObjectManager()->get(NodeTypeManager::class);
-            $rows = $table->getHash();
-            foreach ($rows as $row) {
-                $path = $row['Path'];
-                $name = implode('', array_slice(explode('/', $path), -1, 1));
-                $parentPath = implode('/', array_slice(explode('/', $path), 0, -1)) ?: '/';
+        // TODO:
+        //   - allow setting defaults for dimensionSpacePoint ("Given I am in ...")
+        //   - add option to specify content repository and workspace (optional, use default/live if not given/empty)
+        $rows = $table instanceof TableNode ? $table->getHash() : $table->getHash();
 
-                $context = $this->getContextForProperties($row, true);
+        foreach ($rows as $row) {
+            $parentValue = $row['Parent'] ?? '';
+            $isDirectSiteChild = $parentValue === '';
 
-                if (isset($row['Node Type']) && $row['Node Type'] !== '') {
-                    $nodeType = $nodeTypeManager->getNodeType($row['Node Type']);
+            $nodeAggregateId = NodeAggregateId::fromString($row['NodeAggregateId']);
+
+            //TODO: default for dimension space point
+            $dimensionSpacePointJson = !empty($row['DimensionSpacePoint']) ? $row['DimensionSpacePoint'] : null;
+            $dimensionSpacePoint = $dimensionSpacePointJson !== null
+                ? DimensionSpacePoint::fromArray(json_decode($dimensionSpacePointJson, associative: true))
+                : DimensionSpacePoint::fromArray([]);
+            $originDimensionSpacePoint = OriginDimensionSpacePoint::fromDimensionSpacePoint($dimensionSpacePoint);
+
+            if ($isDirectSiteChild) {
+                $parentNodeAggregateId = $this->sitesNodeAggregateId;
+            } elseif (str_contains($parentValue, '/')) {
+                [$ownerId, $childString] = explode('/', $parentValue, 2);
+                $children = explode('/', $childString);
+
+                $parentNodeAggregateId = NodeAggregateId::fromString($ownerId);
+                foreach ($children as $childName) {
+                    $parentNodeAggregateId = $this->findTetheredChildId(
+                        $parentNodeAggregateId,
+                        NodeName::fromString($childName)
+                    );
                 } else {
-                    $nodeType = null;
-                }
-
-                if (isset($row['Identifier'])) {
-                    $identifier = $row['Identifier'];
-                } else {
-                    $identifier = null;
-                }
-
-                if (isset($row['Hidden']) && $row['Hidden'] === 'true') {
-                    $hidden = true;
-                } else {
-                    $hidden = false;
-                }
-
-                $parentNode = $context->getNode($parentPath);
-                if ($parentNode === null) {
-                    throw new \Exception(sprintf('Could not get parent node with path %s to create node %s', $parentPath, $path));
-                }
-
-                $persistenceManager = $this->objectManager->get(PersistenceManagerInterface::class);
-                $node = $parentNode->getNode($name);
-                if ($node === null) {
-                    $node = $parentNode->createNode($name, $nodeType, $identifier);
-                }
-
-                if (isset($row['Properties']) && $row['Properties'] !== '') {
-                    $properties = json_decode($row['Properties'], true);
-                    if ($properties === null) {
-                        throw new \Exception(sprintf('Error decoding json value "%s": %d', $row['Properties'], json_last_error()));
-                    }
-                    foreach ($properties as $propertyName => $propertyValue) {
-                        if (is_array($propertyValue) && isset($propertyValue['__flow_object_type'])) {
-                            $instance = $persistenceManager->getObjectByIdentifier(
-                                $propertyValue['__identifier'],
-                                $propertyValue['__flow_object_type'],
-                                true);
-                            $node->setProperty($propertyName, $instance);
-                        } else {
-                            $node->setProperty($propertyName, $propertyValue);
-                        }
-                    }
-                }
-
-                $node->setHidden($hidden);
-
-                if (isset($row['HiddenInIndex']) && $row['HiddenInIndex'] === 'true') {
-                    $node->setHiddenInIndex(true);
-                }
-
+                $parentNodeAggregateId = NodeAggregateId::fromString($parentValue);
             }
 
-            // Make sure we do not use cached instances
-            $persistenceManager->persistAll();
-            $this->resetNodeInstances();
+            $propertiesJson = !empty($row['Properties']) ? $row['Properties'] : '[]';
+            $propertiesArray = json_decode($propertiesJson, true) ?? [];
+            $propertiesArray = $this->deserializePropertyValues($propertiesArray, $row['NodeType']);
+            $propertyValues = PropertyValuesToWrite::fromArray($propertiesArray);
+
+            $command = CreateNodeAggregateWithNode::create(
+                WorkspaceName::forLive(),
+                $nodeAggregateId,
+                NodeTypeName::fromString($row['NodeType']),
+                $originDimensionSpacePoint,
+                $parentNodeAggregateId,
+                initialPropertyValues: $propertyValues
+            );
+
+            if ($isDirectSiteChild) {
+                $command = $command->withNodeName(NodeName::fromString($siteName));
+            }
+
+            $this->contentRepository->handle($command);
         }
+    }
+
+    /**
+     * Sets node references (type: references) from a Gherkin table.
+     *
+     * Use this step after "I have the following nodes in site" to express node references.
+     *
+     * Supported columns: NodeAggregateId, ReferenceName, Targets (comma-separated NodeAggregateIds), DimensionSpacePoint
+     */
+    #[Given("the following node references:")]
+    public function iSetTheFollowingNodeReferencesInSite(TableNode $table): void
+    {
+        foreach ($table->getHash() as $row) {
+            $dimensionSpacePointJson = !empty($row['DimensionSpacePoint']) ? $row['DimensionSpacePoint'] : null;
+            $dimensionSpacePoint = $dimensionSpacePointJson !== null
+                ? DimensionSpacePoint::fromArray(json_decode($dimensionSpacePointJson, associative: true))
+                : DimensionSpacePoint::fromArray([]);
+
+            $targetIds = array_map(
+                fn(string $id) => NodeAggregateId::fromString(trim($id)),
+                explode(',', $row['Targets'])
+            );
+
+            $this->contentRepository->handle(SetNodeReferences::create(
+                WorkspaceName::forLive(),
+                NodeAggregateId::fromString($row['NodeAggregateId']),
+                OriginDimensionSpacePoint::fromDimensionSpacePoint($dimensionSpacePoint),
+                NodeReferencesToWrite::create(
+                    NodeReferencesForName::fromTargets(
+                        ReferenceName::fromString($row['ReferenceName']),
+                        NodeAggregateIds::create(...$targetIds)
+                    )
+                )
+            ));
+        }
+    }
+
+    private function findTetheredChildId(NodeAggregateId $parentId, NodeName $childName): NodeAggregateId
+    {
+        $contentGraph = $this->contentRepository->getContentGraph(WorkspaceName::forLive());
+        $childAggregate = $contentGraph->findChildNodeAggregateByName($parentId, $childName);
+        if ($childAggregate === null) {
+            throw new \RuntimeException(sprintf(
+                'No tethered child "%s" found under node "%s". Make sure the parent node is inserted before this row.',
+                $childName->value,
+                $parentId->value
+            ));
+        }
+        return $childAggregate->nodeAggregateId;
     }
 }

@@ -26,21 +26,28 @@ trait NeosBackendControlTrait
 
     /**
      * @When I log into the backend using credentials :username :password
+     * @When I log into the backend using credentials :username :password with username placeholder :usernamePlaceholder and password placeholder :passwordPlaceholder
      */
-    public function iLogIntoTheBackendUsingCredentials(string $username, string $password)
-    {
+    public function iLogIntoTheBackendUsingCredentials(
+        string $username,
+        string $password,
+        string $usernamePlaceholder = 'Username',
+        string $passwordPlaceholder = 'Password'
+    ) {
         $this->playwrightConnector->execute($this->playwrightContext, sprintf(
             // language=JavaScript
             '
             vars.page = await context.newPage();
             await vars.page.goto("BASEURL/neos/");
 
-            await vars.page.fill(`[placeholder="Username"]`, `%s`);
-            await vars.page.fill(`[placeholder="Password"]`, `%s`);
-            await vars.page.click(`button:has-text("Login")`);
-            await vars.page.waitForNavigation();
+            await vars.page.fill(`[placeholder="%s"]`, `%s`);
+            await vars.page.fill(`[placeholder="%s"]`, `%s`);
+            await Promise.all([
+                vars.page.waitForNavigation(),
+                vars.page.click(`button:has-text("Login")`),
+            ]);
         '// language=PHP
-            , $username, $password));
+            , $usernamePlaceholder, $username, $passwordPlaceholder, $password));
     }
 
     /**
@@ -52,8 +59,8 @@ trait NeosBackendControlTrait
         // language=JavaScript
             '
             // open the main menu
-            await vars.page.click(`[aria-label="Menu"]`);
-            await vars.page.click(`button[role="button"]:has-text("%s")`);
+            await vars.page.click(`.neos-menu-button`);
+            await vars.page.click(`.neos-menu-panel a:has-text("%s")`);
         '// language=PHP
             , $menuItem));
     }
