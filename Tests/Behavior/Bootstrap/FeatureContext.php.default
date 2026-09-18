@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 use Behat\Behat\Context\Context;
 use Behat\Behat\Hook\Scope\BeforeScenarioScope;
+use Behat\Testwork\Hook\Scope\BeforeSuiteScope;
 use Neos\Behat\FlowBootstrapTrait;
 use Neos\Behat\FlowEntitiesTrait;
 use Neos\Flow\ObjectManagement\ObjectManagerInterface;
 use Sandstorm\E2ETestTools\Tests\Behavior\Bootstrap\FusionRenderingTrait;
 use Sandstorm\E2ETestTools\Tests\Behavior\Bootstrap\NeosBackendControlTrait;
 use Sandstorm\E2ETestTools\Tests\Behavior\Bootstrap\PlaywrightTrait;
+use function PHPUnit\Framework\assertEquals;
 
 require_once(__DIR__ . '/../../../../../../Packages/Application/Sandstorm.E2ETestTools/Tests/Behavior/Bootstrap/PlaywrightTrait.php');
 require_once(__DIR__ . '/../../../../../../Packages/Application/Sandstorm.E2ETestTools/Tests/Behavior/Bootstrap/NeosBackendControlTrait.php');
@@ -42,6 +44,9 @@ class FeatureContext implements Context
 
     protected string $currentTestFilePath;
 
+    // !!! Set this to the Flow context the SYSTEM UNDER TEST actually runs under -
+    // NOT this runner's own context. Used by executeFlowCommand() below to shell
+    // commands into the SUT rather than into this Behat process. E.g. 'Production/E2E-SUT'.
     protected string $flowContextForSystemUnderTest = 'Testing/Behat';
 
     public function getCurrentTestFilePath(): string
@@ -73,15 +78,6 @@ class FeatureContext implements Context
     public static function prepareSUT(BeforeSuiteScope $scope): void
     {
         exec("./flow flow:doctrine:compileproxies");
-    }
-
-    /**
-     * @BeforeScenario @flowEntities
-     */
-    public function beforeScenario(BeforeScenarioScope $scope): void
-    {
-        $this->currentTestFilePath = $scope->getFeature()->getFile();
-        $this->setupContentRepository();
     }
 
     public function getObjectManager(): ObjectManagerInterface
@@ -118,7 +114,7 @@ class FeatureContext implements Context
      */
     public function iShouldSeeSomeOutputFromBehat(): bool
     {
-        $this->printDebug('Can you see me?');
+        echo 'Can you see me?' . PHP_EOL;
         return true;
     }
 

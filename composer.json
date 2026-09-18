@@ -10,7 +10,7 @@
         "neos/contentgraph-doctrinedbaladapter": "^9.0",
         "neos/neos-ui": "^9.0",
         "neos/flow": "^9.0",
-        "neos/utility-files": "9.1.1",
+        "neos/utility-files": "^9.1",
         "neos/behat": "^9.0"
     },
     "license": "MIT",
