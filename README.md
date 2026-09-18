@@ -20,6 +20,7 @@ the test framework for writing all kinds of BDD tests.
   - [3. behat.yml.dist](#3-behatymldist)
   - [4. FeatureContext.php](#4-featurecontextphp)
   - [5. Playwright (e2e-testrunner)](#5-playwright-e2e-testrunner)
+  - [6. CI Pipeline (optional)](#6-ci-pipeline-optional)
 - [Writing Behat Tests](#writing-behat-tests)
   - [Fixture Setup](#fixture-setup)
   - [Fusion Component Testcases](#fusion-component-testcases)
@@ -33,7 +34,6 @@ the test framework for writing all kinds of BDD tests.
   - [Setup command](#setup-command)
   - [Style Guide](#style-guide)
   - [Symfony support](#symfony-support)
-  - [CI Pipeline setup](#ci-pipeline-setup)
 
 <!-- /TOC -->
 
@@ -128,6 +128,68 @@ cd e2e-testrunner && npm install && npx playwright install && cd ..
 We suggest naming the folder `e2e-testrunner` at the root of your Git repository (in our projects, usually one level
 above the Neos root directory). See [Running Behat Tests](#running-behat-tests) below for starting it and running
 the suite.
+
+## 6. CI Pipeline (optional)
+
+The idea, regardless of CI system: run the E2E job **inside the same image you deploy** (build once, test that
+artifact — not a separate CI-only build), give it a database and Redis service, and give it the Playwright bridge
+as its own service too (build `e2e-testrunner`'s own small image separately, e.g. from its `Dockerfile`).
+
+A CI job usually only ever needs to serve the SUT context — unlike local dev, which runs both your normal dev vhost
+*and* the SUT vhost from the same long-lived container. That means the context-routing gotcha in
+[Troubleshooting](#troubleshooting) doesn't apply in CI: just set `FLOW_CONTEXT` to your SUT context directly as a
+job variable, no `$_SERVER`-to-`getenv()` bridge needed there.
+
+Two things commonly need doing at job-runtime rather than at image-build-time, since a production image is usually
+built lean:
+
+- If your production image is built with `--no-dev`, Behat and this package's dev-only pieces won't be installed —
+  re-run `composer install --dev` (or your dev-dependency equivalent) as the job's first step.
+- If the web server config serving your SUT vhost only ships in a local-dev image layer (see
+  [Two Flow Contexts, Two Ports](#two-flow-contexts-two-ports)), copy that config file into the running container
+  before starting the server.
+
+Then: migrate/warm the SUT's caches, start the web server in the background, point
+`PLAYWRIGHT_API_URL`/`SYSTEM_UNDER_TEST_URL_FOR_PLAYWRIGHT` at the right hostnames for your CI system's networking,
+and run `bin/behat` — a JUnit-format report (`--format junit --out <dir>`) is worth adding so your CI system can show
+per-scenario results rather than just a pass/fail job.
+
+Illustrated with GitLab CI, since that's what we use — the same shape (image reuse, services, env vars shared with
+those services, JUnit reporting) applies to any CI system:
+
+```yaml
+e2e_test:
+  stage: test
+  image:
+    name: $CI_REGISTRY_IMAGE/neos:$CI_COMMIT_REF_SLUG   # the image you already build for deployment
+    entrypoint: [ "" ]                                   # skip its normal startup sequence
+  variables:
+    FLOW_CONTEXT: Production/E2E-SUT
+    DB_NEOS_DATABASE_E2ETEST: ci_test
+    E2E_FLOW_CONTEXT: Production/E2E-SUT
+    REDIS_HOST: redis
+    REDIS_PORT: 6379
+  services:
+    - name: mariadb:11.8
+    - name: redis:7
+    - name: $CI_REGISTRY_IMAGE/e2e-testrunner:$CI_COMMIT_REF_SLUG
+      alias: e2e-testrunner
+  script:
+    - composer install --dev
+    - FLOW_CONTEXT=Production/E2E-SUT ./flow doctrine:migrate
+    - FLOW_CONTEXT=Production/E2E-SUT ./flow cache:warmup
+    - your-web-server-start-command &
+    - export PLAYWRIGHT_API_URL=http://e2e-testrunner:3000
+    - export SYSTEM_UNDER_TEST_URL_FOR_PLAYWRIGHT=http://$(hostname -i):9090
+    - ./bin/behat --format junit --out e2e-results -c Packages/Sites/Your.SitePackageKey/Tests/Behavior/behat.yml.dist
+  artifacts:
+    reports:
+      junit: e2e-results/*.xml
+```
+
+One GitLab-specific quirk worth knowing regardless of the example above: a job's *environment variables* are passed
+to *all* its `services:` too — so DB/Redis credentials set for the main job are what the DB/Redis services
+themselves also start with; there's no separate place to configure them.
 
 # Writing Behat Tests
 
@@ -753,17 +815,3 @@ guide contains BOTH HTML snapshots; and rendered images of the HTML.
 
 The Symfony variant ([README.Symfony.md](./README.Symfony.md)) hasn't been revisited alongside the Neos 9 changes in
 this README — needs a pass later to confirm it's still accurate.
-
-## CI Pipeline setup
-
-> Moved here — not covered in this pass.
-
-We provide a skeleton to run e2e tests in your gitlab pipeline.
-Add the provided lines from our `.gitlab-ci.yml` to yours and adjust accordingly.
-
-Every related service (like redis, database, ...) needs to be started using a `servives` entry. Ensure the Docker image
-version of the service matches the development and production image from `docker-compose.yml`.
-
-The *environment variables* of the job are passed on to *all services* - so all connected services and the main job
-share the same environment variables. Thus, you need to add the environment variables for BOTH the SUT (which is the
-main job) and all related services to the `variables` section of the test job.
