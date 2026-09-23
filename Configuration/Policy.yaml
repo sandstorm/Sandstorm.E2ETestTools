@@ -1,0 +1,11 @@
+# The node export (Export Node button) reads content from any workspace - backend users only.
+privilegeTargets:
+  'Neos\Flow\Security\Authorization\Privilege\Method\MethodPrivilege':
+    'Sandstorm.E2ETestTools:NodeExport':
+      matcher: 'method(Sandstorm\E2ETestTools\Controller\NodeExportController->.*Action())'
+
+roles:
+  'Neos.Neos:AbstractEditor':
+    privileges:
+      - privilegeTarget: 'Sandstorm.E2ETestTools:NodeExport'
+        permission: GRANT

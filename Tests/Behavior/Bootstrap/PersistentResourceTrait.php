@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Sandstorm\E2ETestTools\Tests\Behavior\Bootstrap;
 
 use Behat\Gherkin\Node\PyStringNode;
@@ -37,7 +39,7 @@ trait PersistentResourceTrait
      */
     private PersistenceManagerInterface $PersistentResourceTrait_persistenceManager;
 
-    private ?\Closure $PersistentResourceTrait_resourcePersistedHook;
+    private ?\Closure $PersistentResourceTrait_resourcePersistedHook = null;
 
     public function PersistentResourceTrait_setupServices(ObjectManagerInterface $objectManager): void
     {
@@ -64,6 +66,7 @@ trait PersistentResourceTrait
         ObjectAccess::setProperty($document, 'Persistence_Object_Identifier', $uuid, true);
         $this->PersistentResourceTrait_assetRepository->add($document);
         $this->PersistentResourceTrait_persistenceManager->persistAll();
+        $this->publishResource($resource);
 
         $this->callResourcePersistedHook();
     }
@@ -90,10 +93,23 @@ trait PersistentResourceTrait
 
             ObjectAccess::setProperty($image, 'Persistence_Object_Identifier', $row['Image ID'], true);
             $this->PersistentResourceTrait_assetRepository->add($image);
+            $persistentResources[] = $persistentResource;
         }
         $this->PersistentResourceTrait_persistenceManager->persistAll();
+        array_map($this->publishResource(...), $persistentResources ?? []);
 
         $this->callResourcePersistedHook();
+    }
+
+    /**
+     * Resources are not published on demand, so publish fixture resources right away. This only makes them reachable
+     * for the system under test if this Behat context uses the same persistent resource storage and target as the
+     * system under test (see "Two Flow Contexts, Two Ports" in the README).
+     */
+    private function publishResource(PersistentResource $resource): void
+    {
+        $collection = $this->PersistentResourceTrait_resourceManager->getCollection($resource->getCollectionName());
+        $collection->getTarget()->publishResource($resource, $collection);
     }
 
     private function callResourcePersistedHook(): void

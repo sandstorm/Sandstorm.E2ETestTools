@@ -1,0 +1,16 @@
+# Same rows as the "I have the following nodes in site" table - see Classes/Service/NodeImportService.php
+nodes:
+  - nodeAggregateId: homepage
+    parent: ''
+    nodeType: 'Your.SitePackageKey:Document.StartPage'
+    properties: { uriPathSegment: site, title: Homepage }
+    dimensionSpacePoint: { language: de }
+  - nodeAggregateId: section
+    parent: homepage/main
+    nodeType: 'Your.SitePackageKey:Content.Section'
+    dimensionSpacePoint: { language: de }
+  - nodeAggregateId: headline
+    parent: section
+    nodeType: 'Your.SitePackageKey:Content.Headline'
+    properties: { title: '<h1>From YAML</h1>' }
+    dimensionSpacePoint: { language: de }

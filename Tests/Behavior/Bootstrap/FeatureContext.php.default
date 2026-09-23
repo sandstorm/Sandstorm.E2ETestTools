@@ -10,12 +10,14 @@ use Neos\Behat\FlowEntitiesTrait;
 use Neos\Flow\ObjectManagement\ObjectManagerInterface;
 use Sandstorm\E2ETestTools\Tests\Behavior\Bootstrap\FusionRenderingTrait;
 use Sandstorm\E2ETestTools\Tests\Behavior\Bootstrap\NeosBackendControlTrait;
+use Sandstorm\E2ETestTools\Tests\Behavior\Bootstrap\NodeImportTrait;
 use Sandstorm\E2ETestTools\Tests\Behavior\Bootstrap\PlaywrightTrait;
 use function PHPUnit\Framework\assertEquals;
 
 require_once(__DIR__ . '/../../../../../../Packages/Application/Sandstorm.E2ETestTools/Tests/Behavior/Bootstrap/PlaywrightTrait.php');
 require_once(__DIR__ . '/../../../../../../Packages/Application/Sandstorm.E2ETestTools/Tests/Behavior/Bootstrap/NeosBackendControlTrait.php');
 require_once(__DIR__ . '/../../../../../../Packages/Application/Sandstorm.E2ETestTools/Tests/Behavior/Bootstrap/FusionRenderingTrait.php');
+require_once(__DIR__ . '/../../../../../../Packages/Application/Sandstorm.E2ETestTools/Tests/Behavior/Bootstrap/NodeImportTrait.php');
 
 /**
  * This class is copied to new projects when setting up behat E2E tests via Sandstorm.E2ETestTools
@@ -34,25 +36,16 @@ class FeatureContext implements Context
     // Render Fusion code and Styleguide; create nodes via Neos 9 CR API (part of Sandstorm.E2ETestTools)
     use FusionRenderingTrait;
 
+    // Backend login/navigation, page visits and assertions (part of Sandstorm.E2ETestTools)
     use NeosBackendControlTrait;
 
-    //TODO
-
-
-
-
-
-    protected string $currentTestFilePath;
+    // Create nodes from YAML fixture files (part of Sandstorm.E2ETestTools)
+    use NodeImportTrait;
 
     // !!! Set this to the Flow context the SYSTEM UNDER TEST actually runs under -
     // NOT this runner's own context. Used by executeFlowCommand() below to shell
     // commands into the SUT rather than into this Behat process. E.g. 'Production/E2E-SUT'.
     protected string $flowContextForSystemUnderTest = 'Testing/Behat';
-
-    public function getCurrentTestFilePath(): string
-    {
-        return $this->currentTestFilePath;
-    }
 
 
     public function __construct()
@@ -63,13 +56,8 @@ class FeatureContext implements Context
         // !!! You need to add the Site Package Key here, so that we are able to load the Fusion code properly.
         $this->setupFusionRendering('Site.Package.Key.Here');
 
-        // TODO: Still important in Neos 9? If so: how?
-        //// !!! Important for usage with Neos: you need to publish resources that are created from fixtures
-        //$this->PersistentResourceTrait_registerResourcePersistedHook(function () {
-        //    // publish resources post persist hook for PersistentResources created by fixtures
-        //    // execute a: './flow resource:publish'
-        //    exec('./flow resource:publish');
-        //});
+        // Resources created by fixture steps are published automatically. For the system under test to find them,
+        // Testing/Behat must use the same persistent resource storage and target as the SUT context (see README).
     }
 
     /**
@@ -90,7 +78,6 @@ class FeatureContext implements Context
      */
     public function beforeFixturesScenario(BeforeScenarioScope $scope): void
     {
-        $this->currentTestFilePath = $scope->getFeature()->getFile();
         $this->setupContentRepository();
     }
 
@@ -109,22 +96,12 @@ class FeatureContext implements Context
     }
 
     /**
-     * @Then /^I should see some output from behat$/
-     * @return bool
-     */
-    public function iShouldSeeSomeOutputFromBehat(): bool
-    {
-        echo 'Can you see me?' . PHP_EOL;
-        return true;
-    }
-
-    /**
      * @When /^I pause for debugging$/
      */
     public function iPauseForDebugging(): void
     {
         $this->playwrightConnector->execute(
-            $this->expectPlaywrightContext(),
+            $this->requirePlaywrightContext(),
             <<<JS
                 await vars.page.pause();
             JS
@@ -137,11 +114,8 @@ class FeatureContext implements Context
     public function iShouldSeeThePageTitle($title): void
     {
         $actualTitle = $this->playwrightConnector->execute(
-            $this->expectPlaywrightContext(),
+            $this->requirePlaywrightContext(),
             <<<JS
-            try {
-                await expect(vars.page).toHaveTitle(expected, { timeout: 10000 });
-            } catch (exception) {}
             return await vars.page.title();
             JS
         );

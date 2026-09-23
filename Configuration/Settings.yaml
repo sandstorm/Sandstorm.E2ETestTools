@@ -13,6 +13,17 @@ Neos:
             resource: 'resource://Sandstorm.E2ETestTools/Public/ExportNodeButton/Plugin.css'
 
   Flow:
+    security:
+      authentication:
+        providers:
+          'Neos.Neos:Backend':
+            requestPatterns:
+              # the export button's controller lives outside the Neos namespaces - without this, the backend login
+              # wouldn't apply to it and Policy.yaml would deny every request
+              'Sandstorm.E2ETestTools:NodeExport':
+                pattern: ControllerObjectName
+                patternOptions:
+                  controllerObjectNamePattern: 'Sandstorm\E2ETestTools\Controller\NodeExportController'
     mvc:
       routes:
         'Sandstorm.E2ETestTools':

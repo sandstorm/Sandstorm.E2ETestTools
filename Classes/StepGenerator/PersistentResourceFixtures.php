@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Sandstorm\E2ETestTools\StepGenerator;
 
 use Neos\Flow\ResourceManagement\PersistentResource;

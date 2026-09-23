@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Sandstorm\E2ETestTools\Tests\Behavior\Bootstrap;
 
 use Neos\Flow\ObjectManagement\ObjectManagerInterface;

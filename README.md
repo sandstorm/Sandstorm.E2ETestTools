@@ -23,17 +23,17 @@ the test framework for writing all kinds of BDD tests.
   - [6. Project tasks (recommended)](#6-project-tasks-recommended)
   - [7. CI Pipeline (optional)](#7-ci-pipeline-optional)
 - [Writing Behat Tests](#writing-behat-tests)
-  - [Fixture Setup](#fixture-setup)
-  - [Fusion Component Testcases](#fusion-component-testcases)
-  - [Fusion Integration Testcases](#fusion-integration-testcases)
-  - [Full-Page Snapshot Testcases](#full-page-snapshot-testcases)
+  - [Tags](#tags)
+  - [Fixtures](#fixtures)
+  - [Fixtures from existing content](#fixtures-from-existing-content)
+  - [Steps](#steps)
   - [Style Guide](#style-guide)
+  - [Dynamic SUT URL](#dynamic-sut-url)
+  - [Sandstorm.NeosAcl](#sandstormneosacl)
 - [Running Behat Tests](#running-behat-tests)
   - [Debugging](#debugging)
 - [Troubleshooting](#troubleshooting)
 - [Architecture](#architecture)
-- [TODO](#todo)
-  - [Writing Behat Tests examples are outdated](#writing-behat-tests-examples-are-outdated)
 
 <!-- /TOC -->
 
@@ -85,6 +85,27 @@ FLOW_CONTEXT=Production/E2E-SUT ./flow doctrine:migrate
 Caches the test runner must invalidate between scenarios (e.g. Fusion content cache) either need a backend shared by
 both contexts (e.g. the same Redis database), or an explicit flush in the SUT's context — see
 [Troubleshooting](#troubleshooting) item 4.
+
+If you use asset fixtures (`I have a textual persistent resource ...`, `I have the following images:`), the Behat
+context also needs the SUT's persistent resource storage and target — Flow's `Testing` defaults use separate ones
+(`.../Test/`, `_Resources/Testing/`), and the SUT would 404 on the files. In `Configuration/Testing/Behat/Settings.yaml`
+(values as in your SUT context):
+
+```yaml
+Neos:
+  Flow:
+    resource:
+      storages:
+        defaultPersistentResourcesStorage:
+          storageOptions:
+            path: '%FLOW_PATH_DATA%Persistent/Resources/'
+      targets:
+        localWebDirectoryPersistentResourcesTarget:
+          targetOptions:
+            path: '%FLOW_PATH_WEB%_Resources/Persistent/'
+            baseUri: '_Resources/Persistent/'
+            subdivideHashPathSegment: true
+```
 
 ## 3. behat.yml.dist
 
@@ -234,398 +255,109 @@ themselves also start with; there's no separate place to configure them.
 
 # Writing Behat Tests
 
-Here, we try to give examples for common Behat scenarios; such that you can easily get started.
+Feature files live in your site package (`Tests/Behavior/Features/`), step definitions come from the traits wired up
+in your `FeatureContext` (see [Setup](#4-featurecontextphp)). **Working, commented Neos 9 examples for everything
+below are in [`Tests/Behavior/Examples/`](Tests/Behavior/Examples/README.md)** — copy one and adapt it.
 
-## Fixture Setup
+## Tags
 
-The Sandstorm.E2ETestTools Package provides inline, delegated and hybrid fixture setups.
-We recommend using a hybrid approach.
+- `@flowEntities` — resets the content repository before the scenario (prunes it, creates the live workspace and the
+  `/sites` root) via your `FeatureContext`'s `@BeforeScenario @flowEntities` hook. Needed for every scenario that
+  creates nodes.
+- `@playwright` — starts a browser context in the playwright-bridge. Needed for page visits, backend steps,
+  screenshots and the style guide.
 
-### Delegated / Hybrid
+## Fixtures
 
-In your Neos Backend, select a node you want to test, go to the meta tab and click "export node".
-This will download a yaml file containing all the selected node's parents and all descendants of the
-nearest document parent (in case of dependencies as such references). Afterwards, move the downloaded yaml file into
-test directory and use them in your .feature file like such:
-```gherkin
-Given I have a site for Site Node "www-my-site" with name "www.my.side"
-And I have the following nodes from file "relative-path-from-test-file-to.yaml"
-```
-
-Also, you can override node properties inline:
-```gherkin
-Given I have the following nodes from file "relative-path-from-test-file-to.yaml" with overwrites
-| identifier                           | property      | value |
-| 5cb3a5f7-b501-40b2-b5a8-9de169ef1105 | title         | Foo   |
-```
-
-### Inline
-
-Tag the feature with `@flowEntities` (your `FeatureContext`'s `@BeforeScenario @flowEntities` hook calls
-`setupContentRepository()`, which resets the content repository and creates the `/sites` root), create the site, then
-the nodes:
+Create the site, then its nodes — as table, or from a YAML file with the same rows:
 
 ```gherkin
-@flowEntities
-Feature: Homepage renders
-
-  Background:
-    Given I have a site for Site Node "site" with name "YourSiteName"
-    And I have the following nodes in site "site":
-      | NodeAggregateId | Parent        | NodeType                              | Properties                                   | DimensionSpacePoint |
-      | homepage        |               | Your.SitePackageKey:Document.StartPage | {"uriPathSegment":"site","title":"Homepage"} | {"language":"de"}   |
-      | section         | homepage/main | Your.SitePackageKey:Content.Section    | {}                                           | {"language":"de"}   |
-      | headline        | section       | Your.SitePackageKey:Content.Headline   | {"title":"<h1>It works<\/h1>"}               | {"language":"de"}   |
+Given I have a site for Site Node "site" with name "YourSiteName"
+And I have the following nodes in site "site":
+  | NodeAggregateId | Parent        | NodeType                               | Properties                                   | DimensionSpacePoint |
+  | homepage        |               | Your.SitePackageKey:Document.StartPage | {"uriPathSegment":"site","title":"Homepage"} | {"language":"de"}   |
+  | section         | homepage/main | Your.SitePackageKey:Content.Section    | {}                                           | {"language":"de"}   |
+  | headline        | section       | Your.SitePackageKey:Content.Headline   | {"title":"<h1>It works<\/h1>"}               | {"language":"de"}   |
 ```
 
 - `Parent` empty: the site node itself (created with the node name given in `in site "..."`).
-- `Parent` `homepage/main`: the tethered child node `main` of `homepage` (from the NodeType's `childNodes`); deeper
-  paths like `homepage/main/foo` work too.
-- `Parent` `section`: a plain child of a node created earlier, by its `NodeAggregateId`.
-- `DimensionSpacePoint` must match your content dimensions
-  (`Neos.ContentRepositoryRegistry.contentRepositories.default.contentDimensions`) — with a `language` dimension, every
-  row needs it.
-- Respect NodeType `constraints`: e.g. if `main` only allows a section wrapper, content goes inside that wrapper, not
-  directly under `main` (see [Troubleshooting](#troubleshooting) item 2).
-
-References are set in a separate step, after the nodes exist:
-
-```gherkin
-And the following node references:
-  | NodeAggregateId | ReferenceName | Targets        | DimensionSpacePoint |
-  | teaser          | targets       | page-a, page-b | {"language":"de"}   |
-```
-
-## Fusion Component Testcases
-
-You can use a test case like the following for testing components - analogous to what you usually do with Monocle.
-`When I render the Fusion object ...:` renders a Fusion path against your site package's Fusion (plus the Fusion
-snippet you pass in) — no nodes needed, as long as the component doesn't render links.
-
-```gherkin
-@playwright
-Feature: Button component renders
-
-  Scenario: primary button
-    When I render the Fusion object "/testcase":
-    """
-    testcase = PACKAGEKEY:Component.Button {
-      title = 'Click me'
-      type = 'primary'
-    }
-    """
-    Then in the fusion output, the inner HTML of CSS selector "button span" matches "Click me"
-    Then I store the Fusion output in the styleguide as "Button_Component_Primary"
-```
-
-`@playwright` is only needed for the last step (see [Style Guide](#style-guide)).
-
-> **TODO — outdated:** components that render links need a node as context
-> (`When I render the Fusion object ... with the current context node:`), which still relies on the
-> pre-Neos-9 `$this->currentNodes` — see
-> [Writing Behat Tests examples are outdated](#writing-behat-tests-examples-are-outdated).
-
-## Fusion Integration Testcases
-
-> **TODO — outdated:** same as above, plus `Given I get a node by path ... with the following
-> context:` isn't a step this package provides at all anymore. Needs rewriting against the
-> current node-creation/lookup API.
-
-It is especially valuable to not just test the Fusion component (which is more or less like a pure function), but
-instead test that a given *Node* renders in a certain way - so that the *wiring between Node and Fusion component*
-is set up correctly.
-
-A test case can look like the following one:
-
-```gherkin
-@fixtures
-@playwright
-Feature: Testcase for Button Integration
-
-  Background:
-    Given I have a site for Site Node "site"
-    Given I have the following nodes:
-      | Identifier                           | Path               | Node Type                | Properties                   | Language |
-      | 5cb3a5f7-b501-40b2-b5a8-9de169ef1105 | /sites             | unstructured             | {}                           | de       |
-      | 5e312d5b-9559-4bd2-8251-0182e11b4950 | /sites/site        | PACKAGEKEY:Document.Page | {}                           | de       |
-      | 9cbaa2e2-d779-4936-aa02-0dab324da93e | /sites/site/nested | PACKAGEKEY:Document.Page | {"uriPathSegment": "nested"} | de       |
-
-
-  Scenario: Secondary Button
-    Given I create the following nodes:
-      | Path                      | Node Type                 | Properties                                                                   | Language |
-      | /sites/site/main/testnode | PACKAGEKEY:Content.Button | {"type": "secondary", "link": "node://9cbaa2e2-d779-4936-aa02-0dab324da93e"} | de       |
-    Given I get a node by path "/sites/site/main/testnode" with the following context:
-      | Workspace | Dimension: language |
-      | live      | de                  |
-
-    When I render the Fusion object "/testcase" with the current context node:
-    """
-    testcase = PACKAGEKEY:Content.Button
-    """
-    Then in the fusion output, the attributes of CSS selector "a" are:
-      | Key  | Value      |
-      | href | /de/nested |
-
-    Then I store the Fusion output in the styleguide as "Button_Integration_Secondary"
-
-```
-
-## Full-Page Snapshot Testcases
-
-> **TODO — outdated:** the `StepGeneratorCommandController` example below type-hints
-> `Neos\ContentRepository\Domain\Model\NodeInterface` and `ContextFactoryInterface`, both
-> pre-Neos-9 classes that no longer exist — it won't compile. `NodeTableBuilder`'s real API is
-> also `withFixturesBaseDirectory($packageKey, $subPath)`, not `withFixtureBasePath(...)` as
-> shown, and `NodeTable::print()` still emits the dead bare `Given I have the following nodes:`
-> syntax (see the two TODOs above). `Given I accepted the Cookie Consent` below also isn't a step
-> this package provides — it's a stray project-specific step that shouldn't be in this example.
-> Needs a full rewrite: port `NodeTableBuilder`/`NodeTable` to the current CR API, and fix the
-> emitted step syntax.
-
-This tests a complete page rendering, and not just single components. It is meant mostly for visual checking; and most
-likely you'll work less with specific assertions.
-
-In this case, the rendering depends on many more nodes - so setting up the behat fixture with all the relevant nodes can
-be a bit tedious. Luckily, there are helpers in this package to help with the process. We suggest writing a
-CommandController like the following:
-
-```php
-<?php
-
-namespace PACKAGEKEY\Command;
-
-use Neos\ContentRepository\Domain\Model\NodeInterface;
-use Neos\ContentRepository\Domain\Service\ContextFactoryInterface;
-use Neos\Flow\Annotations as Flow;
-use Neos\Flow\Cli\CommandController;
-use Sandstorm\E2ETestTools\StepGenerator\NodeTableBuilderService;
-
-class StepGeneratorCommandController extends CommandController
-{
-    /**
-     * @Flow\Inject
-     */
-    protected ContextFactoryInterface $contextFactory;
-
-    /**
-     * Main API for creating NodeTable instances to print BDD steps.
-     *
-     * @Flow\Inject
-     */
-    protected NodeTableBuilderService $nodeTableBuilderService;
-
-    public function homepageCommand()
-    {
-        $nodeTable = $this->nodeTableBuilderService->nodeTable()
-            ->withDefaultNodeProperties(['Language' => 'de'])
-            ->build();
-        $siteNode = $this->getSiteNode();
-
-        $nodeTable->addParents($siteNode);
-        $nodeTable->addNode($siteNode);
-        $nodeTable->addNodesUnderneathExcludingAutoGeneratedChildNodes($siteNode, '!Neos.Neos:Document'); // we recurse into the content of the homepage
-        $nodeTable->addNodesUnderneathExcludingAutoGeneratedChildNodes($siteNode, 'Neos.Neos:Document'); // we render the remaining document nodes so we can have a menu rendered (but without content)
-
-        $nodeTable->print();
-    }
-
-    /**
-     * @return NodeInterface
-     */
-    public function getSiteNode(): NodeInterface
-    {
-        $context = $this->contextFactory->create([
-            'workspaceName' => 'live',
-            'invisibleContentShown' => true,
-            'dimensions' => [
-                'language' => ['de']
-            ],
-            'targetDimensions' => [
-                'language' => 'de'
-            ]
-        ]);
-        return $context->getCurrentSiteNode();
-    }
-}
-```
-
-Now, when you run `./flow stepGenerator:homepage`, you'll get a table like the following:
-
-```gherkin
-Given I have the following nodes:
-| Path   | Node Type    | Properties | HiddenInIndex | Language |
-| /sites | unstructured | []         | false         | de       |
-    # ... many more nodes here in this table ...
-```
-
-This is ready to be pasted into a test case like the following:
-
-```gherkin
-@fixtures
-@playwright
-Feature: Homepage Rendering
-
-  Scenario: Full Homepage Rendering
-    Given I have a site for Site Node "site"
-    # to regenerate, use: ./flow stepGenerator:homepage
-    Given I have the following nodes:
-      | Path   | Node Type    | Properties | HiddenInIndex | Language |
-      | /sites | unstructured | []         | false         | de       |
-    # ... many more nodes here ...
-
-    Given I get a node by path "/sites/site" with the following context:
-      | Workspace | Dimension: language |
-      | live      | de                  |
-
-    Given I accepted the Cookie Consent
-    When I render the page
-    Then I store the Fusion output in the styleguide as "Page_Homepage"
-    Then I store the Fusion output in the styleguide as "Page_Homepage_Mobile" using viewport width "320"
-```
-
-This enables to generate **responsive, reproducible screenshots** of the different pages, and being able to re-generate
-this when the dummy data changes.
-
-### persistent resources in BDD tests
-
-In case, your node fixtures point to some assets from the Neos.Media module, you can generate fixtures for them as well.
-You need to pass the second parameter ($fixtureBasePath) when creating a NodeTable.
-
-You probably want to store you asset fixtures near your feature files.
-
-# TODO explain how to set fixture base path
-
-```php
-    // ... Step Generator Command Controller
-
-    public function homepageCommand()
-    {
-        $nodeTable = $this->nodeTableBuilderService->nodeTable()
-            ->withDefaultNodeProperties(['Language' => 'de'])
-            // !!! Here you setup your directory for storing your fixture files.
-            // It will print a path relative to the Flow package directory.
-            //  -> most likely: Sites/Your.PackageKey/Tests/Behavior/Features/Homepage/Resources/someSHA1.png (depending on the type of the composer package)
-            ->withFixtureBasePath('Your.PackageKey', 'Tests/Behavior/Features/Homepage/Resources/')
-            ->build();
-        $siteNode = $this->getSiteNode();
-
-        $nodeTable->addParents($siteNode);
-        $nodeTable->addNode($siteNode);
-        $nodeTable->addNodesUnderneathExcludingAutoGeneratedChildNodes($siteNode, '!Neos.Neos:Document'); // we recurse into the content of the homepage
-        $nodeTable->addNodesUnderneathExcludingAutoGeneratedChildNodes($siteNode, 'Neos.Neos:Document'); // we render the remaining document nodes so we can have a menu rendered (but without content)
-
-        // when the table is printed, it includes other tables containing asset fixtures
-        $nodeTable->print();
-    }
-
-    // ...
-
-```
-
-Let's say you have three images in your node data fixtures (node property of type `ImageInterface`). Your output could
-look like:
-
-```gherkin
-
-Given I have the following images:
-| Image ID                             | Width | Height | Filename            | Collection | Relative Publication Path | Path                                                                                                        |
-| 3a28c97c-58f1-45c5-b1ad-2f491c904467 |       |        | Map-circle-blue.svg | persistent |                           | Sites/Your.Package/Tests/Behavior/Features/Homepage/Resources/9600acebed149b1e0178b214a7f3a82bc7a829a4.svg  |
-| 846d085f-091b-4d08-82bb-e5f04150c594 | 615   | 418    | cat_caviar.jpeg     | persistent |                           | Sites/Your.Package/Tests/Behavior/Features/Homepage/Resources/ee53c207588c199b4e5359f5e06d241b0d93b78e.jpeg |
-| 3ca6e806-182a-4af2-9a60-50d2ff0bcbdb | 4500  | 4500   | mark-man-stock.png  | persistent |                           | Sites/Your.Package/Tests/Behavior/Features/Homepage/Resources/9784f58d2f6810b773807b3cfd56dcbe2b3a1c65.png  |
-Given I have the following nodes:
-| Path | Node Type | Properties | HiddenInIndex | Language |
-    # ... nodes go here here with reference to Image ID in their serialized properties
-    # a property might look like: { ..., "myImageProperty":{"__flow_object_type":"Neos\\Media\\Domain\\Model\\Image","__identifier":"3a28c97c-58f1-45c5-b1ad-2f491c904467"}, ...
-```
-
-Note, that the `Path` column values are printed and read relative to the Flow package directory. That should keep your
-tests more or less environment independent.
-Usually, the files are stored inside a DistributionPackages/* package which is symlinked into the Flow package
-directory (and thus is readable from your Test and writable from your Command Controller).
-Also, those files should be added to git, since they are part of your test cases.
-
-### dynamic modification of SUT URL via step
-
-By default, the SUT URL is configured statically via environment variable. In some cases, that is not sufficient.
-
-Use cases:
-
-#### custom content dimension resolving based on host info
-
-Let's say, your Neos project has a custom content dimension value resolver, f.e. by host name or subdomain. The SUT base
-URL is configured statically via environment variable. But in the mentioned special case, you need dynamic base URLs
-that are modified via your own custom steps.
-
-#### multi-site setup
-
-When your Neos application has multiple sites, the host name also needs to be defined via custom step.
-
-The `PlaywrightConnector` has an API for that purpose:
-
-public API: `PlaywrightTrait#setSystemUnderTestUrlModifier(\Closure $urlModifier): void`
-delegates to internal: `PlaywrightConnector#setSystemUnderTestUrlModifier(\Closure $urlModifier): void`
-
-Note, that the modifier is reset after each scenario.
-
-You need to call that setter from your custom step, that could look like:
-
-```php
-...
-
-    /**
-     * @Given my base URL is :baseUrl
-     */
-    public function myBaseUrlIs($baseUrl)
-    {
-        $this->setSystemUnderTestUrlModifier(function (string $staticBaseUrl) use ($baseUrl) {
-            return $baseUrl;
-        });
-    }
-
-    /**
-     * @Given my subdomain is :subdomain
-     */
-    public function mySubdomainIs($subdomain)
-    {
-        $this->setSystemUnderTestUrlModifier(function (string $baseUrl) use ($subdomain) {
-            return sprintf("%s://%s.%s.nip.io:%s/%s",
-                parse_url($baseUrl, PHP_URL_SCHEME),
-                $subdomain,
-                parse_url($baseUrl, PHP_URL_HOST),
-                parse_url($baseUrl, PHP_URL_PORT),
-                parse_url($baseUrl, PHP_URL_PATH),
-            );
-        });
-    }
-
-...
-
-```
-
-and behat call:
-
-```gherkin
-Given my subdomain is "de"
-```
-
-## Usage for Site Packages that use Sandstorm.NeosAcl
-
-add this to your Policy.yaml in the `Testing/Behat` context:
-
-```yaml
-roles:
-  # this is necessary to allow the test runner to create fixtures when neos
-  # acl package is installed
-  'Neos.Flow:Everybody':
-    privileges:
-      - privilegeTarget: 'Sandstorm.NeosAcl:EditAllNodes'
-        permission: GRANT
-      - privilegeTarget: 'Sandstorm.NeosAcl:CreateAllNodes'
-        permission: GRANT
-      - privilegeTarget: 'Sandstorm.NeosAcl:RemoveAllNodes'
-        permission: GRANT
-```
+- `Parent` `homepage/main`: the tethered child node `main` of `homepage`; deeper paths like `homepage/main/foo` work
+  too. `Parent` `section`: a plain child of a node created earlier, by its `NodeAggregateId`.
+- `DimensionSpacePoint` must match your content dimensions — with a `language` dimension, every row needs it.
+- `Properties` is JSON; invalid JSON fails the step. Gherkin unescapes `\\` to `\` in table cells, so a JSON-escaped
+  backslash (e.g. in a PHP class name) is written as `\\\\`.
+- Respect NodeType `constraints` (see [Troubleshooting](#troubleshooting) item 2).
+- References: `And the following node references:` with columns `NodeAggregateId | ReferenceName | Targets |
+  DimensionSpacePoint` (Targets comma-separated) — see
+  [References.feature](Tests/Behavior/Examples/Fixtures/References.feature).
+- YAML: `I have the following nodes from file "homepage.yaml" in site "site"` (optionally `... with overwrites:`),
+  path relative to the feature file, format see
+  [homepage.yaml](Tests/Behavior/Examples/Fixtures/homepage.yaml) — same fields as the table, plus an optional
+  `references:` list (`nodeAggregateId`, `referenceName`, `targets`, `dimensionSpacePoint`).
+- Assets: `I have a textual persistent resource ...` and `I have the following images:` create file/image assets
+  that node properties can reference — see
+  [Download.feature](Tests/Behavior/Examples/PersistentResources/Download.feature). They're published right away;
+  the Behat context must share the persistent resource storage/target with the SUT (Setup step 2).
+
+## Fixtures from existing content
+
+Instead of writing node tables by hand, build the content in the Neos backend and export it. All three ways produce
+the format above and export the same tree: the node's closest document with all its ancestors and descendants, plus
+references between them. Tethered nodes and nodes of unknown NodeTypes are left out, as are properties the NodeType
+doesn't declare (anymore). **Assets are not exported** — asset properties keep the asset id; create those assets in
+the scenario (`I have the following images:` …).
+
+- **Export Node button** (inspector, tab with the gear icon, group "Export"): downloads the YAML for the selected
+  node, from the current workspace and dimension. Backend users only (`Configuration/Policy.yaml`).
+- **CLI**: `./flow e2efixture:export <nodeAggregateId> --dimension '{"language":"de"}'` prints the YAML;
+  `--format gherkin --site-name site` prints the inline steps instead; `--workspace` defaults to `live`.
+- **StepGenerator** — for your own command controllers, when you want a different selection of nodes, or image
+  fixture files (written to `withFixturesBaseDirectory()` and printed as `I have the following images:`):
+
+  ```php
+  public function homepageCommand(): void
+  {
+      $subgraph = $this->contentRepositoryRegistry->get(ContentRepositoryId::fromString('default'))
+          ->getContentGraph(WorkspaceName::forLive())
+          ->getSubgraph(DimensionSpacePoint::fromArray(['language' => 'de']), NeosVisibilityConstraints::excludeRemoved());
+      $homepage = $subgraph->findNodeById(NodeAggregateId::fromString('...'));
+
+      $nodeTable = $this->nodeTableBuilderService->nodeTable() // Sandstorm\E2ETestTools\StepGenerator\NodeTableBuilderService
+          ->withFixturesBaseDirectory('Your.SitePackageKey', 'Tests/Behavior/Features/Homepage/Resources/')
+          ->build($subgraph);
+      $nodeTable->addParents($homepage);
+      $nodeTable->addNode($homepage);
+      $nodeTable->addChildNodesRecursively($homepage, '!Neos.Neos:Document'); // the homepage's content
+      $nodeTable->addChildNodesRecursively($homepage, 'Neos.Neos:Document');  // other documents, so menus render
+      $nodeTable->print('site'); // site node name for "... in site"
+  }
+  ```
+
+  References are only printed for targets that are part of the table.
+
+## Steps
+
+| Trait | Steps |
+|---|---|
+| `FusionRenderingTrait` | `I have a site for Site Node :siteNodeName [with name :siteName]` · `I have/create the following nodes in site :siteName:` · `the following node references:` · `I get the node :nodeAggregateId [in dimension :dimensionSpacePoint]` · `I render the Fusion object :fusionPath:` · `I render the Fusion object :fusionPath with the current context node:` · `I render the page` · `the Fusion output should equal to :expected` · `in the fusion output, the inner HTML of CSS selector :selector matches :expected` · `in the fusion output, the attributes of CSS selector :selector are:` · `I store the Fusion output in the styleguide as :name [using viewport width :viewportWidth]` |
+| `NodeImportTrait` | `I have/create the following nodes from file :fileName in site :siteName [with overwrites:]` |
+| `PersistentResourceTrait` (via `FusionRenderingTrait`) | `I have a textual persistent resource :uuid named :filename with the following content:` · `I have the following images:` |
+| `PlaywrightTrait` | `I do a screenshot :filename` · `I debug the playwright script` (prints the generated Playwright JS) |
+| `NeosBackendControlTrait` | `I access the URI path :uriPath` · `the response status code should be :status` · `there should be the text :expected on the page` · `the URI path should be :uriPath` · `I have a Neos backend user :username with password :password and role :role` · `I log into the backend using credentials :username :password [with username placeholder ... and password placeholder ...]` · `I click the main menu item :menuItem` · `I click the overview dashboard tile :tileTitle` · `I click the document tree entry :documentTitle` |
+
+What to test how:
+
+- **Component** (a Fusion prototype, like a pure function): `I render the Fusion object` without nodes —
+  [FusionComponent/Button.feature](Tests/Behavior/Examples/FusionComponent/Button.feature).
+- **Integration** (node → Fusion wiring): create nodes, `I get the node`, `... with the current context node` —
+  [FusionIntegration/Button.feature](Tests/Behavior/Examples/FusionIntegration/Button.feature).
+- **Page in the browser**: `I access the URI path` + assertions/screenshot —
+  [PageRendering/Homepage.feature](Tests/Behavior/Examples/PageRendering/Homepage.feature).
+- **Page snapshot** (responsive, reproducible screenshots): `I render the page` + style guide —
+  [PageRendering/FusionPageSnapshot.feature](Tests/Behavior/Examples/PageRendering/FusionPageSnapshot.feature).
+
+Project-specific steps go into your `FeatureContext`; `Tests/Behavior/Bootstrap/FeatureContext.php.default` has a few
+examples (`I pause for debugging`, `I should see the page title :title`) using `$this->playwrightConnector->execute()`.
 
 ## Style Guide
 
@@ -657,6 +389,46 @@ Then I store the Fusion output in the styleguide as "Button_Component_Primary_Mo
   }
   ```
 - In CI, `Web/styleguide` can be kept as a job artifact (see the `.gitlab-ci.yml` in this package).
+
+## Dynamic SUT URL
+
+The SUT base URL comes from `SYSTEM_UNDER_TEST_URL_FOR_PLAYWRIGHT`. When it has to change per scenario (e.g. content
+dimensions resolved by host/subdomain, multi-site setups), call `setSystemUnderTestUrlModifier()` (from
+`PlaywrightTrait`) in a custom step; the modifier is reset after each scenario:
+
+```php
+/**
+ * @Given my subdomain is :subdomain
+ */
+public function mySubdomainIs(string $subdomain): void
+{
+    $this->setSystemUnderTestUrlModifier(fn (string $baseUrl) => sprintf('%s://%s.%s:%s%s',
+        parse_url($baseUrl, PHP_URL_SCHEME),
+        $subdomain,
+        parse_url($baseUrl, PHP_URL_HOST),
+        parse_url($baseUrl, PHP_URL_PORT),
+        parse_url($baseUrl, PHP_URL_PATH),
+    ));
+}
+```
+
+## Sandstorm.NeosAcl
+
+add this to your Policy.yaml in the `Testing/Behat` context:
+
+```yaml
+roles:
+  # this is necessary to allow the test runner to create fixtures when neos
+  # acl package is installed
+  'Neos.Flow:Everybody':
+    privileges:
+      - privilegeTarget: 'Sandstorm.NeosAcl:EditAllNodes'
+        permission: GRANT
+      - privilegeTarget: 'Sandstorm.NeosAcl:CreateAllNodes'
+        permission: GRANT
+      - privilegeTarget: 'Sandstorm.NeosAcl:RemoveAllNodes'
+        permission: GRANT
+```
 
 # Running Behat Tests
 
@@ -715,8 +487,9 @@ project's tasks, see [Project tasks](#6-project-tasks-recommended)).
   database and reproduce the bug manually.
 - **Stack traces**: `-vvv` (extra verbose) prints the full exception stack trace.
 - **Run only what you're debugging**: tag scenarios (e.g. `@debug`) and run `bin/behat ... --tags=debug`.
-- **Pausing the browser**: when using Playwright's `page.pause()` (e.g. inside a custom step's Playwright script), run
-  Behat with `PAUSE_FOR_DEBUGGING=true` — otherwise the connection to the playwright-bridge times out after 30 seconds.
+- **Pausing the browser**: `And I pause for debugging` (from `FeatureContext.php.default`, calls Playwright's
+  `page.pause()`) opens the Playwright inspector on the bridge side. Run Behat with `PAUSE_FOR_DEBUGGING=true` —
+  otherwise the connection to the playwright-bridge times out after 30 seconds.
 
 # Troubleshooting
 
@@ -772,6 +545,12 @@ project's tasks, see [Project tasks](#6-project-tasks-recommended)).
 
    unless it's already on a backend shared between both contexts (e.g. the same Redis database), in which case an
    in-process flush from the runner reaches it directly.
+
+5. **Files/images created by fixture steps return 404 on the SUT.**
+
+   Cause: the Behat context (`Testing/Behat`) stores and publishes persistent resources somewhere else than the SUT
+   context, which shares the database but looks for the files in its own storage/target. Fix: use the SUT's storage
+   and target in `Testing/Behat` — see [Setup step 2](#2-two-flow-contexts-two-ports).
 
 # Architecture
 
@@ -872,16 +651,3 @@ where [Troubleshooting item 1](#troubleshooting) tends to bite:
                                         ║             for PROD             ║        ║                          ║
                                         ╚══════════════════════════════════╝        ╚══════════════════════════╝
 ```
-
-# TODO
-
-## Writing Behat Tests examples are outdated
-
-[Fusion Integration Testcases](#fusion-integration-testcases) and
-[Full-Page Snapshot Testcases](#full-page-snapshot-testcases) are written against the
-pre-Neos-9 Content Repository — dead tags/steps, and in the last case, classes that no longer
-exist and code that won't compile. See the TODO callout inline in each section for specifics.
-Node-free [Fusion Component Testcases](#fusion-component-testcases) work; everything that needs a
-context node (`When I render the Fusion object ... with the current context node:`,
-`When I render the page`) still reads the pre-Neos-9 `$this->currentNodes` and needs porting too.
-Needs a full rewrite against the current CR API.

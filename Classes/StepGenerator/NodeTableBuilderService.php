@@ -1,7 +1,10 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Sandstorm\E2ETestTools\StepGenerator;
 
+use Neos\ContentRepositoryRegistry\ContentRepositoryRegistry;
 use Neos\Flow\Package\PackageManager;
 use Neos\Flow\Annotations as Flow;
 
@@ -18,9 +21,14 @@ class NodeTableBuilderService
      */
     protected PackageManager $packageManager;
 
+    /**
+     * @Flow\Inject
+     */
+    protected ContentRepositoryRegistry $contentRepositoryRegistry;
+
     public function nodeTable(): NodeTableBuilder
     {
-        return new NodeTableBuilder($this->packageManager);
+        return new NodeTableBuilder($this->packageManager, $this->contentRepositoryRegistry);
     }
 
 }

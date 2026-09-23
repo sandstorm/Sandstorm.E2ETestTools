@@ -4,43 +4,78 @@ declare(strict_types=1);
 
 namespace Sandstorm\E2ETestTools\Service;
 
-use Doctrine\ORM\EntityManagerInterface;
+use Neos\ContentRepository\Core\DimensionSpace\DimensionSpacePoint;
+use Neos\ContentRepository\Core\Projection\ContentGraph\ContentSubgraphInterface;
+use Neos\ContentRepository\Core\SharedModel\ContentRepository\ContentRepositoryId;
+use Neos\ContentRepository\Core\SharedModel\Node\NodeAddress;
+use Neos\ContentRepository\Core\SharedModel\Node\NodeAggregateId;
+use Neos\ContentRepository\Core\SharedModel\Workspace\WorkspaceName;
+use Neos\ContentRepositoryRegistry\ContentRepositoryRegistry;
 use Neos\Flow\Annotations as Flow;
-use Neos\Neos\Domain\Repository\SiteRepository;
+use Neos\Neos\Domain\SubtreeTagging\NeosVisibilityConstraints;
+use Sandstorm\E2ETestTools\Fixture\NodeFixtureCollector;
+use Sandstorm\E2ETestTools\Fixture\NodeFixtureRow;
+use Sandstorm\E2ETestTools\Fixture\ReferenceFixtureRow;
 
 /**
- * NOTE: This service uses Neos 8 CR APIs and is not functional in Neos 9.
- * ContentContextFactory injection was removed — that class no longer exists in Neos 9.
+ * Exports existing content as node fixture (export button and CLI): the node's closest document with all its
+ * ancestors and descendants, plus their references.
+ *
+ * @Flow\Scope("singleton")
  */
 class NodeExportService
 {
     /**
      * @Flow\Inject
-     * @var SiteRepository
+     * @var ContentRepositoryRegistry
      */
-    protected $siteRepository;
+    protected $contentRepositoryRegistry;
 
     /**
-     * Doctrine's Entity Manager.
-     *
-     * @Flow\Inject
-     * @var EntityManagerInterface
+     * @return array{nodes: list<NodeFixtureRow>, references: list<ReferenceFixtureRow>}
      */
-    protected $entityManager;
-
-    /**
-     * @Flow\Inject
-     * @var NodeToYamlConverter
-     */
-    protected $nodeToYamlConverter;
-
-    public function getNeosNodeFromIdentifier(?string $identifier = null): mixed
+    public function exportNodeTree(NodeAddress $nodeAddress): array
     {
-        throw new \RuntimeException('NodeExportService::getNeosNodeFromIdentifier() is not implemented for Neos 9. The Neos 8 ContentContextFactory no longer exists.', 1700000001);
+        $subgraph = $this->subgraph($nodeAddress->contentRepositoryId, $nodeAddress->workspaceName, $nodeAddress->dimensionSpacePoint);
+        $node = $subgraph->findNodeById($nodeAddress->aggregateId)
+            ?? throw new \InvalidArgumentException(sprintf('Node "%s" not found in workspace "%s", dimension %s', $nodeAddress->aggregateId->value, $nodeAddress->workspaceName->value, $nodeAddress->dimensionSpacePoint->toJson()), 1727100001);
+
+        $collector = new NodeFixtureCollector($subgraph, $this->contentRepositoryRegistry->get($nodeAddress->contentRepositoryId)->getNodeTypeManager());
+        $nodes = $collector->collectExportTree($node);
+        $exportedIds = array_map(fn ($node) => $node->aggregateId->value, $nodes);
+
+        $references = [];
+        foreach ($nodes as $exportedNode) {
+            foreach ($collector->referencesFor($exportedNode) as $reference) {
+                // references to nodes outside the export couldn't be set on import
+                $targets = array_values(array_intersect($reference->targets, $exportedIds));
+                if ($targets !== []) {
+                    $references[] = new ReferenceFixtureRow($reference->nodeAggregateId, $reference->referenceName, $targets, $reference->dimensionSpacePoint);
+                }
+            }
+        }
+
+        return [
+            'nodes' => array_map($collector->rowFor(...), $nodes),
+            'references' => $references,
+        ];
     }
 
-    public function getNodeTreeArrayByNode(mixed $node): array
+    public function nodeAddress(string $nodeAggregateId, string $workspaceName = 'live', string $dimensionSpacePointJson = '{}', string $contentRepositoryId = 'default'): NodeAddress
     {
-        throw new \RuntimeException('NodeExportService::getNodeTreeArrayByNode() is not implemented for Neos 9.', 1700000002);
+        return NodeAddress::create(
+            ContentRepositoryId::fromString($contentRepositoryId),
+            WorkspaceName::fromString($workspaceName),
+            DimensionSpacePoint::fromJsonString($dimensionSpacePointJson),
+            NodeAggregateId::fromString($nodeAggregateId),
+        );
+    }
+
+    private function subgraph(ContentRepositoryId $contentRepositoryId, WorkspaceName $workspaceName, DimensionSpacePoint $dimensionSpacePoint): ContentSubgraphInterface
+    {
+        // hidden nodes are content too - export them as well
+        return $this->contentRepositoryRegistry->get($contentRepositoryId)
+            ->getContentGraph($workspaceName)
+            ->getSubgraph($dimensionSpacePoint, NeosVisibilityConstraints::excludeRemoved());
     }
 }

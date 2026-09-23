@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Sandstorm\E2ETestTools;
 
 use Neos\ContentRepository\Core\SharedModel\ContentRepository\ContentRepositoryId;

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Sandstorm\E2ETestTools\Tests\Behavior\Bootstrap;
 
 use Closure;
@@ -63,7 +65,7 @@ class PlaywrightConnector
     public function execute(string $contextName, string $playwrightJsCode)
     {
         $successResponse = $this->executeInternal($contextName, $playwrightJsCode);
-        return isset($successResponse['returnValue']) ? $successResponse['returnValue'] : null;
+        return $successResponse['returnValue'] ?? null;
     }
 
     public function getCurrentJsCode(string $contextName)
@@ -81,7 +83,7 @@ class PlaywrightConnector
         string $contextName,
         string $featureFile,
         string $scenarioName,
-        string $featureFileLine
+        int $featureFileLine
     ) {
         $this->execute(
             $contextName,
@@ -105,7 +107,7 @@ class PlaywrightConnector
         string $contextName,
         string $featureFile,
         string $scenarioName,
-        string $featureFileLine,
+        int $featureFileLine,
         bool $keepTrace
     ) {
         $traceReportZipFileName = 'report_' . preg_replace(
@@ -145,8 +147,8 @@ class PlaywrightConnector
                 $traceReportZipFileName
             )
         );
-        if (strlen($traceReportZipBase64)) {
-            $traceReportZip = base64_decode($traceReportZipBase64);
+        if (is_string($traceReportZipBase64) && $traceReportZipBase64 !== '') {
+            $traceReportZip = base64_decode($traceReportZipBase64, true);
             Files::createDirectoryRecursively($this->resultsDir);
             file_put_contents(sprintf('%s/%s', $this->resultsDir, $traceReportZipFileName), $traceReportZip);
             echo sprintf(
@@ -204,13 +206,13 @@ class PlaywrightConnector
     private function sendRequest(string $method, string $requestUri, string $content = '')
     {
         if (!extension_loaded('curl')) {
-            throw new Http\Exception(
+            throw new \RuntimeException(
                 'CurlEngine requires the PHP CURL extension to be installed and loaded.',
                 1346319808
             );
         }
 
-        $curlHandle = curl_init((string)$requestUri);
+        $curlHandle = curl_init($requestUri);
 
         $pauseEnv = getenv('PAUSE_FOR_DEBUGGING');
         if ($pauseEnv !== 'true') {
@@ -233,20 +235,17 @@ class PlaywrightConnector
         // If we don't set this, cURL will set "Expect: 100-continue" for requests larger than 1024 bytes.
         curl_setopt($curlHandle, CURLOPT_HTTPHEADER, ['Expect:']);
 
-        switch ($method) {
-            case 'GET':
-                if ($content) {
-                    // workaround because else the request would implicitly fall into POST:
-                    curl_setopt($curlHandle, CURLOPT_CUSTOMREQUEST, 'GET');
-                    curl_setopt($curlHandle, CURLOPT_POSTFIELDS, $content);
-                }
-                break;
-            case 'POST':
-                curl_setopt($curlHandle, CURLOPT_POST, true);
+        if ($method === 'GET') {
+            if ($content !== '') {
+                // workaround because else the request would implicitly fall into POST:
+                curl_setopt($curlHandle, CURLOPT_CUSTOMREQUEST, 'GET');
                 curl_setopt($curlHandle, CURLOPT_POSTFIELDS, $content);
-                break;
-            default:
-                throw new \RuntimeException('Not supported');
+            }
+        } elseif ($method === 'POST') {
+            curl_setopt($curlHandle, CURLOPT_POST, true);
+            curl_setopt($curlHandle, CURLOPT_POSTFIELDS, $content);
+        } else {
+            throw new \RuntimeException('Not supported');
         }
 
         $curlResult = curl_exec($curlHandle);

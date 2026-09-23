@@ -1,11 +1,14 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Sandstorm\E2ETestTools\Tests\Behavior\Bootstrap;
 
 use Behat\Behat\Hook\Scope\BeforeScenarioScope;
 use Behat\Gherkin\Node\PyStringNode;
 use Behat\Gherkin\Node\TableNode;
 use Behat\Step\Given;
+use Behat\Step\When;
 use Behat\Testwork\Hook\Scope\AfterSuiteScope;
 use Behat\Testwork\Hook\Scope\BeforeSuiteScope;
 use GuzzleHttp\Psr7\ServerRequest;
@@ -24,6 +27,8 @@ use Neos\ContentRepository\Core\Feature\NodeReferencing\Dto\NodeReferencesToWrit
 use Neos\ContentRepository\Core\Feature\RootNodeCreation\Command\CreateRootNodeAggregateWithNode;
 use Neos\ContentRepository\Core\Infrastructure\Property\PropertyConverter;
 use Neos\ContentRepository\Core\NodeType\NodeTypeName;
+use Neos\ContentRepository\Core\Projection\ContentGraph\Filter\FindClosestNodeFilter;
+use Neos\ContentRepository\Core\Projection\ContentGraph\Node;
 use Neos\ContentRepository\Core\Service\ContentRepositoryMaintainerFactory;
 use Neos\ContentRepository\Core\SharedModel\ContentRepository\ContentRepositoryId;
 use Neos\ContentRepository\Core\SharedModel\Node\NodeAggregateId;
@@ -40,13 +45,17 @@ use Neos\Flow\ObjectManagement\ObjectManagerInterface;
 use Neos\Flow\Persistence\PersistenceManagerInterface;
 use Neos\Fusion\Core\FusionGlobals;
 use Neos\Fusion\Core\RuntimeFactory;
+use Neos\Neos\Domain\Model\RenderingMode;
 use Neos\Neos\Domain\Model\Site;
+use Neos\Neos\Domain\Model\SiteNodeName;
 use Neos\Neos\Domain\Model\WorkspaceDescription;
 use Neos\Neos\Domain\Model\WorkspaceRoleAssignments;
 use Neos\Neos\Domain\Model\WorkspaceTitle;
 use Neos\Neos\Domain\Repository\SiteRepository;
 use Neos\Neos\Domain\Repository\WorkspaceMetadataAndRoleRepository;
 use Neos\Neos\Domain\Service\WorkspaceService;
+use Neos\Neos\Domain\SubtreeTagging\NeosVisibilityConstraints;
+use Neos\Neos\FrontendRouting\SiteDetection\SiteDetectionResult;
 use Neos\Utility\Files;
 use PHPUnit\Framework\Assert;
 use Sandstorm\E2ETestTools\FusionServiceForTesting;
@@ -203,25 +212,39 @@ trait FusionRenderingTrait
     }
 
     /**
+     * Node used as context by "... with the current context node" and "I render the page".
+     */
+    private ?Node $currentNode = null;
+
+    /**
+     * Picks a node (created before, e.g. via "I have the following nodes in site") from the live workspace as
+     * context node for the rendering steps below.
+     */
+    #[Given("I get the node :nodeAggregateId")]
+    #[Given("I get the node :nodeAggregateId in dimension :dimensionSpacePoint")]
+    public function iGetTheNode(string $nodeAggregateId, string $dimensionSpacePoint = '[]'): void
+    {
+        $node = $this->contentRepository
+            ->getContentGraph(WorkspaceName::forLive())
+            ->getSubgraph(
+                DimensionSpacePoint::fromArray(json_decode($dimensionSpacePoint, associative: true, flags: JSON_THROW_ON_ERROR)),
+                NeosVisibilityConstraints::excludeRemoved()
+            )
+            ->findNodeById(NodeAggregateId::fromString($nodeAggregateId));
+        if ($node === null) {
+            throw new \RuntimeException(sprintf('Node "%s" not found in live workspace, dimension %s', $nodeAggregateId, $dimensionSpacePoint));
+        }
+        $this->currentNode = $node;
+    }
+
+    /**
      * @When I render the Fusion object :fusionPath with the current context node:
      */
     public function iRenderTheFusionObjectWithNode($fusionPath, PyStringNode $additionalFusion)
     {
-        // NOTE: $this->currentNodes is not available in Neos 9 — this step requires additional setup
-        Assert::assertEquals(1, count($this->currentNodes));
-
         $fusionRenderingResult = new FusionRenderingResult();
-        $node = $this->currentNodes[0];
-        try {
-            $documentNode = (new \Neos\Eel\FlowQuery\FlowQuery([$node]))->closest('[instanceof Neos.Neos:Document]')->get(0);
-        } catch (\Exception $e) {
-            $documentNode = null;
-        }
-
         $this->internalRender('e2eTestRoot', $additionalFusion->getRaw(), [
-            'node' => $node,
-            'documentNode' => $documentNode,
-            'site' => $documentNode,
+            ...$this->currentNodeFusionContext(),
             // both used in Root.fusion
             'fusionRenderingResult' => $fusionRenderingResult,
             'renderPath' => $fusionPath
@@ -231,11 +254,11 @@ trait FusionRenderingTrait
     }
 
     /**
-     * @When I render the page
+     * Renders the whole page (Fusion path "root") of the current context node, which must be a document.
      */
+    #[When("I render the page")]
     public function iRenderThePage()
     {
-        // NOTE: $this->currentNodes is not available in Neos 9 — this step requires additional setup
         $fusionRenderingResult = new FusionRenderingResult();
         $additionalFusion = "
             prototype(Neos.Neos:Page) {
@@ -243,16 +266,31 @@ trait FusionRenderingTrait
                 httpResponseHead >
             }
         ";
-        $result = $this->internalRender('root', $additionalFusion, [
-            'node' => $this->currentNodes[0],
-            'site' => $this->currentNodes[0],
-            'documentNode' => $this->currentNodes[0],
-        ]);
+        $result = $this->internalRender('root', $additionalFusion, $this->currentNodeFusionContext());
 
         $fusionRenderingResult->setAndReturnRenderedElement($result);
         $fusionRenderingResult->setAndReturnRenderedPage($result);
 
         $this->lastFusionRenderingResult = $fusionRenderingResult;
+    }
+
+    /**
+     * node / documentNode / site context variables for the current context node, like Neos sets them for a request.
+     */
+    private function currentNodeFusionContext(): array
+    {
+        if ($this->currentNode === null) {
+            throw new \RuntimeException('No context node selected - use "Given I get the node ..." first.');
+        }
+        $subgraph = $this->contentRepository->getContentSubgraph(
+            $this->currentNode->workspaceName,
+            $this->currentNode->dimensionSpacePoint
+        );
+        return [
+            'node' => $this->currentNode,
+            'documentNode' => $subgraph->findClosestNode($this->currentNode->aggregateId, FindClosestNodeFilter::create(nodeTypes: 'Neos.Neos:Document')),
+            'site' => $subgraph->findClosestNode($this->currentNode->aggregateId, FindClosestNodeFilter::create(nodeTypes: 'Neos.Neos:Site')),
+        ];
     }
 
     private function internalRender(string $fusionPath, string $additionalFusion, $fusionContext = [])
@@ -263,14 +301,24 @@ trait FusionRenderingTrait
         // to generate links without /index.php/
         putenv('FLOW_REWRITEURLS=1');
         $httpRequest = new ServerRequest('GET', 'http://neos.test/');
-        $httpRequest = $httpRequest->withAttribute(ServerRequestAttributes::ROUTING_PARAMETERS, RouteParameters::createEmpty()->withParameter('requestUriHost', 'neos.test'));
+        $routeParameters = RouteParameters::createEmpty()->withParameter('requestUriHost', 'neos.test');
+        $siteNode = $fusionContext['site'] ?? null;
+        if ($siteNode instanceof Node && $siteNode->name !== null) {
+            // node URIs need the site + content repository, which Neos' SiteDetectionMiddleware normally stores in
+            // the request; we render without a real request, so store it ourselves
+            $siteDetectionResult = SiteDetectionResult::create(SiteNodeName::fromNodeName($siteNode->name), $siteNode->contentRepositoryId);
+            $httpRequest = $siteDetectionResult->storeInRequest($httpRequest);
+            $routeParameters = $siteDetectionResult->storeInRouteParameters($routeParameters);
+        }
+        $httpRequest = $httpRequest->withAttribute(ServerRequestAttributes::ROUTING_PARAMETERS, $routeParameters);
         $actionRequest = ActionRequest::fromHttpRequest($httpRequest);
         // needed to generate links
         $actionRequest->setFormat('html');
         // RuntimeFactory adds the default Eel helpers (String, Array, ...) as Fusion globals
         $runtime = $this->getObjectManager()->get(RuntimeFactory::class)->createFromConfiguration(
             $fusionConfiguration,
-            FusionGlobals::fromArray(['request' => $actionRequest])
+            // same globals Neos' FusionView sets for a frontend request
+            FusionGlobals::fromArray(['request' => $actionRequest, 'renderingMode' => RenderingMode::createFrontend()])
         );
 
         $runtime->pushContextArray($fusionContext);
@@ -467,7 +515,7 @@ trait FusionRenderingTrait
             //TODO: default for dimension space point
             $dimensionSpacePointJson = !empty($row['DimensionSpacePoint']) ? $row['DimensionSpacePoint'] : null;
             $dimensionSpacePoint = $dimensionSpacePointJson !== null
-                ? DimensionSpacePoint::fromArray(json_decode($dimensionSpacePointJson, associative: true))
+                ? DimensionSpacePoint::fromArray(json_decode($dimensionSpacePointJson, associative: true, flags: JSON_THROW_ON_ERROR))
                 : DimensionSpacePoint::fromArray([]);
             $originDimensionSpacePoint = OriginDimensionSpacePoint::fromDimensionSpacePoint($dimensionSpacePoint);
 
@@ -489,7 +537,13 @@ trait FusionRenderingTrait
             }
 
             $propertiesJson = !empty($row['Properties']) ? $row['Properties'] : '[]';
-            $propertiesArray = json_decode($propertiesJson, true) ?? [];
+            // invalid JSON must fail loudly - otherwise all properties would silently be dropped. Note that Gherkin
+            // table cells unescape \\ to \, so a JSON-escaped backslash (e.g. in a PHP class name) needs \\\\ in the table.
+            try {
+                $propertiesArray = json_decode($propertiesJson, true, flags: JSON_THROW_ON_ERROR) ?? [];
+            } catch (\JsonException $e) {
+                throw new \RuntimeException(sprintf('Invalid JSON in Properties of node "%s": %s', $row['NodeAggregateId'], $e->getMessage()), 0, $e);
+            }
             $propertiesArray = $this->deserializePropertyValues($propertiesArray, $row['NodeType']);
             $propertyValues = PropertyValuesToWrite::fromArray($propertiesArray);
 
@@ -523,7 +577,7 @@ trait FusionRenderingTrait
         foreach ($table->getHash() as $row) {
             $dimensionSpacePointJson = !empty($row['DimensionSpacePoint']) ? $row['DimensionSpacePoint'] : null;
             $dimensionSpacePoint = $dimensionSpacePointJson !== null
-                ? DimensionSpacePoint::fromArray(json_decode($dimensionSpacePointJson, associative: true))
+                ? DimensionSpacePoint::fromArray(json_decode($dimensionSpacePointJson, associative: true, flags: JSON_THROW_ON_ERROR))
                 : DimensionSpacePoint::fromArray([]);
 
             $targetIds = array_map(

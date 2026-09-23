@@ -1,5 +1,8 @@
 # Shaping E2E Neos Package - export and import nodes
 
+> Historical concept notes (Neos 8 era). The implemented YAML format, export button and CLI export are documented in
+> the README ("Fixtures" and "Fixtures from existing content"); the diagrams in this folder show the original idea.
+
 ### Current Situation
 - node to test and all of its parents have to be added to test file
 - difficult to see through on first sight
