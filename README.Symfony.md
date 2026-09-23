@@ -139,7 +139,7 @@ APP_ENV=test vendor/bin/behat
 ## Setting up Playwright
 
 We suggest copying `Resources/Private/playwright-bridge-template` of this package to the root of the Git Repository and
-name the folder `playwright-bridge` (in our projects, usually one level ABOVE the Neos Root Directory).
+name the folder `playwright-bridge` (in our projects, usually one level ABOVE the application root directory).
 
 Additionally, you'll need the following `.gitlab-ci.yml` for *BUILDING*
 
@@ -193,10 +193,6 @@ The *environment variables* of the job are passed on to *all services* - so all 
 share the same environment variables. Thus, you need to add the environment variables for BOTH the SUT (which is the
 main job) and all related services to the `variables` section of the test job.
 
-```yaml
-.... TODO FIGURE THIS OUT FOR SYMFONY ....
-```
-
 ## Creating a FeatureContext
 
 The `FeatureContext` is the PHP class containing the step definitions for the Behat scenarios.
@@ -212,7 +208,6 @@ namespace App\Tests\Behat;
 
 use Behat\Behat\Context\Context;
 use Sandstorm\E2ETestTools\Tests\Behavior\Bootstrap\PlaywrightTrait;
-use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\KernelInterface;
 
@@ -268,12 +263,6 @@ node index.js
 ```
 
 Second, **ensure the docker containers are running**; usually by `docker-compose build && docker-compose up -d`.
-Then, enter the `neos` container: `docker-compose exec neos /bin/bash` and run the following commands inside
-the container:
-
-```bash
-... TODO ...
-```
 
 Alternatively, you can also run the tests locally on your  machine by using:
 
