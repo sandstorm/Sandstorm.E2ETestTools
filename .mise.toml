@@ -30,12 +30,12 @@ run = [
   'mise run neos:exec "./flow behat:setup"',
   'mise run neos:exec "./flow behat:kickstart $PACKAGE_NAME http://127.0.0.1:8081"',
   'mise run neos:exec "./flow e2e:fix"',
-  'cd e2e-testrunner && npm install',
+  'cd playwright-bridge && npm install',
 ]
 
 [tasks."e2e:playwright"]
 run = [
-  'cd e2e-testrunner && node index.js',
+  'cd playwright-bridge && node index.js',
 ]
 
 [tasks."cache:flush"]

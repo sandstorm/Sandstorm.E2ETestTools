@@ -7,7 +7,7 @@ use GuzzleHttp\Psr7\Message;
 use Neos\Utility\Files;
 
 /**
- * This is the connector between the {@see PlaywrightTrait} and the Playwright server (located in e2e-testrunner/index.js).
+ * This is the connector between the {@see PlaywrightTrait} and the Playwright server (located in playwright-bridge/index.js).
  *
  * For full documentation, {@see PlaywrightTrait}.
  */
@@ -144,7 +144,7 @@ class PlaywrightConnector
                 "You can find the report trace file %s BOTH in the current PHP execution directory (where you started the tests from),\n",
                 $traceReportZipFileName
             );
-            echo "and as well in the e2e-testrunner/ folder.";
+            echo "and as well in the playwright-bridge/ folder.";
         }
     }
 

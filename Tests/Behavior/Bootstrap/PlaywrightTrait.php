@@ -182,7 +182,7 @@ trait PlaywrightTrait
                 Files::createDirectoryRecursively('e2e-results');
                 file_put_contents(sprintf('e2e-results/error_%s.png', $errorScreenshotFileName), $image);
                 echo sprintf("You can find the file error_%s.png BOTH in the current PHP execution directory (where you started the tests from),\n", $errorScreenshotFileName);
-                echo "and as well in the e2e-testrunner/ folder.";
+                echo "and as well in the playwright-bridge/ folder.";
             }
         }
     }

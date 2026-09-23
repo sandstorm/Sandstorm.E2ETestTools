@@ -30,7 +30,7 @@ The architecture for running behavioral tests is as follows:
 
 ```                                                                                              
    ╔╦══════════════════╦╗   1  ┌────────────────────┐
-   ║│Behat Test Runner ├╬──────▶   E2E-Testrunner   │
+   ║│Behat Test Runner ├╬──────▶ Playwright Bridge  │
    ║└──────────────────┘║      │(Playwright Server -│
    ║ Application Docker ║      │  Chrome Browser)   │
    ║  Container (SUT)   ║◀─────┤                    │
@@ -48,10 +48,10 @@ The architecture for running behavioral tests is as follows:
    the Behat test runner can access any code from the application, and has the exact same environment, database, and
    library versions like the production application.
 
-2) The E2E Testrunner wraps Playwright (which is a browser orchestrator) and exposes a HTTP API. It is running as
+2) The Playwright Bridge wraps Playwright (which is a browser orchestrator) and exposes a HTTP API. It is running as
    associated service. Behat communicates to the test runner via HTTP (1).
 
-3) Then, the testrunner calls the unmodified application via HTTP (2).
+3) Then, the bridge calls the unmodified application via HTTP (2).
 
 4) The application then calls other services like Redis and the database - just as usual.
 
@@ -138,8 +138,8 @@ APP_ENV=test vendor/bin/behat
 
 ## Setting up Playwright
 
-We suggest copying `Resources/Private/e2e-testrunner-template` of this package to the root of the Git Repository and
-name the folder `e2e-testrunner` (in our projects, usually one level ABOVE the Neos Root Directory).
+We suggest copying `Resources/Private/playwright-bridge-template` of this package to the root of the Git Repository and
+name the folder `playwright-bridge` (in our projects, usually one level ABOVE the Neos Root Directory).
 
 Additionally, you'll need the following `.gitlab-ci.yml` for *BUILDING*
 
@@ -169,15 +169,15 @@ package_app:
 
 
 
-build_e2e_testrunner:
+build_playwright_bridge:
   stage: build
   image: docker-hub.sandstorm.de/docker-infrastructure/php-app/build:7.4-v2
   interruptible: true
   script:
-    - cd e2e-testrunner
+    - cd playwright-bridge
     - docker login -u gitlab-ci-token -p $CI_BUILD_TOKEN $CI_REGISTRY
-    - docker build -t $CI_REGISTRY_IMAGE:$CI_BUILD_REF_SLUG-e2e-testrunner .
-    - docker push $CI_REGISTRY_IMAGE:$CI_BUILD_REF_SLUG-e2e-testrunner
+    - docker build -t $CI_REGISTRY_IMAGE:$CI_BUILD_REF_SLUG-playwright-bridge .
+    - docker push $CI_REGISTRY_IMAGE:$CI_BUILD_REF_SLUG-playwright-bridge
     - cd ..
   tags:
     - docker
@@ -253,7 +253,7 @@ class FeatureContext implements Context
 > This is MANDATORY to read for everybody.
 > We suggest that this section is COPIED to the readme of your project.
 
-First, you need to start the **Playwright Server** on your development machine. For that, go to `e2e-testrunner`
+First, you need to start the **Playwright Server** on your development machine. For that, go to `playwright-bridge`
 in your Git Repo, and do:
 
 ```bash

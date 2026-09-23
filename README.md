@@ -19,7 +19,7 @@ the test framework for writing all kinds of BDD tests.
   - [2. Two Flow Contexts, Two Ports](#2-two-flow-contexts-two-ports)
   - [3. behat.yml.dist](#3-behatymldist)
   - [4. FeatureContext.php](#4-featurecontextphp)
-  - [5. Playwright (e2e-testrunner)](#5-playwright-e2e-testrunner)
+  - [5. Playwright (playwright-bridge)](#5-playwright-playwright-bridge)
   - [6. CI Pipeline (optional)](#6-ci-pipeline-optional)
 - [Writing Behat Tests](#writing-behat-tests)
   - [Fixture Setup](#fixture-setup)
@@ -115,17 +115,17 @@ if left unedited rather than silently pointing at the wrong package/context:
   above), **not** this runner's own context. Used by `executeFlowCommand()` to shell commands
   into the SUT; leaving it at its default is a common source of confusing failures.
 
-## 5. Playwright (e2e-testrunner)
+## 5. Playwright (playwright-bridge)
 
 The Playwright↔Behat bridge (`index.js`) is deliberately **not** composer/npm-installed — it's
 meant to be copied and adjusted per project:
 
 ```bash
-cp -r Packages/Application/Sandstorm.E2ETestTools/Resources/Private/e2e-testrunner-template ./e2e-testrunner
-cd e2e-testrunner && npm install && npx playwright install && cd ..
+cp -r Packages/Application/Sandstorm.E2ETestTools/Resources/Private/playwright-bridge-template ./playwright-bridge
+cd playwright-bridge && npm install && npx playwright install && cd ..
 ```
 
-We suggest naming the folder `e2e-testrunner` at the root of your Git repository (in our projects, usually one level
+We suggest naming the folder `playwright-bridge` at the root of your Git repository (in our projects, usually one level
 above the Neos root directory). See [Running Behat Tests](#running-behat-tests) below for starting it and running
 the suite.
 
@@ -133,7 +133,7 @@ the suite.
 
 The idea, regardless of CI system: run the E2E job **inside the same image you deploy** (build once, test that
 artifact — not a separate CI-only build), give it a database and Redis service, and give it the Playwright bridge
-as its own service too (build `e2e-testrunner`'s own small image separately, e.g. from its `Dockerfile`).
+as its own service too (build `playwright-bridge`'s own small image separately, e.g. from its `Dockerfile`).
 
 A CI job usually only ever needs to serve the SUT context — unlike local dev, which runs both your normal dev vhost
 *and* the SUT vhost from the same long-lived container. That means the context-routing gotcha in
@@ -172,14 +172,14 @@ e2e_test:
   services:
     - name: mariadb:11.8
     - name: redis:7
-    - name: $CI_REGISTRY_IMAGE/e2e-testrunner:$CI_COMMIT_REF_SLUG
-      alias: e2e-testrunner
+    - name: $CI_REGISTRY_IMAGE/playwright-bridge:$CI_COMMIT_REF_SLUG
+      alias: playwright-bridge
   script:
     - composer install --dev
     - FLOW_CONTEXT=Production/E2E-SUT ./flow doctrine:migrate
     - FLOW_CONTEXT=Production/E2E-SUT ./flow cache:warmup
     - your-web-server-start-command &
-    - export PLAYWRIGHT_API_URL=http://e2e-testrunner:3000
+    - export PLAYWRIGHT_API_URL=http://playwright-bridge:3000
     - export SYSTEM_UNDER_TEST_URL_FOR_PLAYWRIGHT=http://$(hostname -i):9090
     - ./bin/behat --format junit --out e2e-results -c Packages/Sites/Your.SitePackageKey/Tests/Behavior/behat.yml.dist
   artifacts:
@@ -580,14 +580,14 @@ roles:
 ## pause for debugging
 
 If you want to use the pause functionality of playwright, please start the test with
-`PAUSE_FOR_DEBUGGING=true` to prevent curl timeouts when communicating with the e2e-testrunner.
+`PAUSE_FOR_DEBUGGING=true` to prevent curl timeouts when communicating with the playwright-bridge.
 
 # Running Behat Tests
 
 > This is MANDATORY to read for everybody.
 > We suggest that this section is COPIED to the readme of your project.
 
-First, you need to start the **Playwright Server** on your development machine. For that, go to `e2e-testrunner`
+First, you need to start the **Playwright Server** on your development machine. For that, go to `playwright-bridge`
 in your Git Repo, and do:
 
 ```bash
@@ -691,7 +691,7 @@ The architecture for running behavioral tests is as follows:
 
 ```
    ╔╦══════════════════╦╗   1  ┌────────────────────┐
-   ║│Behat Test Runner ├╬──────▶   E2E-Testrunner   │
+   ║│Behat Test Runner ├╬──────▶ Playwright Bridge  │
    ║└──────────────────┘║      │(Playwright Server -│
    ║ Application Docker ║      │  Chrome Browser)   │
    ║  Container (SUT)   ║◀─────┤                    │
@@ -708,10 +708,10 @@ The architecture for running behavioral tests is as follows:
    the Behat test runner can access any code from the application, and has the exact same environment, database, and
    library versions like the production application.
 
-2) The E2E Testrunner wraps Playwright (which is a browser orchestrator) and exposes a HTTP API. It is running as
+2) The Playwright Bridge wraps Playwright (which is a browser orchestrator) and exposes a HTTP API. It is running as
    associated service. Behat communicates to the test runner via HTTP (1).
 
-3) Then, the testrunner calls the unmodified application via HTTP (2).
+3) Then, the bridge calls the unmodified application via HTTP (2).
 
 4) The application then calls other services like Redis and the database - just as usual.
 
