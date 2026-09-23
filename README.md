@@ -29,6 +29,7 @@ the test framework for writing all kinds of BDD tests.
   - [Full-Page Snapshot Testcases](#full-page-snapshot-testcases)
   - [Style Guide](#style-guide)
 - [Running Behat Tests](#running-behat-tests)
+  - [Debugging](#debugging)
 - [Troubleshooting](#troubleshooting)
 - [Architecture](#architecture)
 - [TODO](#todo)
@@ -626,11 +627,6 @@ roles:
         permission: GRANT
 ```
 
-## pause for debugging
-
-If you want to use the pause functionality of playwright, please start the test with
-`PAUSE_FOR_DEBUGGING=true` to prevent curl timeouts when communicating with the playwright-bridge.
-
 ## Style Guide
 
 Every rendering can additionally be stored in a **style guide**: a static HTML page listing a screenshot of each stored
@@ -703,11 +699,24 @@ bin/behat -c Packages/Sites/[SITEPACKAGE_NAME]/Tests/Behavior/behat.yml.dist Pac
 bin/behat -c Packages/Sites/[SITEPACKAGE_NAME]/Tests/Behavior/behat.yml.dist Packages/Sites/[SITEPACKAGE_NAME]/Tests/Behavior/Features/WebsiteRendering.feature:27
 ```
 
-In case of exceptions, it might be helpful to run the tests with `--stop-on-failure`, which stops the test cases at the
-first error. Then, you can inspect the testing database and manually reproduce the bug.
+IDE "run" buttons for Behat usually don't work when Behat runs inside a Docker container — use the CLI (or your
+project's tasks, see [Project tasks](#6-project-tasks-recommended)).
 
-Additionally, `-vvv` is a helpful CLI flag (extra-verbose) - this displays the full exception stack trace in case of
-errors.
+## Debugging
+
+- **Screenshots**: add `And I do a screenshot "name.png"` to a `@playwright` scenario. When a step fails, an
+  `error_*.png` screenshot is taken automatically. Both are written to the results directory — `e2e-results/` relative
+  to where Behat runs, or whatever you pass to `setupPlaywright($resultsDir)`.
+- **Traces**: for failed `@playwright` scenarios, a Playwright trace `report_<feature>_<scenario>.zip` is written to the
+  results directory. Open it with
+  `npx playwright show-trace path/to/report_....zip` (e.g. after `npm install -g playwright`). To keep traces of passing
+  scenarios too (or none), call `setPlaywrightTracingMode()` in your `FeatureContext`.
+- **Stop at the first failure**: `--stop-on-failure` stops the run at the first error, so you can inspect the E2E
+  database and reproduce the bug manually.
+- **Stack traces**: `-vvv` (extra verbose) prints the full exception stack trace.
+- **Run only what you're debugging**: tag scenarios (e.g. `@debug`) and run `bin/behat ... --tags=debug`.
+- **Pausing the browser**: when using Playwright's `page.pause()` (e.g. inside a custom step's Playwright script), run
+  Behat with `PAUSE_FOR_DEBUGGING=true` — otherwise the connection to the playwright-bridge times out after 30 seconds.
 
 # Troubleshooting
 

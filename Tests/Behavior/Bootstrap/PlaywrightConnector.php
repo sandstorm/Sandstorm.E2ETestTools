@@ -125,9 +125,14 @@ class PlaywrightConnector
                 await context.tracing.stop();
                 return "";
             } else {
+                // Playwright can only save a trace to a file (unlike screenshots, which can be returned as a
+                // buffer). So write a temporary file in the bridge, hand its content back to PHP (which writes
+                // it to $resultsDir), and delete it again - otherwise a stray second copy stays in playwright-bridge/.
                 await context.tracing.stop({ path: `%s` });
                 const fs = require("fs");
-                return await fs.readFileSync(`%s`, `base64`);
+                const traceBase64 = fs.readFileSync(`%s`, `base64`);
+                fs.unlinkSync(`%s`);
+                return traceBase64;
             }
             '// language=PHP
                 ,
@@ -135,6 +140,7 @@ class PlaywrightConnector
                 $featureFileLine,
                 $scenarioName,
                 $keepTrace ? 'true' : 'false',
+                $traceReportZipFileName,
                 $traceReportZipFileName,
                 $traceReportZipFileName
             )
@@ -144,10 +150,10 @@ class PlaywrightConnector
             Files::createDirectoryRecursively($this->resultsDir);
             file_put_contents(sprintf('%s/%s', $this->resultsDir, $traceReportZipFileName), $traceReportZip);
             echo sprintf(
-                "You can find the report trace file %s BOTH in the current PHP execution directory (where you started the tests from),\n",
-                $traceReportZipFileName
+                "You can find the report trace file %s in %s\n",
+                $traceReportZipFileName,
+                $this->resultsDir
             );
-            echo "and as well in the playwright-bridge/ folder.";
         }
     }
 
