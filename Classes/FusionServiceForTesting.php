@@ -2,7 +2,8 @@
 
 namespace Sandstorm\E2ETestTools;
 
-use Neos\Flow\Annotations as Flow;
+use Neos\ContentRepository\Core\SharedModel\ContentRepository\ContentRepositoryId;
+use Neos\Fusion\Core\FusionConfiguration;
 use Neos\Fusion\Core\FusionSourceCodeCollection;
 use Neos\Neos\Domain\Service\FusionService;
 use Sandstorm\E2ETestTools\Tests\Behavior\Bootstrap\FusionRenderingTrait;
@@ -14,26 +15,21 @@ use Sandstorm\E2ETestTools\Tests\Behavior\Bootstrap\FusionRenderingTrait;
 class FusionServiceForTesting extends FusionService
 {
     /**
-     * @Flow\InjectConfiguration("fusion.autoInclude", package="Neos.Neos")
-     * @var array
+     * Same as {@see FusionService::createFusionConfigurationFromSite()}, but without needing a Site entity
+     * (and uncached), plus $extraFusionCode appended last so it can override everything else.
      */
-    protected $autoIncludeConfiguration = [];
-
-    public function getMergedFusionObjectTreeForPackage(string $siteResourcesPackageKey, string $extraFusionCode)
+    public function getMergedFusionObjectTreeForPackage(string $siteResourcesPackageKey, string $extraFusionCode, ContentRepositoryId $contentRepositoryId): FusionConfiguration
     {
-        $siteRootFusionPathAndFilename = sprintf($this->siteRootFusionPattern, $siteResourcesPackageKey);
-
         return $this->fusionParser->parseFromSource(
-            $this->fusionSourceCodeFactory->createFromNodeTypeDefinitions()
-                ->union(
-                    $this->fusionSourceCodeFactory->createFromAutoIncludes()
-                )
-                ->union(
-                    FusionSourceCodeCollection::tryFromFilePath($siteRootFusionPathAndFilename)
-                )
-                ->union(
-                    FusionSourceCodeCollection::fromString($extraFusionCode)
-                )
+            $this->fusionAutoIncludeHandler->loadFusionFromPackage(
+                $siteResourcesPackageKey,
+                $this->fusionSourceCodeFactory->createFromNodeTypeDefinitions($contentRepositoryId)
+                    ->union(
+                        $this->fusionSourceCodeFactory->createFromAutoIncludes()
+                    )
+            )->union(
+                FusionSourceCodeCollection::fromString($extraFusionCode)
+            )
         );
     }
 }

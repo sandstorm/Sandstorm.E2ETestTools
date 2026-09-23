@@ -35,14 +35,11 @@ use Neos\ContentRepositoryRegistry\ContentRepositoryRegistry;
 use Neos\Flow\Cache\CacheManager;
 use Neos\Flow\Http\ServerRequestAttributes;
 use Neos\Flow\Mvc\ActionRequest;
-use Neos\Flow\Mvc\ActionResponse;
-use Neos\Flow\Mvc\Controller\Arguments;
-use Neos\Flow\Mvc\Controller\ControllerContext;
 use Neos\Flow\Mvc\Routing\Dto\RouteParameters;
-use Neos\Flow\Mvc\Routing\UriBuilder;
 use Neos\Flow\ObjectManagement\ObjectManagerInterface;
 use Neos\Flow\Persistence\PersistenceManagerInterface;
-use Neos\Fusion\Core\Runtime;
+use Neos\Fusion\Core\FusionGlobals;
+use Neos\Fusion\Core\RuntimeFactory;
 use Neos\Neos\Domain\Model\Site;
 use Neos\Neos\Domain\Model\WorkspaceDescription;
 use Neos\Neos\Domain\Model\WorkspaceRoleAssignments;
@@ -261,7 +258,7 @@ trait FusionRenderingTrait
     private function internalRender(string $fusionPath, string $additionalFusion, $fusionContext = [])
     {
         $fusionService = $this->getObjectManager()->get(FusionServiceForTesting::class);
-        $fusionObjectTree = $fusionService->getMergedFusionObjectTreeForPackage($this->sitePackageKey, $additionalFusion);
+        $fusionConfiguration = $fusionService->getMergedFusionObjectTreeForPackage($this->sitePackageKey, $additionalFusion, ContentRepositoryId::fromString('default'));
 
         // to generate links without /index.php/
         putenv('FLOW_REWRITEURLS=1');
@@ -270,10 +267,11 @@ trait FusionRenderingTrait
         $actionRequest = ActionRequest::fromHttpRequest($httpRequest);
         // needed to generate links
         $actionRequest->setFormat('html');
-        $uriBuilder = new UriBuilder();
-        $uriBuilder->setRequest($actionRequest);
-        $controllerContext = new ControllerContext($actionRequest, new ActionResponse(), new Arguments([]), $uriBuilder);
-        $runtime = new Runtime($fusionObjectTree, $controllerContext);
+        // RuntimeFactory adds the default Eel helpers (String, Array, ...) as Fusion globals
+        $runtime = $this->getObjectManager()->get(RuntimeFactory::class)->createFromConfiguration(
+            $fusionConfiguration,
+            FusionGlobals::fromArray(['request' => $actionRequest])
+        );
 
         $runtime->pushContextArray($fusionContext);
         // as a side effect of rendering, $fusionContext['fusionRenderingResult'] gets filled.
@@ -380,7 +378,9 @@ trait FusionRenderingTrait
             $indexFileContents .= '</body></html>';
             file_put_contents(FLOW_PATH_WEB . 'styleguide/index.html', $indexFileContents);
 
-            echo 'The STYLEGUIDE can be found at http://127.0.0.1:8080/styleguide/';
+            // same base URL Playwright uses to screenshot the styleguide pages (see PlaywrightTrait)
+            $baseUrl = getenv('SYSTEM_UNDER_TEST_URL_FOR_PLAYWRIGHT') ?: '';
+            echo 'The STYLEGUIDE can be found at ' . rtrim($baseUrl, '/') . '/styleguide/';
         }
     }
 

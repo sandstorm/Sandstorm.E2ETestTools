@@ -26,13 +26,13 @@ the test framework for writing all kinds of BDD tests.
   - [Fusion Component Testcases](#fusion-component-testcases)
   - [Fusion Integration Testcases](#fusion-integration-testcases)
   - [Full-Page Snapshot Testcases](#full-page-snapshot-testcases)
+  - [Style Guide](#style-guide)
 - [Running Behat Tests](#running-behat-tests)
 - [Troubleshooting](#troubleshooting)
 - [Architecture](#architecture)
 - [TODO](#todo)
   - [Writing Behat Tests examples are outdated](#writing-behat-tests-examples-are-outdated)
   - [Setup command](#setup-command)
-  - [Style Guide](#style-guide)
   - [Symfony support](#symfony-support)
 
 <!-- /TOC -->
@@ -233,53 +233,32 @@ Given I have the following nodes:
 
 ## Fusion Component Testcases
 
-> **TODO — outdated:** this example uses the pre-Neos-9 `@fixtures` tag and bare
-> `Given I have the following nodes:` step, neither of which exist anymore. Needs rewriting
-> against the current `@flowEntities` tag and the `...in site ":siteName":` node-creation steps
-> in `FusionRenderingTrait`.
-
 You can use a test case like the following for testing components - analogous to what you usually do with Monocle.
-
-Some hints:
-
-- We need to set up a minimal node tree, as otherwise we cannot render links.
+`When I render the Fusion object ...:` renders a Fusion path against your site package's Fusion (plus the Fusion
+snippet you pass in) — no nodes needed, as long as the component doesn't render links.
 
 ```gherkin
-@fixtures
 @playwright
-Feature: Testcase for Button Component
+Feature: Button component renders
 
-  Background:
-    Given I have a site for Site Node "site"
-    Given I have the following nodes:
-      | Identifier                           | Path               | Node Type                | Properties                   | Language |
-      | 5cb3a5f7-b501-40b2-b5a8-9de169ef1105 | /sites             | unstructured             | {}                           | de       |
-      | 5e312d5b-9559-4bd2-8251-0182e11b4950 | /sites/site        | PACKAGEKEY:Document.Page | {}                           | de       |
-      | 9cbaa2e2-d779-4936-aa02-0dab324da93e | /sites/site/nested | PACKAGEKEY:Document.Page | {"uriPathSegment": "nested"} | de       |
-
-
-    Given I get a node by path "/sites/site" with the following context:
-      | Workspace | Dimension: language |
-      | live      | de                  |
-
-
-  Scenario: Basic Button (external link)
-    When I render the Fusion object "/testcase" with the current context node:
+  Scenario: primary button
+    When I render the Fusion object "/testcase":
     """
     testcase = PACKAGEKEY:Component.Button {
-      text = "External Link"
-      link = "https://spiegel.de"
-      isExternalLink = true
+      title = 'Click me'
+      type = 'primary'
     }
     """
-    Then in the fusion output, the inner HTML of CSS selector "a" matches "External Link"
-    Then in the fusion output, the attributes of CSS selector "a" are:
-      | Key    | Value              |
-      | class  | button             |
-      | href   | https://spiegel.de |
-      | target | _blank             |
-    Then I store the Fusion output in the styleguide as "Button_Component_Basic"
+    Then in the fusion output, the inner HTML of CSS selector "button span" matches "Click me"
+    Then I store the Fusion output in the styleguide as "Button_Component_Primary"
 ```
+
+`@playwright` is only needed for the last step (see [Style Guide](#style-guide)).
+
+> **TODO — outdated:** components that render links need a node as context
+> (`When I render the Fusion object ... with the current context node:`), which still relies on the
+> pre-Neos-9 `$this->currentNodes` — see
+> [Writing Behat Tests examples are outdated](#writing-behat-tests-examples-are-outdated).
 
 ## Fusion Integration Testcases
 
@@ -588,6 +567,37 @@ roles:
 If you want to use the pause functionality of playwright, please start the test with
 `PAUSE_FOR_DEBUGGING=true` to prevent curl timeouts when communicating with the playwright-bridge.
 
+## Style Guide
+
+Every rendering can additionally be stored in a **style guide**: a static HTML page listing a screenshot of each stored
+rendering, each linking to its HTML snapshot.
+
+```gherkin
+Then I store the Fusion output in the styleguide as "Button_Component_Primary"
+Then I store the Fusion output in the styleguide as "Button_Component_Primary_Mobile" using viewport width "320"
+```
+
+- The feature must be annotated with `@playwright`, and the playwright-bridge must be running — it screenshots the
+  stored HTML through the system under test (`SYSTEM_UNDER_TEST_URL_FOR_PLAYWRIGHT`).
+- Output goes to `Web/styleguide/` (`<name>.html`, `<name>.png`, `index.html`). It's wiped at the start of each Behat
+  run, and `index.html` is regenerated at the end; Behat prints the URL (e.g.
+  [127.0.0.1:9090/styleguide/](http://127.0.0.1:9090/styleguide/)).
+- The rendering is wrapped in `Sandstorm.E2ETestTools:StyleguidePage` (see `Resources/Private/Fusion/Root.fusion`),
+  which ships **without CSS/JS**. Add your project's assets so screenshots look like the real site:
+
+  ```neosfusion
+  prototype(Sandstorm.E2ETestTools:StyleguideStylesheets) {
+      main = Neos.Fusion:Tag {
+          tagName = 'link'
+          attributes.rel = 'stylesheet'
+          attributes.href = Neos.Fusion:ResourceUri {
+              path = 'resource://PACKAGEKEY/Public/main.css'
+          }
+      }
+  }
+  ```
+- In CI, `Web/styleguide` can be kept as a job artifact (see the `.gitlab-ci.yml` in this package).
+
 # Running Behat Tests
 
 > This is MANDATORY to read for everybody.
@@ -792,11 +802,13 @@ where [Troubleshooting item 1](#troubleshooting) tends to bite:
 
 ## Writing Behat Tests examples are outdated
 
-[Fusion Component Testcases](#fusion-component-testcases),
-[Fusion Integration Testcases](#fusion-integration-testcases), and
-[Full-Page Snapshot Testcases](#full-page-snapshot-testcases) are all written against the
+[Fusion Integration Testcases](#fusion-integration-testcases) and
+[Full-Page Snapshot Testcases](#full-page-snapshot-testcases) are written against the
 pre-Neos-9 Content Repository — dead tags/steps, and in the last case, classes that no longer
 exist and code that won't compile. See the TODO callout inline in each section for specifics.
+Node-free [Fusion Component Testcases](#fusion-component-testcases) work; everything that needs a
+context node (`When I render the Fusion object ... with the current context node:`,
+`When I render the page`) still reads the pre-Neos-9 `$this->currentNodes` and needs porting too.
 Needs a full rewrite against the current CR API.
 
 ## Setup command
@@ -806,16 +818,6 @@ scaffold most of [Setup](#setup) automatically. `behat:setup` is now a deprecate
 that only prints an error and exits; `behat:kickstart` doesn't exist anymore at all. Either revive
 an equivalent command in this package, or remove `e2e:setup`/`e2e:fix` if they're not worth
 keeping now that they just shell out to dead commands.
-
-## Style Guide
-
-> Moved here — revisiting this feature later.
-
-If you use the Style Guide feature (`Then I store the Fusion output in the styleguide as "Button_Component_Basic"`),
-then your tests need to be annotated with `@playwright` and the playwright dev server needs to be running.
-
-You can then access the style guide using [127.0.0.1:8080/styleguide/](http://127.0.0.1:8080/styleguide/). The style
-guide contains BOTH HTML snapshots; and rendered images of the HTML.
 
 ## Symfony support
 
