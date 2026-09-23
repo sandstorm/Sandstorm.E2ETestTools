@@ -446,7 +446,7 @@ trait FusionRenderingTrait
     /**
      * Creates nodes in the content repository from a Gherkin table.
      *
-     * Supported columns: NodeAggregateId, Parent, Node Type, Properties (JSON), Language
+     * Supported columns: NodeAggregateId, Parent, NodeType, Properties (JSON), DimensionSpacePoint (JSON)
      * The /sites root node is created automatically by setupContentRepository() and must not be repeated here.
      */
     #[Given("I have the following nodes in site :siteName:")]

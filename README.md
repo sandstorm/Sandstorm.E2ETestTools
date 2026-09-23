@@ -20,7 +20,8 @@ the test framework for writing all kinds of BDD tests.
   - [3. behat.yml.dist](#3-behatymldist)
   - [4. FeatureContext.php](#4-featurecontextphp)
   - [5. Playwright (playwright-bridge)](#5-playwright-playwright-bridge)
-  - [6. CI Pipeline (optional)](#6-ci-pipeline-optional)
+  - [6. Project tasks (recommended)](#6-project-tasks-recommended)
+  - [7. CI Pipeline (optional)](#7-ci-pipeline-optional)
 - [Writing Behat Tests](#writing-behat-tests)
   - [Fixture Setup](#fixture-setup)
   - [Fusion Component Testcases](#fusion-component-testcases)
@@ -32,16 +33,14 @@ the test framework for writing all kinds of BDD tests.
 - [Architecture](#architecture)
 - [TODO](#todo)
   - [Writing Behat Tests examples are outdated](#writing-behat-tests-examples-are-outdated)
-  - [Setup command](#setup-command)
-  - [Symfony support](#symfony-support)
 
 <!-- /TOC -->
 
 # Setup
 
-No one-shot setup command exists (see [TODO](#todo)), so these steps are done by hand, once per
-project, in order. None are optional: skip step 2 and running Behat against your normal dev
-database will delete its content.
+Setup is done by hand, once per project, in order — there's deliberately no setup command, since web server,
+ports, Docker and CI differ from project to project. Steps 1–5 are required: skip step 2 and running Behat against
+your normal dev database will delete its content.
 
 ## 1. Install the package
 
@@ -74,6 +73,17 @@ Neos:
       backendOptions:
         dbname: '%env:DB_NEOS_DATABASE_E2ETEST%'
 ```
+
+Create that database once, then migrate it in the SUT context (again after pulling new migrations):
+
+```bash
+mysql -e 'CREATE DATABASE IF NOT EXISTS neos_e2etest'   # or your DB's equivalent
+FLOW_CONTEXT=Production/E2E-SUT ./flow doctrine:migrate
+```
+
+Caches the test runner must invalidate between scenarios (e.g. Fusion content cache) either need a backend shared by
+both contexts (e.g. the same Redis database), or an explicit flush in the SUT's context — see
+[Troubleshooting](#troubleshooting) item 4.
 
 ## 3. behat.yml.dist
 
@@ -129,7 +139,31 @@ We suggest naming the folder `playwright-bridge` at the root of your Git reposit
 above the Neos root directory). See [Running Behat Tests](#running-behat-tests) below for starting it and running
 the suite.
 
-## 6. CI Pipeline (optional)
+The bridge runs on your host (it drives a real browser), Behat usually inside your app container. `setupPlaywright()`
+needs two environment variables in the Behat process, e.g. in your `docker-compose.yml`:
+
+```yaml
+environment:
+  # where Behat reaches the bridge (from inside a container: the host)
+  PLAYWRIGHT_API_URL: 'http://host.docker.internal:3000'
+  # where the browser (on the host) reaches the SUT port from step 2
+  SYSTEM_UNDER_TEST_URL_FOR_PLAYWRIGHT: 'http://127.0.0.1:9090'
+```
+
+## 6. Project tasks (recommended)
+
+The recurring commands — start/stop the bridge, create + migrate the E2E database, run Behat (optionally for a single
+file or scenario) — are worth wrapping in your project's task runner (mise, make, npm scripts, ...), so nobody has to
+remember them. For example, the Neos-on-Docker kickstart ships `mise run tests:e2e:start-bridge` and
+`mise run tests:e2e [path]`, the latter roughly doing:
+
+```bash
+docker compose exec maria-db /createTestingDB.sh
+docker compose exec neos bash -c "FLOW_CONTEXT=Production/E2E-SUT ./flow doctrine:migrate"
+docker compose exec neos bin/behat -c Packages/Sites/Your.SitePackageKey/Tests/Behavior/behat.yml.dist $1
+```
+
+## 7. CI Pipeline (optional)
 
 The idea, regardless of CI system: run the E2E job **inside the same image you deploy** (build once, test that
 artifact — not a separate CI-only build), give it a database and Redis service, and give it the Playwright bridge
@@ -146,7 +180,7 @@ built lean:
 - If your production image is built with `--no-dev`, Behat and this package's dev-only pieces won't be installed —
   re-run `composer install --dev` (or your dev-dependency equivalent) as the job's first step.
 - If the web server config serving your SUT vhost only ships in a local-dev image layer (see
-  [Two Flow Contexts, Two Ports](#two-flow-contexts-two-ports)), copy that config file into the running container
+  [Two Flow Contexts, Two Ports](#2-two-flow-contexts-two-ports)), copy that config file into the running container
   before starting the server.
 
 Then: migrate/warm the SUT's caches, start the web server in the background, point
@@ -225,10 +259,40 @@ Given I have the following nodes from file "relative-path-from-test-file-to.yaml
 ```
 
 ### Inline
+
+Tag the feature with `@flowEntities` (your `FeatureContext`'s `@BeforeScenario @flowEntities` hook calls
+`setupContentRepository()`, which resets the content repository and creates the `/sites` root), create the site, then
+the nodes:
+
 ```gherkin
-Given I have the following nodes:
-| Identifier                           | Path               | Node Type                | Properties                   | Language |
-| 5cb3a5f7-b501-40b2-b5a8-9de169ef1105 | /sites             | unstructured             | {}                           | de       |
+@flowEntities
+Feature: Homepage renders
+
+  Background:
+    Given I have a site for Site Node "site" with name "YourSiteName"
+    And I have the following nodes in site "site":
+      | NodeAggregateId | Parent        | NodeType                              | Properties                                   | DimensionSpacePoint |
+      | homepage        |               | Your.SitePackageKey:Document.StartPage | {"uriPathSegment":"site","title":"Homepage"} | {"language":"de"}   |
+      | section         | homepage/main | Your.SitePackageKey:Content.Section    | {}                                           | {"language":"de"}   |
+      | headline        | section       | Your.SitePackageKey:Content.Headline   | {"title":"<h1>It works<\/h1>"}               | {"language":"de"}   |
+```
+
+- `Parent` empty: the site node itself (created with the node name given in `in site "..."`).
+- `Parent` `homepage/main`: the tethered child node `main` of `homepage` (from the NodeType's `childNodes`); deeper
+  paths like `homepage/main/foo` work too.
+- `Parent` `section`: a plain child of a node created earlier, by its `NodeAggregateId`.
+- `DimensionSpacePoint` must match your content dimensions
+  (`Neos.ContentRepositoryRegistry.contentRepositories.default.contentDimensions`) — with a `language` dimension, every
+  row needs it.
+- Respect NodeType `constraints`: e.g. if `main` only allows a section wrapper, content goes inside that wrapper, not
+  directly under `main` (see [Troubleshooting](#troubleshooting) item 2).
+
+References are set in a separate step, after the nodes exist:
+
+```gherkin
+And the following node references:
+  | NodeAggregateId | ReferenceName | Targets        | DimensionSpacePoint |
+  | teaser          | targets       | page-a, page-b | {"language":"de"}   |
 ```
 
 ## Fusion Component Testcases
@@ -619,9 +683,11 @@ server, Kubernetes, ...). Then, enter your application's container (however your
 exec`, `kubectl exec`, or none at all if running locally) and run the following commands:
 
 ```bash
-./flow behat:setup
 bin/behat -c Packages/Sites/[SITEPACKAGE_NAME]/Tests/Behavior/behat.yml.dist
 ```
+
+(Make sure the E2E database exists and is migrated, see
+[Two Flow Contexts, Two Ports](#2-two-flow-contexts-two-ports).)
 
 Behat also supports running single tests or single files - they need to be specified after the config file, e.g.
 
@@ -741,7 +807,7 @@ need **two web server ports** as well: One for development, and one for the test
 This setup is somewhat complicated; so the following image helps to illustrate how the different contexts interact
 **during development time and during production/CI**. The context names below (`Development/Docker`,
 `Production/Kubernetes`, ...) are examples — name yours after your own environments; see
-[Two Flow Contexts, Two Ports](#two-flow-contexts-two-ports). Wiring the second port to the right context is exactly
+[Two Flow Contexts, Two Ports](#2-two-flow-contexts-two-ports). Wiring the second port to the right context is exactly
 where [Troubleshooting item 1](#troubleshooting) tends to bite:
 
 ```
@@ -810,16 +876,3 @@ Node-free [Fusion Component Testcases](#fusion-component-testcases) work; everyt
 context node (`When I render the Fusion object ... with the current context node:`,
 `When I render the page`) still reads the pre-Neos-9 `$this->currentNodes` and needs porting too.
 Needs a full rewrite against the current CR API.
-
-## Setup command
-
-`behat:setup` / `behat:kickstart` (and this package's own `e2e:setup`, which called both) used to
-scaffold most of [Setup](#setup) automatically. `behat:setup` is now a deprecated stub
-that only prints an error and exits; `behat:kickstart` doesn't exist anymore at all. Either revive
-an equivalent command in this package, or remove `e2e:setup`/`e2e:fix` if they're not worth
-keeping now that they just shell out to dead commands.
-
-## Symfony support
-
-The Symfony variant ([README.Symfony.md](./README.Symfony.md)) hasn't been revisited alongside the Neos 9 changes in
-this README — needs a pass later to confirm it's still accurate.

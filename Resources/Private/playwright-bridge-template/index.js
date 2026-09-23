@@ -185,7 +185,6 @@ function wrapForDebug(scriptBlocks) {
 /**
  *
  * composer require neos/behat
- * ./flow behat:setup
  *
  * npx playwright codegen wikipedia.org
  *
