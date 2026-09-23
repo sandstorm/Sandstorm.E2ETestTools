@@ -202,6 +202,14 @@ trait PlaywrightTrait
         }
     }
 
+    private function requirePlaywrightContext(): string
+    {
+        if ($this->playwrightContext === null) {
+            throw new \RuntimeException('No active Playwright context. Did you forget the @playwright tag on this scenario?');
+        }
+        return $this->playwrightContext;
+    }
+
     /**
      * @AfterScenario @playwright
      */
@@ -218,7 +226,7 @@ trait PlaywrightTrait
      */
     public function iDebugThePlaywrightScript()
     {
-        $js = $this->playwrightConnector->getCurrentJsCode($this->playwrightContext);
+        $js = $this->playwrightConnector->getCurrentJsCode($this->requirePlaywrightContext());
         echo $js;
 
         // we flush the output here so that we do not have it wrapped in another block; but it's directly copy/pastable
@@ -232,7 +240,7 @@ trait PlaywrightTrait
     {
         // TODO: make "page" a specific API
         // NOTE: intentionally no "path" option here - see the comment in playwrightAfterStep().
-        $base64Image = $this->playwrightConnector->execute($this->playwrightContext, '
+        $base64Image = $this->playwrightConnector->execute($this->requirePlaywrightContext(), '
                 const buffer = await vars.page.screenshot({fullPage: true});
                 return buffer.toString("base64");
             ');
