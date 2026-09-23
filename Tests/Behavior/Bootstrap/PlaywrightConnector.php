@@ -16,16 +16,19 @@ class PlaywrightConnector
 
     private string $playwrightApiUrl;
     private string $systemUnderTestUrl;
+    private string $resultsDir;
     private ?Closure $systemUnderTestUrlModifier = null;
 
     /**
      * @param string $playwrightApiUrl Playwright API URL, as seen from the perspective of the Behat test runner (inside the Docker container)
      * @param string $systemUnderTestUrl System under Test URL, as seen from Playwright
+     * @param string $resultsDir Where trace zips get written (relative to CWD)
      */
-    public function __construct(string $playwrightApiUrl, string $systemUnderTestUrl)
+    public function __construct(string $playwrightApiUrl, string $systemUnderTestUrl, string $resultsDir = 'e2e-results')
     {
         $this->playwrightApiUrl = $playwrightApiUrl;
         $this->systemUnderTestUrl = $systemUnderTestUrl;
+        $this->resultsDir = $resultsDir;
     }
 
     /**
@@ -138,8 +141,8 @@ class PlaywrightConnector
         );
         if (strlen($traceReportZipBase64)) {
             $traceReportZip = base64_decode($traceReportZipBase64);
-            Files::createDirectoryRecursively('e2e-results');
-            file_put_contents(sprintf('e2e-results/%s', $traceReportZipFileName), $traceReportZip);
+            Files::createDirectoryRecursively($this->resultsDir);
+            file_put_contents(sprintf('%s/%s', $this->resultsDir, $traceReportZipFileName), $traceReportZip);
             echo sprintf(
                 "You can find the report trace file %s BOTH in the current PHP execution directory (where you started the tests from),\n",
                 $traceReportZipFileName

@@ -187,6 +187,12 @@ e2e_test:
       junit: e2e-results/*.xml
 ```
 
+`setupPlaywright()` writes screenshots/error-screenshots/trace zips to `e2e-results` by default.
+It takes an optional `?string $resultsDir` param if you want that driven by your own project's
+config instead (e.g. Neos: resolve it from `Settings.yaml` in your `FeatureContext`'s constructor
+before calling `setupPlaywright($resultsDir)` — see this project's own consuming project for a
+worked example). Keep it in sync with whatever `--out` path you pass to Behat above.
+
 One GitLab-specific quirk worth knowing regardless of the example above: a job's *environment variables* are passed
 to *all* its `services:` too — so DB/Redis credentials set for the main job are what the DB/Redis services
 themselves also start with; there's no separate place to configure them.

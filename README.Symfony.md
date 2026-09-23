@@ -231,6 +231,9 @@ class FeatureContext implements Context
     public function __construct(KernelInterface $kernel)
     {
         $this->kernel = $kernel;
+        // setupPlaywright() writes screenshots/error-screenshots/trace zips to "e2e-results" by
+        // default; pass an optional $resultsDir here if you want that driven by your own
+        // project's config instead (e.g. a Symfony parameter/env var).
         $this->setupPlaywright();
     }
 

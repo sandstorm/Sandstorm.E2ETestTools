@@ -68,6 +68,8 @@ trait PlaywrightTrait
 
     protected ?string $playwrightContext = null;
 
+    protected string $resultsDir = 'e2e-results';
+
     // on_error per default
     private int $playwrightTracingMode = 2;
 
@@ -80,8 +82,18 @@ trait PlaywrightTrait
         $this->playwrightTracingMode = $mode;
     }
 
-    public function setupPlaywright()
+    /**
+     * @param ?string $resultsDir Where screenshots/error-screenshots/trace zips get written (relative to CWD).
+     *   Defaults to "e2e-results". Framework-agnostic on purpose (this trait is used from both Neos/Flow and
+     *   Symfony projects) - if you want this driven by your own framework's config (e.g. Neos Settings.yaml),
+     *   resolve it yourself before calling setupPlaywright() and pass it in here.
+     */
+    public function setupPlaywright(?string $resultsDir = null)
     {
+        if ($resultsDir !== null) {
+            $this->resultsDir = $resultsDir;
+        }
+
         // Playwright API URL, as seen from the perspective of the Behat test runner (inside the Docker container).
         $playwrightApiUrl = getenv('PLAYWRIGHT_API_URL');
         if (empty($playwrightApiUrl)) {
@@ -106,7 +118,7 @@ trait PlaywrightTrait
         }
 
 
-        $this->playwrightConnector = new PlaywrightConnector($playwrightApiUrl, $systemUnderTestUrl);
+        $this->playwrightConnector = new PlaywrightConnector($playwrightApiUrl, $systemUnderTestUrl, $this->resultsDir);
     }
 
     /**
@@ -170,19 +182,22 @@ trait PlaywrightTrait
             $errorScreenshotFileName = (string)preg_replace('/[^a-zA-Z_]/', '', basename($event->getFeature()->getFile()) . '_' . $event->getStep()->getText());
 
             // TODO: make "page" a specific API
-            $base64Image = $this->playwrightConnector->execute($this->playwrightContext, sprintf('
+            // NOTE: intentionally no "path" option here - the resulting buffer is returned to PHP
+            // and written to $resultsDir below. Passing "path" would make Playwright *also* write
+            // the file itself, relative to the bridge (Node) process's own CWD - i.e. a second,
+            // un-configurable copy outside of $resultsDir.
+            $base64Image = $this->playwrightConnector->execute($this->playwrightContext, '
                 if (vars && vars.page) {
-                    const buffer = await vars.page.screenshot({path: "error_%s.png", fullPage: true});
+                    const buffer = await vars.page.screenshot({fullPage: true});
                     return buffer.toString("base64");
                 }
                 return "";
-            ', $errorScreenshotFileName));
+            ');
             if (strlen($base64Image)) {
                 $image = base64_decode($base64Image);
-                Files::createDirectoryRecursively('e2e-results');
-                file_put_contents(sprintf('e2e-results/error_%s.png', $errorScreenshotFileName), $image);
-                echo sprintf("You can find the file error_%s.png BOTH in the current PHP execution directory (where you started the tests from),\n", $errorScreenshotFileName);
-                echo "and as well in the playwright-bridge/ folder.";
+                Files::createDirectoryRecursively($this->resultsDir);
+                file_put_contents(sprintf('%s/error_%s.png', $this->resultsDir, $errorScreenshotFileName), $image);
+                echo sprintf("You can find the file error_%s.png in %s\n", $errorScreenshotFileName, $this->resultsDir);
             }
         }
     }
@@ -216,12 +231,13 @@ trait PlaywrightTrait
     public function iDoAScreenshot($filename)
     {
         // TODO: make "page" a specific API
-        $base64Image = $this->playwrightConnector->execute($this->playwrightContext, sprintf('
-                const buffer = await vars.page.screenshot({path: "%s", fullPage: true});
+        // NOTE: intentionally no "path" option here - see the comment in playwrightAfterStep().
+        $base64Image = $this->playwrightConnector->execute($this->playwrightContext, '
+                const buffer = await vars.page.screenshot({fullPage: true});
                 return buffer.toString("base64");
-            ', $filename));
+            ');
         $image = base64_decode($base64Image);
-        Files::createDirectoryRecursively('e2e-results');
-        file_put_contents('e2e-results/' . $filename, $image);
+        Files::createDirectoryRecursively($this->resultsDir);
+        file_put_contents($this->resultsDir . '/' . $filename, $image);
     }
 }
