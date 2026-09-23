@@ -14,160 +14,188 @@ the test framework for writing all kinds of BDD tests.
 <!-- TOC -->
 
 - [End-To-End Test Tools](#end-to-end-test-tools)
-- [Installation and Setup Instructions](#installation-and-setup-instructions)
-  - [Setting up Playwright](#setting-up-playwright)
-  - [Creating a FeatureContext](#creating-a-featurecontext)
-  - [Loading CSS and JavaScript for the Styleguide](#loading-css-and-javascript-for-the-styleguide)
-  - [Pipeline Setup](#pipeline-setup) 
-- [Running Behat Tests](#running-behat-tests)
-  - [Style Guide](#style-guide)
+- [Setup](#setup)
+  - [1. Install the package](#1-install-the-package)
+  - [2. Two Flow Contexts, Two Ports](#2-two-flow-contexts-two-ports)
+  - [3. behat.yml.dist](#3-behatymldist)
+  - [4. FeatureContext.php](#4-featurecontextphp)
+  - [5. Playwright (playwright-bridge)](#5-playwright-playwright-bridge)
+  - [6. CI Pipeline (optional)](#6-ci-pipeline-optional)
 - [Writing Behat Tests](#writing-behat-tests)
+  - [Fixture Setup](#fixture-setup)
   - [Fusion Component Testcases](#fusion-component-testcases)
   - [Fusion Integration Testcases](#fusion-integration-testcases)
   - [Full-Page Snapshot Testcases](#full-page-snapshot-testcases)
+- [Running Behat Tests](#running-behat-tests)
+- [Troubleshooting](#troubleshooting)
 - [Architecture](#architecture)
+- [TODO](#todo)
+  - [Writing Behat Tests examples are outdated](#writing-behat-tests-examples-are-outdated)
+  - [Setup command](#setup-command)
+  - [Style Guide](#style-guide)
+  - [Symfony support](#symfony-support)
 
 <!-- /TOC -->
 
-# Installation and Setup Instructions
+# Setup
 
-- either copy .mise.toml and update it, then run `mise run e2e:setup`
-- or do the following:
+No one-shot setup command exists (see [TODO](#todo)), so these steps are done by hand, once per
+project, in order. None are optional: skip step 2 and running Behat against your normal dev
+database will delete its content.
 
-```
+## 1. Install the package
+
+```bash
+# Pulls in the traits (PlaywrightTrait, FusionRenderingTrait, NeosBackendControlTrait, ...)
+# your FeatureContext.php will use below, plus this package's own Behat/Playwright glue code.
 composer require sandstorm/e2etesttools @dev
-./flow behat:setup
-./flow behat:kickstart Your.SitePackageKey http://127.0.0.1:8081
-rm bin/selenium-server.jar # we do not need this
 ```
 
-- you can delete `behat.yml` and only keep `behat.yml.dist`
-- in `behat.yml.dist`, remove the `Behat\MinkExtension` part completely.
+## 2. Two Flow Contexts, Two Ports
 
-  > Mink is generic a "browser controller API" which in our experience
-  > is a bit brittle to use and adds unnecessary complexity. We recommend
-  > to instead use Playwright directly.
+E2E tests need full control over the database (creating/deleting nodes, resetting workspaces),
+so they need their own database — which means their own Flow context. That context also needs
+to be reachable over HTTP for Playwright, so it needs its own port too. Two contexts are involved:
 
-- You should configure the Flow/Neos `Configuration/Testing/Behat/Settings.yaml` and copy the production `Settings.yaml`
-  there; to ensure that Behat is accessing the same Database like the production application.
+- **`Testing/Behat`** — the context the Behat CLI process itself runs under. Copy your production
+  `Settings.yaml` into `Configuration/Testing/Behat/Settings.yaml` for matching DB access.
+- **Your SUT context** — whatever context actually serves the app for Playwright to hit (e.g.
+  `Production/E2E-SUT`, `Development/Docker/Behat` — name it after your own environment). Needs a
+  second entry point on its own port; how you configure that is up to your web server — see
+  [Troubleshooting](#troubleshooting) for a gotcha that applies regardless of which one you use.
 
-- You should create a `Configuration/Development/Docker/Behat/Settings.yaml` with the following contents:
+Both only need to override the database name — point `DB_NEOS_DATABASE_E2ETEST` at a separate
+database from your normal one:
 
 ```yaml
-  Neos:
-    Flow:
-      persistence:
-        backendOptions:
-          dbname: '%env:DB_NEOS_DATABASE_E2ETEST%'
+Neos:
+  Flow:
+    persistence:
+      backendOptions:
+        dbname: '%env:DB_NEOS_DATABASE_E2ETEST%'
 ```
 
-- You should create a `Configuration/Production/Kubernetes/Behat/Settings.yaml` with the following contents:
+## 3. behat.yml.dist
+
+Behat needs its own minimal config telling it where your feature files and step-definition
+context live — create `DistributionPackages/Your.SitePackageKey/Tests/Behavior/behat.yml.dist`:
 
 ```yaml
-  Neos:
-    Flow:
-      persistence:
-        backendOptions:
-          dbname: '%env:DB_NEOS_DATABASE_E2ETEST%'
+default:
+  autoload:
+    '': "%paths.base%/Features/Bootstrap"
+  suites:
+    behat:
+      paths:
+        - "%paths.base%/Features"
+      contexts:
+        - FeatureContext
 ```
 
-## Setting up Playwright
+## 4. FeatureContext.php
 
-We suggest copying `Resources/Private/e2e-testrunner-template` of this package to the root of the Git Repository and
-name the folder `e2e-testrunner` (in our projects, usually one level ABOVE the Neos Root Directory).
-Also, make sure you have installed playwright on your device.
-`npx playwright install`
-
-
-## Creating a FeatureContext
-
-The `FeatureContext` is the PHP class containing the step definitions for the Behat scenarios. We provide base traits
-you should use for various functionality. 
-We provide a working skeleton for you to use under `Tests/Behavior/Bootstrap/FeatureContext.php.default`
-Copy this file as your `FeatureContext.php` to your project `Tests/Behavior/Bootstrap/FeatureContext.php`
-`cp -R ./Packages/Application/Sandstorm.E2ETestTools/Tests/Behavior/Bootstrap/FeatureContext.php.default ./DistributionPackages/<Your.PackageName>/Tests/Behavior/Bootstrap/FeatureContext.php`
-Inside the file, check the paths to the provided Sandstorm traits and update if necessary.
-
-## Loading CSS and JavaScript for the Styleguide
-
-In your Fusion code, add the JavaScript and CSS of your page to the `Sandstorm.E2ETestTools:StyleguideStylesheets`
-and `Sandstorm.E2ETestTools:StyleguideJavascripts` prototypes, e.g. in the following way:
-
-```neosfusion
-prototype(Sandstorm.E2ETestTools:StyleguideStylesheets) {
-  headerAssets = PACKAGEKEY:Resources.HeaderAssets
-}
-```
-
-> Additionally, the base URL needs to be configured correctly. This package sets it to "/" in the `Testing/Behat`
-> context which will work in most cases out of the box.
-
-## Pipeline Setup
-We provide a skeleton to run e2e tests in your gitlab pipeline.
-Add the provided lines from our `.gitlab-ci.yml` to yours and adjust accordingly.
-
-Every related service (like redis, database, ...) needs to be started using a `servives` entry. Ensure the Docker image
-version of the service matches the development and production image from `docker-compose.yml`.
-
-The *environment variables* of the job are passed on to *all services* - so all connected services and the main job
-share the same environment variables. Thus, you need to add the environment variables for BOTH the SUT (which is the
-main job) and all related services to the `variables` section of the test job.
-
-
-# Running Behat Tests
-
-> This is MANDATORY to read for everybody.
-> We suggest that this section is COPIED to the readme of your project.
-
-First, you need to start the **Playwright Server** on your development machine. For that, go to `e2e-testrunner`
-in your Git Repo, and do:
+`FeatureContext` is the PHP class Behat calls into for every step. This package ships a working
+skeleton with the trait wiring already correct, so copy it rather than assembling that boilerplate
+yourself:
 
 ```bash
-npm install
-node index.js
-# now, the server is running on localhost:3000.
-# Keep the server running as long as you want to execute Behavioral Tests. You can leave the server
-# running for a very long time (e.g. a day).
+cp Packages/Application/Sandstorm.E2ETestTools/Tests/Behavior/Bootstrap/FeatureContext.php.default \
+   DistributionPackages/Your.SitePackageKey/Tests/Behavior/Bootstrap/FeatureContext.php
 ```
 
-Second, **ensure the docker containers are running**; usually by `docker-compose build && docker-compose up -d`. Then,
-enter the `neos` container: `docker-compose exec neos /bin/bash` and run the following commands inside the container:
+The `require_once` paths at the top are relative to **your copy's own location**, not the
+package's — 6 `../` to reach `Packages/Application/Sandstorm.E2ETestTools/...` assumes your file
+sits at `DistributionPackages/<Your.PackageName>/Tests/Behavior/Bootstrap/FeatureContext.php`. A
+different depth needs a different number of `../`. Then edit two
+placeholders — the template ships with values that intentionally don't work, so it fails loudly
+if left unedited rather than silently pointing at the wrong package/context:
+
+- the site package key passed to `setupFusionRendering(...)`.
+- **`$flowContextForSystemUnderTest`** — the context the *served* SUT actually runs under (step 2
+  above), **not** this runner's own context. Used by `executeFlowCommand()` to shell commands
+  into the SUT; leaving it at its default is a common source of confusing failures.
+
+## 5. Playwright (playwright-bridge)
+
+The Playwright↔Behat bridge (`index.js`) is deliberately **not** composer/npm-installed — it's
+meant to be copied and adjusted per project:
 
 ```bash
-./flow behat:setup
-bin/behat -c Packages/Sites/[SITEPACKAGE_NAME]/Tests/Behavior/behat.yml.dist
+cp -r Packages/Application/Sandstorm.E2ETestTools/Resources/Private/playwright-bridge-template ./playwright-bridge
+cd playwright-bridge && npm install && npx playwright install && cd ..
 ```
 
-Behat also supports running single tests or single files - they need to be specified after the config file, e.g.
+We suggest naming the folder `playwright-bridge` at the root of your Git repository (in our projects, usually one level
+above the Neos root directory). See [Running Behat Tests](#running-behat-tests) below for starting it and running
+the suite.
 
-```bash
+## 6. CI Pipeline (optional)
 
-# run all scenarios in a given folder
-bin/behat -c Packages/Sites/[SITEPACKAGE_NAME]/Tests/Behavior/behat.yml.dist Packages/Sites/[SITEPACKAGE_NAME]/Tests/Behavior/Features/Fusion/
+The idea, regardless of CI system: run the E2E job **inside the same image you deploy** (build once, test that
+artifact — not a separate CI-only build), give it a database and Redis service, and give it the Playwright bridge
+as its own service too (build `playwright-bridge`'s own small image separately, e.g. from its `Dockerfile`).
 
-# run all scenarios in the single feature file
-bin/behat -c Packages/Sites/[SITEPACKAGE_NAME]/Tests/Behavior/behat.yml.dist Packages/Sites/[SITEPACKAGE_NAME]/Tests/Behavior/Features/WebsiteRendering.feature
+A CI job usually only ever needs to serve the SUT context — unlike local dev, which runs both your normal dev vhost
+*and* the SUT vhost from the same long-lived container. That means the context-routing gotcha in
+[Troubleshooting](#troubleshooting) doesn't apply in CI: just set `FLOW_CONTEXT` to your SUT context directly as a
+job variable, no `$_SERVER`-to-`getenv()` bridge needed there.
 
-# run the scenario starting at line 27
-bin/behat -c Packages/Sites/[SITEPACKAGE_NAME]/Tests/Behavior/behat.yml.dist Packages/Sites/[SITEPACKAGE_NAME]/Tests/Behavior/Features/WebsiteRendering.feature:27
+Two things commonly need doing at job-runtime rather than at image-build-time, since a production image is usually
+built lean:
+
+- If your production image is built with `--no-dev`, Behat and this package's dev-only pieces won't be installed —
+  re-run `composer install --dev` (or your dev-dependency equivalent) as the job's first step.
+- If the web server config serving your SUT vhost only ships in a local-dev image layer (see
+  [Two Flow Contexts, Two Ports](#two-flow-contexts-two-ports)), copy that config file into the running container
+  before starting the server.
+
+Then: migrate/warm the SUT's caches, start the web server in the background, point
+`PLAYWRIGHT_API_URL`/`SYSTEM_UNDER_TEST_URL_FOR_PLAYWRIGHT` at the right hostnames for your CI system's networking,
+and run `bin/behat` — a JUnit-format report (`--format junit --out <dir>`) is worth adding so your CI system can show
+per-scenario results rather than just a pass/fail job.
+
+Illustrated with GitLab CI, since that's what we use — the same shape (image reuse, services, env vars shared with
+those services, JUnit reporting) applies to any CI system:
+
+```yaml
+e2e_test:
+  stage: test
+  image:
+    name: $CI_REGISTRY_IMAGE/neos:$CI_COMMIT_REF_SLUG   # the image you already build for deployment
+    entrypoint: [ "" ]                                   # skip its normal startup sequence
+  variables:
+    FLOW_CONTEXT: Production/E2E-SUT
+    DB_NEOS_DATABASE_E2ETEST: ci_test
+    E2E_FLOW_CONTEXT: Production/E2E-SUT
+    REDIS_HOST: redis
+    REDIS_PORT: 6379
+  services:
+    - name: mariadb:11.8
+    - name: redis:7
+    - name: $CI_REGISTRY_IMAGE/playwright-bridge:$CI_COMMIT_REF_SLUG
+      alias: playwright-bridge
+  script:
+    - composer install --dev
+    - FLOW_CONTEXT=Production/E2E-SUT ./flow doctrine:migrate
+    - FLOW_CONTEXT=Production/E2E-SUT ./flow cache:warmup
+    - your-web-server-start-command &
+    - export PLAYWRIGHT_API_URL=http://playwright-bridge:3000
+    - export SYSTEM_UNDER_TEST_URL_FOR_PLAYWRIGHT=http://$(hostname -i):9090
+    - ./bin/behat --format junit --out e2e-results -c Packages/Sites/Your.SitePackageKey/Tests/Behavior/behat.yml.dist
+  artifacts:
+    reports:
+      junit: e2e-results/*.xml
 ```
 
-In case of exceptions, it might be helpful to run the tests with `--stop-on-failure`, which stops the test cases at the
-first error. Then, you can inspect the testing database and manually reproduce the bug.
+`setupPlaywright()` writes screenshots/error-screenshots/trace zips to `e2e-results` by default.
+It takes an optional `?string $resultsDir` param if you want that driven by your own project's
+config instead (e.g. Neos: resolve it from `Settings.yaml` in your `FeatureContext`'s constructor
+before calling `setupPlaywright($resultsDir)` — see this project's own consuming project for a
+worked example). Keep it in sync with whatever `--out` path you pass to Behat above.
 
-Additionally, `-vvv` is a helpful CLI flag (extra-verbose) - this displays the full exception stack trace in case of
-errors.
-
-**For hints how to write Behat tests, we suggest to
-read [Sandstorm.E2ETestTools README](./Packages/Application/Sandstorm.E2ETestTools/README.md).**
-
-## Style Guide
-
-If you use the Style Guide feature (`Then I store the Fusion output in the styleguide as "Button_Component_Basic"`),
-then your tests need to be annotated with `@playwright` and the playwright dev server needs to be running.
-
-You can then access the style guide using [127.0.0.1:8080/styleguide/](http://127.0.0.1:8080/styleguide/). The style
-guide contains BOTH HTML snapshots; and rendered images of the HTML.
+One GitLab-specific quirk worth knowing regardless of the example above: a job's *environment variables* are passed
+to *all* its `services:` too — so DB/Redis credentials set for the main job are what the DB/Redis services
+themselves also start with; there's no separate place to configure them.
 
 # Writing Behat Tests
 
@@ -181,7 +209,7 @@ We recommend using a hybrid approach.
 ### Delegated / Hybrid
 
 In your Neos Backend, select a node you want to test, go to the meta tab and click "export node".
-This will download a yaml file containing all the selected node's parents and all descendants of the 
+This will download a yaml file containing all the selected node's parents and all descendants of the
 nearest document parent (in case of dependencies as such references). Afterwards, move the downloaded yaml file into
 test directory and use them in your .feature file like such:
 ```gherkin
@@ -204,6 +232,11 @@ Given I have the following nodes:
 ```
 
 ## Fusion Component Testcases
+
+> **TODO — outdated:** this example uses the pre-Neos-9 `@fixtures` tag and bare
+> `Given I have the following nodes:` step, neither of which exist anymore. Needs rewriting
+> against the current `@flowEntities` tag and the `...in site ":siteName":` node-creation steps
+> in `FusionRenderingTrait`.
 
 You can use a test case like the following for testing components - analogous to what you usually do with Monocle.
 
@@ -250,6 +283,10 @@ Feature: Testcase for Button Component
 
 ## Fusion Integration Testcases
 
+> **TODO — outdated:** same as above, plus `Given I get a node by path ... with the following
+> context:` isn't a step this package provides at all anymore. Needs rewriting against the
+> current node-creation/lookup API.
+
 It is especially valuable to not just test the Fusion component (which is more or less like a pure function), but
 instead test that a given *Node* renders in a certain way - so that the *wiring between Node and Fusion component*
 is set up correctly.
@@ -291,6 +328,16 @@ Feature: Testcase for Button Integration
 ```
 
 ## Full-Page Snapshot Testcases
+
+> **TODO — outdated:** the `StepGeneratorCommandController` example below type-hints
+> `Neos\ContentRepository\Domain\Model\NodeInterface` and `ContextFactoryInterface`, both
+> pre-Neos-9 classes that no longer exist — it won't compile. `NodeTableBuilder`'s real API is
+> also `withFixturesBaseDirectory($packageKey, $subPath)`, not `withFixtureBasePath(...)` as
+> shown, and `NodeTable::print()` still emits the dead bare `Given I have the following nodes:`
+> syntax (see the two TODOs above). `Given I accepted the Cookie Consent` below also isn't a step
+> this package provides — it's a stray project-specific step that shouldn't be in this example.
+> Needs a full rewrite: port `NodeTableBuilder`/`NodeTable` to the current CR API, and fix the
+> emitted step syntax.
 
 This tests a complete page rendering, and not just single components. It is meant mostly for visual checking; and most
 likely you'll work less with specific assertions.
@@ -406,7 +453,7 @@ You probably want to store you asset fixtures near your feature files.
 # TODO explain how to set fixture base path
 
 ```php
-    // ... Step Generator Command Controller 
+    // ... Step Generator Command Controller
 
     public function homepageCommand()
     {
@@ -427,7 +474,7 @@ You probably want to store you asset fixtures near your feature files.
         // when the table is printed, it includes other tables containing asset fixtures
         $nodeTable->print();
     }
-    
+
     // ...
 
 ```
@@ -508,7 +555,7 @@ You need to call that setter from your custom step, that could look like:
         });
     }
 
-...    
+...
 
 ```
 
@@ -539,8 +586,107 @@ roles:
 ## pause for debugging
 
 If you want to use the pause functionality of playwright, please start the test with
-`PAUSE_FOR_DEBUGGING=true` to prevent curl timeouts when communicating with the e2e-testrunner.
+`PAUSE_FOR_DEBUGGING=true` to prevent curl timeouts when communicating with the playwright-bridge.
 
+# Running Behat Tests
+
+> This is MANDATORY to read for everybody.
+> We suggest that this section is COPIED to the readme of your project.
+
+First, you need to start the **Playwright Server** on your development machine. For that, go to `playwright-bridge`
+in your Git Repo, and do:
+
+```bash
+npm install
+node index.js
+# now, the server is running on localhost:3000.
+# Keep the server running as long as you want to execute Behavioral Tests. You can leave the server
+# running for a very long time (e.g. a day).
+```
+
+Second, **ensure your application is running** in whatever way your project does that (Docker Compose, a local PHP
+server, Kubernetes, ...). Then, enter your application's container (however your project runs one — `docker compose
+exec`, `kubectl exec`, or none at all if running locally) and run the following commands:
+
+```bash
+./flow behat:setup
+bin/behat -c Packages/Sites/[SITEPACKAGE_NAME]/Tests/Behavior/behat.yml.dist
+```
+
+Behat also supports running single tests or single files - they need to be specified after the config file, e.g.
+
+```bash
+
+# run all scenarios in a given folder
+bin/behat -c Packages/Sites/[SITEPACKAGE_NAME]/Tests/Behavior/behat.yml.dist Packages/Sites/[SITEPACKAGE_NAME]/Tests/Behavior/Features/Fusion/
+
+# run all scenarios in the single feature file
+bin/behat -c Packages/Sites/[SITEPACKAGE_NAME]/Tests/Behavior/behat.yml.dist Packages/Sites/[SITEPACKAGE_NAME]/Tests/Behavior/Features/WebsiteRendering.feature
+
+# run the scenario starting at line 27
+bin/behat -c Packages/Sites/[SITEPACKAGE_NAME]/Tests/Behavior/behat.yml.dist Packages/Sites/[SITEPACKAGE_NAME]/Tests/Behavior/Features/WebsiteRendering.feature:27
+```
+
+In case of exceptions, it might be helpful to run the tests with `--stop-on-failure`, which stops the test cases at the
+first error. Then, you can inspect the testing database and manually reproduce the bug.
+
+Additionally, `-vvv` is a helpful CLI flag (extra-verbose) - this displays the full exception stack trace in case of
+errors.
+
+# Troubleshooting
+
+1. **The system-under-test serves the wrong content / wrong database, even though the response status is 200.**
+
+   Cause: your web server sets the SUT's Flow context per-vhost, but the *container* (or host) also has a real,
+   process-wide `FLOW_CONTEXT` env var — needed for normal CLI/`./flow` usage — and Flow's own
+   `Bootstrap::getEnvironmentConfigurationSetting()` checks real `getenv()` *before* `$_SERVER`. The container-wide
+   value always wins, silently, regardless of what your web server sets per-vhost.
+
+   Verify by checking which context's cache/temp directory actually got populated for the request that hit the wrong
+   content (e.g. `Data/Temporary/<Context>/<SubContext>/Cache/...` for a Flow-default setup) — if it's not the
+   context you configured for that vhost, this is it.
+
+   Fix: bridge `$_SERVER` → real env inside a PHP file that runs before every request (e.g. via `auto_prepend_file`
+   in php.ini), so the per-vhost value takes precedence over the container-wide fallback:
+
+   ```php
+   if (isset($_SERVER['FLOW_CONTEXT'])) {
+       putenv('FLOW_CONTEXT=' . $_SERVER['FLOW_CONTEXT']);
+       $_ENV['FLOW_CONTEXT'] = $_SERVER['FLOW_CONTEXT'];
+   }
+   ```
+
+   This applies to any web server that only sets per-request `$_SERVER`/CGI-style env vars rather than a real,
+   process-wide one (Caddy/FrankenPHP's `env` directive behaves this way, for example) — the underlying
+   `getenv()`-precedence behavior lives in Flow itself, not in any particular web server.
+
+2. **`NodeConstraintException: Node type "..." is not allowed below tethered child nodes "..."` when creating
+   fixtures.**
+
+   Cause: the target NodeType's `constraints.nodeTypes` only allows one specific wrapper type directly under that
+   tethered collection (commonly a "section"/"row" type) — content nodes nest inside *that*, not directly under the
+   collection. Check the NodeType's `constraints` before picking a fixture node type.
+
+3. **`FeatureContext.php` fatals with a missing class on boot, inherited from an older setup.**
+
+   Cause: a `FeatureContext.php` written against an older version of this package references classes/traits that no
+   longer exist. Compare against the *current* `Tests/Behavior/Bootstrap/FeatureContext.php.default` in this package
+   and rewrite against that, rather than patching the old one forward.
+
+4. **Content changes don't show up on the SUT after resetting the content repository.**
+
+   Cause: a project-specific cache (e.g. a full-page/HTTP response cache) isn't covered by
+   `setupContentRepository()`'s generic cache flush, and/or isn't on a cache backend shared between the runner's
+   context and the SUT's context.
+
+   Fix: flush it explicitly, in the SUT's own context, from a `@BeforeScenario` hook:
+
+   ```php
+   exec("FLOW_CONTEXT=$this->flowContextForSystemUnderTest ./flow cache:flushone <YourCacheIdentifier>");
+   ```
+
+   unless it's already on a backend shared between both contexts (e.g. the same Redis database), in which case an
+   in-process flush from the runner reaches it directly.
 
 # Architecture
 
@@ -549,29 +695,29 @@ If you want to use the pause functionality of playwright, please start the test 
 
 The architecture for running behavioral tests is as follows:
 
-```                                                                                              
+```
    ╔╦══════════════════╦╗   1  ┌────────────────────┐
-   ║│Behat Test Runner ├╬──────▶   E2E-Testrunner   │
+   ║│Behat Test Runner ├╬──────▶ Playwright Bridge  │
    ║└──────────────────┘║      │(Playwright Server -│
    ║ Application Docker ║      │  Chrome Browser)   │
    ║  Container (SUT)   ║◀─────┤                    │
    ╚══════════╦═════════╝   2  └────────────────────┘
-              │                                      
-             3│                                      
-   ┌──────────▼─────────┐                            
-   │other services (DB, │                            
-   │    Redis, ...)     │                            
-   └────────────────────┘                            
+              │
+             3│
+   ┌──────────▼─────────┐
+   │other services (DB, │
+   │    Redis, ...)     │
+   └────────────────────┘
 ```
 
 1) We add the Behat test runner to the Development or Production App Docker Container (SUT - System under Test), so that
    the Behat test runner can access any code from the application, and has the exact same environment, database, and
    library versions like the production application.
 
-2) The E2E Testrunner wraps Playwright (which is a browser orchestrator) and exposes a HTTP API. It is running as
+2) The Playwright Bridge wraps Playwright (which is a browser orchestrator) and exposes a HTTP API. It is running as
    associated service. Behat communicates to the test runner via HTTP (1).
 
-3) Then, the testrunner calls the unmodified application via HTTP (2).
+3) Then, the bridge calls the unmodified application via HTTP (2).
 
 4) The application then calls other services like Redis and the database - just as usual.
 
@@ -582,20 +728,22 @@ databases**: one for Testing, and the other one for Development.
 Additionally, the E2E tests need to reach the system wired to the *testing environment* through HTTP. This means we
 need **two web server ports** as well: One for development, and one for the testing context.
 
-This setup is somewhat complicated; so the following image helps to illustrate how the different contexts interact **
-during development time and during production/CI**:
+This setup is somewhat complicated; so the following image helps to illustrate how the different contexts interact
+**during development time and during production/CI**. The context names below (`Development/Docker`,
+`Production/Kubernetes`, ...) are examples — name yours after your own environments; see
+[Two Flow Contexts, Two Ports](#two-flow-contexts-two-ports). Wiring the second port to the right context is exactly
+where [Troubleshooting item 1](#troubleshooting) tends to bite:
 
-```                                                                                                             
-                                                                                                                
-                                                                                                                
-                               Main Development Web                                              Behat CLI      
-                               Server (usually port         Web Server used by                  (bin/behat)     
-                                      8080)                Behat Tests (usually                        │        
-                                                                Port 9090)                             │        
-                                         │                                                             │        
-                                         │                           ┌────────────────┐                │        
-                                         │                           │                │                │        
-                                         │                           ▼                │                ▼        
+```
+
+                               Main Development Web                                              Behat CLI
+                               Server (usually port         Web Server used by                  (bin/behat)
+                                      8080)                Behat Tests (usually                        │
+                                                                Port 9090)                             │
+                                         │                                                             │
+                                         │                           ┌────────────────┐                │
+                                         │                           │                │                │
+                                         │                           ▼                │                ▼
                                          │       ╔═════════════════════════╗        ╔══════════════════════════╗
     ######  ####### #     #              │       ║Development/Docker/Behat ║        ║  Testing/Behat Context   ║
     #     # #       #     #              │       ║         Context         ║        ║                          ║
@@ -611,23 +759,18 @@ during development time and during production/CI**:
                                         ║ contains the main configuration  ║        ║                          ║
                                         ║             for DEV              ║        ║                          ║
                                         ╚══════════════════════════════════╝        ╚══════════════════════════╝
-                                                                                                                
-                                                                                                                
-                                                                                                                
-                                                                                                                
-                                                                                                                
-                                                                                                                
-                                                                                                                
-                                                                                                                
-                                                                                                                
-                               Main Production Web                                              Behat CLI      
-                               Server (usually port         Web Server used by                  (bin/behat)     
-                                      8080)                Behat Tests (usually                        │        
-                                                                Port 9090)                             │        
-                                         │                                                             │        
-                                         │                           ┌────────────────┐                │        
-                                         │                           │                │                │        
-          #####  ###                     │                           ▼                │                ▼        
+
+
+
+
+                               Main Production Web                                              Behat CLI
+                               Server (usually port         Web Server used by                  (bin/behat)
+                                      8080)                Behat Tests (usually                        │
+                                                                Port 9090)                             │
+                                         │                                                             │
+                                         │                           ┌────────────────┐                │
+                                         │                           │                │                │
+          #####  ###                     │                           ▼                │                ▼
          #     #  #                      │       ╔═════════════════════════╗        ╔══════════════════════════╗
          #        #                      │       ║Production/Kubernetes/Beh║        ║  Testing/Behat Context   ║
          #        #                      │       ║       at Context        ║        ║                          ║
@@ -643,4 +786,38 @@ during development time and during production/CI**:
                                         ║ contains the main configuration  ║        ║                          ║
                                         ║             for PROD             ║        ║                          ║
                                         ╚══════════════════════════════════╝        ╚══════════════════════════╝
-```              
+```
+
+# TODO
+
+## Writing Behat Tests examples are outdated
+
+[Fusion Component Testcases](#fusion-component-testcases),
+[Fusion Integration Testcases](#fusion-integration-testcases), and
+[Full-Page Snapshot Testcases](#full-page-snapshot-testcases) are all written against the
+pre-Neos-9 Content Repository — dead tags/steps, and in the last case, classes that no longer
+exist and code that won't compile. See the TODO callout inline in each section for specifics.
+Needs a full rewrite against the current CR API.
+
+## Setup command
+
+`behat:setup` / `behat:kickstart` (and this package's own `e2e:setup`, which called both) used to
+scaffold most of [Setup](#setup) automatically. `behat:setup` is now a deprecated stub
+that only prints an error and exits; `behat:kickstart` doesn't exist anymore at all. Either revive
+an equivalent command in this package, or remove `e2e:setup`/`e2e:fix` if they're not worth
+keeping now that they just shell out to dead commands.
+
+## Style Guide
+
+> Moved here — revisiting this feature later.
+
+If you use the Style Guide feature (`Then I store the Fusion output in the styleguide as "Button_Component_Basic"`),
+then your tests need to be annotated with `@playwright` and the playwright dev server needs to be running.
+
+You can then access the style guide using [127.0.0.1:8080/styleguide/](http://127.0.0.1:8080/styleguide/). The style
+guide contains BOTH HTML snapshots; and rendered images of the HTML.
+
+## Symfony support
+
+The Symfony variant ([README.Symfony.md](./README.Symfony.md)) hasn't been revisited alongside the Neos 9 changes in
+this README — needs a pass later to confirm it's still accurate.

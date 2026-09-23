@@ -156,7 +156,7 @@ process.on('unhandledRejection', (err) => {
 init();
 
 const beginBlock = `
-// USAGE: store this script as "e2e-testrunner/test.js" (so that it has access to the Playwright runtime)
+// USAGE: store this script as "playwright-bridge/test.js" (so that it has access to the Playwright runtime)
 // and then run it using:     PWDEBUG=1 node test.js
 
 const { chromium } = require('playwright');
