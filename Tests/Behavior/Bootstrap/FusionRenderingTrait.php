@@ -126,7 +126,8 @@ trait FusionRenderingTrait
 
     /**
      * Starts the scenario with an empty content repository: only the live workspace and the Neos.Neos:Sites root.
-     * Call it before creating nodes, e.g. from a "@BeforeScenario @flowEntities" hook.
+     * Call it before creating nodes, e.g. from a BeforeScenario hook for the flowEntities tag (see
+     * FeatureContext.php.default).
      */
     public function setupContentRepository(): void
     {
