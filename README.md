@@ -290,6 +290,9 @@ Feature files live in your site package (`Tests/Behavior/Features/`), step defin
 in your `FeatureContext` (see [Setup](#4-featurecontextphp)). **Working, commented Neos 9 examples for everything
 below are in [`Tests/Behavior/Examples/`](Tests/Behavior/Examples/README.md)** — copy one and adapt it.
 
+What to test in a Neos project, on which level, and how to write fixtures, assertions and steps that stay meaningful:
+**[Neos E2E Testing Guide](NEOS_E2E_TESTING_GUIDE.md)**.
+
 ## Tags
 
 - `@flowEntities` — resets the content repository before the scenario (prunes it, creates the live workspace and the
