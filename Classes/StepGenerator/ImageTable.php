@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Sandstorm\E2ETestTools\StepGenerator;
 
 use Neos\Media\Domain\Model\ImageInterface;
@@ -29,6 +31,7 @@ class ImageTable
             array_merge(
                 self::$IMAGE_DEFAULT_HEADER,
                 array_keys($defaultProperties),
+                $persistentResourceFixtures->defaultPropertyNames(),
                 PersistentResourceFixtures::$PERSISTENT_RESOURCE_DEFAULT_HEADER
             )
         );

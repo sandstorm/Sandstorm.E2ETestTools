@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Sandstorm\E2ETestTools\StepGenerator;
 
 use Neos\Flow\ResourceManagement\PersistentResource;
@@ -61,6 +63,14 @@ class PersistentResourceFixtures
             'Relative Publication Path' => $persistentResource->getRelativePublicationPath(),
             'Path' => $fixturePathRelativeToFlowRoot
         ]);
+    }
+
+    /**
+     * @return list<string> the extra columns {@see addPersistentResource()} adds to every row
+     */
+    public function defaultPropertyNames(): array
+    {
+        return array_keys($this->defaultProperties);
     }
 
     public function storeFixtures(): void

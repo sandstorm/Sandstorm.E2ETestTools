@@ -26,15 +26,15 @@ package_app:
       - app/.composer-cache
 
 
-build_e2e_testrunner:
+build_playwright_bridge:
   stage: build
   image: docker-hub.sandstorm.de/docker-infrastructure/php-app/build:7.4-v2
   interruptible: true
   script:
-    - cd e2e-testrunner
+    - cd playwright-bridge
     - docker login -u gitlab-ci-token -p $CI_BUILD_TOKEN $CI_REGISTRY
-    - docker build -t $CI_REGISTRY_IMAGE:$CI_BUILD_REF_SLUG-e2e-testrunner .
-    - docker push $CI_REGISTRY_IMAGE:$CI_BUILD_REF_SLUG-e2e-testrunner
+    - docker build -t $CI_REGISTRY_IMAGE:$CI_BUILD_REF_SLUG-playwright-bridge .
+    - docker push $CI_REGISTRY_IMAGE:$CI_BUILD_REF_SLUG-playwright-bridge
     - cd ..
   tags:
     - docker
@@ -66,9 +66,9 @@ e2e_test:
     DB_NEOS_DATABASE: '${MYSQL_DATABASE}'
   services:
     - name: mariadb:10.5
-    # here, we make the e2e-testrunner available
-    - name: $CI_REGISTRY_IMAGE:$CI_BUILD_REF_SLUG-e2e-testrunner
-      alias: e2e-testrunner
+    # here, we make the playwright-bridge available
+    - name: $CI_REGISTRY_IMAGE:$CI_BUILD_REF_SLUG-playwright-bridge
+      alias: playwright-bridge
   script:
     # ADJUST: the following lines must be adjusted to match the *entrypoint*
     - cd /app && ./flow doctrine:migrate
@@ -76,8 +76,8 @@ e2e_test:
     - ln -s /etc/nginx/nginx-e2etest-server-prod.conf /etc/nginx/conf.d/nginx-e2etest-server-prod.conf
 
     - /bin/sh /start.sh &
-    # the playwright API URL does not need to be adjusted as long as the service alias for playwright is `e2e-testrunner`.
-    - export PLAYWRIGHT_API_URL=http://e2e-testrunner:3000
+    # the playwright API URL does not need to be adjusted as long as the service alias for playwright is `playwright-bridge`.
+    - export PLAYWRIGHT_API_URL=http://playwright-bridge:3000
 
     # ADJUST: you might need to adjust the SUT URL; and the wait URL below
     - export SYSTEM_UNDER_TEST_URL_FOR_PLAYWRIGHT=http://$(hostname -i):9090

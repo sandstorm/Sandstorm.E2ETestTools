@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Sandstorm\E2ETestTools\Tests\Behavior\Bootstrap;
 
 use Closure;
@@ -7,7 +9,7 @@ use GuzzleHttp\Psr7\Message;
 use Neos\Utility\Files;
 
 /**
- * This is the connector between the {@see PlaywrightTrait} and the Playwright server (located in e2e-testrunner/index.js).
+ * This is the connector between the {@see PlaywrightTrait} and the Playwright server (located in playwright-bridge/index.js).
  *
  * For full documentation, {@see PlaywrightTrait}.
  */
@@ -16,16 +18,19 @@ class PlaywrightConnector
 
     private string $playwrightApiUrl;
     private string $systemUnderTestUrl;
+    private string $resultsDir;
     private ?Closure $systemUnderTestUrlModifier = null;
 
     /**
      * @param string $playwrightApiUrl Playwright API URL, as seen from the perspective of the Behat test runner (inside the Docker container)
      * @param string $systemUnderTestUrl System under Test URL, as seen from Playwright
+     * @param string $resultsDir Where trace zips get written (relative to CWD)
      */
-    public function __construct(string $playwrightApiUrl, string $systemUnderTestUrl)
+    public function __construct(string $playwrightApiUrl, string $systemUnderTestUrl, string $resultsDir = 'e2e-results')
     {
         $this->playwrightApiUrl = $playwrightApiUrl;
         $this->systemUnderTestUrl = $systemUnderTestUrl;
+        $this->resultsDir = $resultsDir;
     }
 
     /**
@@ -60,7 +65,7 @@ class PlaywrightConnector
     public function execute(string $contextName, string $playwrightJsCode)
     {
         $successResponse = $this->executeInternal($contextName, $playwrightJsCode);
-        return isset($successResponse['returnValue']) ? $successResponse['returnValue'] : null;
+        return $successResponse['returnValue'] ?? null;
     }
 
     public function getCurrentJsCode(string $contextName)
@@ -78,7 +83,7 @@ class PlaywrightConnector
         string $contextName,
         string $featureFile,
         string $scenarioName,
-        string $featureFileLine
+        int $featureFileLine
     ) {
         $this->execute(
             $contextName,
@@ -102,7 +107,7 @@ class PlaywrightConnector
         string $contextName,
         string $featureFile,
         string $scenarioName,
-        string $featureFileLine,
+        int $featureFileLine,
         bool $keepTrace
     ) {
         $traceReportZipFileName = 'report_' . preg_replace(
@@ -122,9 +127,14 @@ class PlaywrightConnector
                 await context.tracing.stop();
                 return "";
             } else {
+                // Playwright can only save a trace to a file (unlike screenshots, which can be returned as a
+                // buffer). So write a temporary file in the bridge, hand its content back to PHP (which writes
+                // it to $resultsDir), and delete it again - otherwise a stray second copy stays in playwright-bridge/.
                 await context.tracing.stop({ path: `%s` });
                 const fs = require("fs");
-                return await fs.readFileSync(`%s`, `base64`);
+                const traceBase64 = fs.readFileSync(`%s`, `base64`);
+                fs.unlinkSync(`%s`);
+                return traceBase64;
             }
             '// language=PHP
                 ,
@@ -133,18 +143,19 @@ class PlaywrightConnector
                 $scenarioName,
                 $keepTrace ? 'true' : 'false',
                 $traceReportZipFileName,
+                $traceReportZipFileName,
                 $traceReportZipFileName
             )
         );
-        if (strlen($traceReportZipBase64)) {
-            $traceReportZip = base64_decode($traceReportZipBase64);
-            Files::createDirectoryRecursively('e2e-results');
-            file_put_contents(sprintf('e2e-results/%s', $traceReportZipFileName), $traceReportZip);
+        if (is_string($traceReportZipBase64) && $traceReportZipBase64 !== '') {
+            $traceReportZip = base64_decode($traceReportZipBase64, true);
+            Files::createDirectoryRecursively($this->resultsDir);
+            file_put_contents(sprintf('%s/%s', $this->resultsDir, $traceReportZipFileName), $traceReportZip);
             echo sprintf(
-                "You can find the report trace file %s BOTH in the current PHP execution directory (where you started the tests from),\n",
-                $traceReportZipFileName
+                "You can find the report trace file %s in %s\n",
+                $traceReportZipFileName,
+                $this->resultsDir
             );
-            echo "and as well in the e2e-testrunner/ folder.";
         }
     }
 
@@ -195,13 +206,13 @@ class PlaywrightConnector
     private function sendRequest(string $method, string $requestUri, string $content = '')
     {
         if (!extension_loaded('curl')) {
-            throw new Http\Exception(
+            throw new \RuntimeException(
                 'CurlEngine requires the PHP CURL extension to be installed and loaded.',
                 1346319808
             );
         }
 
-        $curlHandle = curl_init((string)$requestUri);
+        $curlHandle = curl_init($requestUri);
 
         $pauseEnv = getenv('PAUSE_FOR_DEBUGGING');
         if ($pauseEnv !== 'true') {
@@ -224,20 +235,17 @@ class PlaywrightConnector
         // If we don't set this, cURL will set "Expect: 100-continue" for requests larger than 1024 bytes.
         curl_setopt($curlHandle, CURLOPT_HTTPHEADER, ['Expect:']);
 
-        switch ($method) {
-            case 'GET':
-                if ($content) {
-                    // workaround because else the request would implicitly fall into POST:
-                    curl_setopt($curlHandle, CURLOPT_CUSTOMREQUEST, 'GET');
-                    curl_setopt($curlHandle, CURLOPT_POSTFIELDS, $content);
-                }
-                break;
-            case 'POST':
-                curl_setopt($curlHandle, CURLOPT_POST, true);
+        if ($method === 'GET') {
+            if ($content !== '') {
+                // workaround because else the request would implicitly fall into POST:
+                curl_setopt($curlHandle, CURLOPT_CUSTOMREQUEST, 'GET');
                 curl_setopt($curlHandle, CURLOPT_POSTFIELDS, $content);
-                break;
-            default:
-                throw new \RuntimeException('Not supported');
+            }
+        } elseif ($method === 'POST') {
+            curl_setopt($curlHandle, CURLOPT_POST, true);
+            curl_setopt($curlHandle, CURLOPT_POSTFIELDS, $content);
+        } else {
+            throw new \RuntimeException('Not supported');
         }
 
         $curlResult = curl_exec($curlHandle);

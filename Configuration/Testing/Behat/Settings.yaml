@@ -3,3 +3,14 @@ Neos:
     http:
       # we want to be able to link to resources or nodes, so we need a base URI
       baseUri: '/'
+  ContentRepositoryRegistry:
+    presets:
+      default:
+        clock:
+          factoryObjectName: Neos\ContentRepositoryRegistry\Factory\Clock\SystemClockFactory
+        nodeTypeManager:
+          factoryObjectName: Neos\ContentRepositoryRegistry\Factory\NodeTypeManager\DefaultNodeTypeManagerFactory
+        contentDimensionSource:
+          factoryObjectName: Neos\ContentRepositoryRegistry\Factory\ContentDimensionSource\ConfigurationBasedContentDimensionSourceFactory
+        authProvider:
+          factoryObjectName: Neos\ContentRepositoryRegistry\Factory\AuthProvider\StaticAuthProviderFactory
