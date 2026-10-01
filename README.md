@@ -30,7 +30,6 @@ the test framework for writing all kinds of BDD tests.
   - [Steps](#steps)
   - [Style Guide](#style-guide)
   - [Dynamic SUT URL](#dynamic-sut-url)
-  - [Sandstorm.NeosAcl](#sandstormneosacl)
 - [Running Behat Tests](#running-behat-tests)
   - [Debugging](#debugging)
 - [Unit and functional tests](#unit-and-functional-tests)
@@ -292,6 +291,9 @@ And I have the following nodes in site "site":
   step. Gherkin unescapes `\\` to `\` in table cells, so a JSON-escaped backslash (e.g. in a PHP class name) is
   written as `\\\\`.
 - Respect NodeType `constraints` (see [Troubleshooting](#troubleshooting) item 2).
+- Fixture steps bypass node and workspace permissions: the `Testing/Behat` context uses the `StaticAuthProviderFactory`
+  (see `Configuration/Testing/Behat/Settings.yaml`). The system under test still applies your permissions, for example
+  when you log in through backend steps in the browser.
 - Optional `Hidden` column: `true` hides the node (and with it its descendants); empty, `false` or no column at all
   means visible.
 - References: `And the following node references:` with columns `NodeAggregateId | ReferenceName | Targets |
@@ -446,24 +448,6 @@ public function mySubdomainIs(string $subdomain): void
         parse_url($baseUrl, PHP_URL_PATH),
     ));
 }
-```
-
-## Sandstorm.NeosAcl
-
-add this to your Policy.yaml in the `Testing/Behat` context:
-
-```yaml
-roles:
-  # this is necessary to allow the test runner to create fixtures when neos
-  # acl package is installed
-  'Neos.Flow:Everybody':
-    privileges:
-      - privilegeTarget: 'Sandstorm.NeosAcl:EditAllNodes'
-        permission: GRANT
-      - privilegeTarget: 'Sandstorm.NeosAcl:CreateAllNodes'
-        permission: GRANT
-      - privilegeTarget: 'Sandstorm.NeosAcl:RemoveAllNodes'
-        permission: GRANT
 ```
 
 # Running Behat Tests
