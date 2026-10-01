@@ -36,6 +36,7 @@ the test framework for writing all kinds of BDD tests.
 - [Migrating tests from Neos 8](#migrating-tests-from-neos-8)
 - [Troubleshooting](#troubleshooting)
 - [Architecture](#architecture)
+  - [Fixture tooling](#fixture-tooling)
 
 <!-- /TOC -->
 
@@ -286,8 +287,9 @@ And I have the following nodes in site "site":
 - `Parent` `homepage/main`: the tethered child node `main` of `homepage`; deeper paths like `homepage/main/foo` work
   too. `Parent` `section`: a plain child of a node created earlier, by its `NodeAggregateId`.
 - `DimensionSpacePoint` must match your content dimensions — with a `language` dimension, every row needs it.
-- `Properties` is JSON; invalid JSON fails the step. Gherkin unescapes `\\` to `\` in table cells, so a JSON-escaped
-  backslash (e.g. in a PHP class name) is written as `\\\\`.
+- `Properties` is a JSON object; invalid JSON, unknown NodeTypes and properties the NodeType doesn't declare fail the
+  step. Gherkin unescapes `\\` to `\` in table cells, so a JSON-escaped backslash (e.g. in a PHP class name) is
+  written as `\\\\`.
 - Respect NodeType `constraints` (see [Troubleshooting](#troubleshooting) item 2).
 - Optional `Hidden` column: `true` hides the node (and with it its descendants); empty, `false` or no column at all
   means visible.
@@ -727,3 +729,28 @@ where [Troubleshooting item 1](#troubleshooting) tends to bite:
                                         ║             for PROD             ║        ║                          ║
                                         ╚══════════════════════════════════╝        ╚══════════════════════════╝
 ```
+
+## Fixture tooling
+
+Export and import share one model, so whatever an export writes, the import creates unchanged:
+
+```
+ export                                                    import
+ ──────                                                    ──────
+ subgraph (workspace + dimension)                          YAML file ─── NodeFixtureYaml::parseFile()
+   │                                                       Gherkin table ─ NodeFixtureGherkin::nodesFromTable()
+   ▼                                                           │
+ NodeFixtureCollector ──▶ NodeFixture ◀────────────────────────┘
+ (button, CLI, StepGenerator)   │  nodes: NodeFixtureRow[]      │
+                                │  references: ReferenceFixtureRow[]
+                 ┌──────────────┴──────────┐                    ▼
+                 ▼                         ▼             NodeFixtureImporter ──▶ content repository commands
+       NodeFixtureYaml::dump()   NodeFixtureGherkin::steps()     (create nodes, hide, set references)
+```
+
+- Rows hold **serialized** property values, as the event store has them: plain JSON/YAML values, assets as
+  `{"__flow_object_type": ..., "__identifier": ...}`. The importer turns them into PHP values with the property types
+  the NodeType declares - so a fixture stays readable and diffable, and needs no PHP objects.
+- Both formats (YAML, Gherkin tables) live in one class each, writing and reading - format changes happen in one place
+  and are pinned by round-trip tests (`Tests/Unit/Fixture`).
+- Classes in `Classes/` hold the logic; the Behat traits only map steps to it.
