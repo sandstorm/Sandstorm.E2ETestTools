@@ -66,26 +66,36 @@ final readonly class NodeFixtureCollector
      */
     public function referencesFor(Node $node): array
     {
-        /** @var list<array{name: string, targets: list<string>, properties: array<string,mixed>}> $groups */
-        $groups = [];
-        $plainGroupIndexByName = [];
+        $rows = [];
+        $rowIndexWithoutPropertiesByName = [];
         foreach ($this->subgraph->findReferences($node->aggregateId, FindReferencesFilter::create()) as $reference) {
             $name = $reference->name->value;
             $target = $reference->node->aggregateId->value;
             $properties = $reference->properties?->serialized()->getPlainValues() ?? [];
-            if ($properties !== []) {
-                $groups[] = ['name' => $name, 'targets' => [$target], 'properties' => $properties];
-            } elseif (array_key_exists($name, $plainGroupIndexByName)) {
-                $groups[$plainGroupIndexByName[$name]]['targets'][] = $target;
-            } else {
-                $plainGroupIndexByName[$name] = count($groups);
-                $groups[] = ['name' => $name, 'targets' => [$target], 'properties' => []];
+            $index = $properties === [] ? ($rowIndexWithoutPropertiesByName[$name] ?? null) : null;
+            if ($index !== null) {
+                $row = $rows[$index];
+                $rows[$index] = new ReferenceFixtureRow($row->nodeAggregateId, $name, [...$row->targets, $target], $row->dimensionSpacePoint);
+                continue;
             }
+            if ($properties === []) {
+                $rowIndexWithoutPropertiesByName[$name] = count($rows);
+            }
+            $rows[] = new ReferenceFixtureRow($node->aggregateId->value, $name, [$target], $node->dimensionSpacePoint->coordinates, $properties);
         }
-        return array_map(
-            fn (array $group) => new ReferenceFixtureRow($node->aggregateId->value, $group['name'], $group['targets'], $node->dimensionSpacePoint->coordinates, $group['properties']),
-            $groups
+        return array_values($rows);
+    }
+
+    /**
+     * @param list<Node> $nodes parents before children
+     */
+    public function fixtureFor(array $nodes): NodeFixture
+    {
+        $fixture = new NodeFixture(
+            array_map($this->rowFor(...), $nodes),
+            array_merge(...array_map($this->referencesFor(...), $nodes))
         );
+        return $fixture->withReferencesLimitedToNodes();
     }
 
     /**

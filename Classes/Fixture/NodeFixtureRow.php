@@ -7,7 +7,8 @@ namespace Sandstorm\E2ETestTools\Fixture;
 use Neos\Flow\Annotations as Flow;
 
 /**
- * One row of the "I have the following nodes in site ..." table / one entry of a YAML node fixture.
+ * One node of a {@see NodeFixture}: a row of the "I have the following nodes in site ..." table, an entry of the YAML
+ * "nodes:" list.
  *
  * @Flow\Proxy(false)
  */
@@ -15,7 +16,7 @@ final readonly class NodeFixtureRow
 {
     /**
      * @param string $parent '' for the site node, "ownerId/tetheredName" for tethered parents, otherwise a NodeAggregateId
-     * @param array<string,mixed> $properties serialized property values, as the node creation step expects them
+     * @param array<string,mixed> $properties serialized property values (as stored in the event store)
      * @param array<string,string> $dimensionSpacePoint
      * @param bool $hidden explicitly hidden (disabled) - descendants inherit that on import
      */
@@ -30,40 +31,10 @@ final readonly class NodeFixtureRow
     }
 
     /**
-     * @return array<string,mixed> YAML fixture entry, see {@see \Sandstorm\E2ETestTools\Service\NodeImportService}
+     * @param array<string,mixed> $properties
      */
-    public function toYamlArray(): array
+    public function withProperties(array $properties): self
     {
-        $yaml = [
-            'nodeAggregateId' => $this->nodeAggregateId,
-            'parent' => $this->parent,
-            'nodeType' => $this->nodeType,
-            'properties' => $this->properties,
-            'dimensionSpacePoint' => $this->dimensionSpacePoint,
-        ];
-        // optional field - only written for hidden nodes
-        if ($this->hidden) {
-            $yaml['hidden'] = true;
-        }
-        return $yaml;
-    }
-
-    /**
-     * @return array<string,string> cells of the "I have the following nodes in site ..." table; the optional "Hidden"
-     *     cell only for hidden nodes
-     */
-    public function toTableCells(): array
-    {
-        $cells = [
-            'NodeAggregateId' => $this->nodeAggregateId,
-            'Parent' => $this->parent,
-            'NodeType' => $this->nodeType,
-            'Properties' => $this->properties === [] ? '{}' : json_encode($this->properties, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
-            'DimensionSpacePoint' => $this->dimensionSpacePoint === [] ? '' : json_encode($this->dimensionSpacePoint, JSON_THROW_ON_ERROR),
-        ];
-        if ($this->hidden) {
-            $cells['Hidden'] = 'true';
-        }
-        return $cells;
+        return new self($this->nodeAggregateId, $this->parent, $this->nodeType, $properties, $this->dimensionSpacePoint, $this->hidden);
     }
 }

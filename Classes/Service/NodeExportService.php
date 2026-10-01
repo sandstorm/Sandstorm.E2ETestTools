@@ -4,22 +4,16 @@ declare(strict_types=1);
 
 namespace Sandstorm\E2ETestTools\Service;
 
-use Neos\ContentRepository\Core\DimensionSpace\DimensionSpacePoint;
-use Neos\ContentRepository\Core\Projection\ContentGraph\ContentSubgraphInterface;
-use Neos\ContentRepository\Core\SharedModel\ContentRepository\ContentRepositoryId;
 use Neos\ContentRepository\Core\SharedModel\Node\NodeAddress;
-use Neos\ContentRepository\Core\SharedModel\Node\NodeAggregateId;
-use Neos\ContentRepository\Core\SharedModel\Workspace\WorkspaceName;
 use Neos\ContentRepositoryRegistry\ContentRepositoryRegistry;
 use Neos\Flow\Annotations as Flow;
 use Neos\Neos\Domain\SubtreeTagging\NeosVisibilityConstraints;
+use Sandstorm\E2ETestTools\Fixture\NodeFixture;
 use Sandstorm\E2ETestTools\Fixture\NodeFixtureCollector;
-use Sandstorm\E2ETestTools\Fixture\NodeFixtureRow;
-use Sandstorm\E2ETestTools\Fixture\ReferenceFixtureRow;
 
 /**
  * Exports existing content as node fixture (export button and CLI): the node's closest document with all its
- * ancestors and descendants, plus their references.
+ * ancestors and descendants, plus the references between them.
  *
  * @Flow\Scope("singleton")
  */
@@ -31,50 +25,16 @@ class NodeExportService
      */
     protected $contentRepositoryRegistry;
 
-    /**
-     * @return array{nodes: list<NodeFixtureRow>, references: list<ReferenceFixtureRow>}
-     */
-    public function exportNodeTree(NodeAddress $nodeAddress): array
+    public function exportNodeTree(NodeAddress $nodeAddress): NodeFixture
     {
-        $subgraph = $this->subgraph($nodeAddress->contentRepositoryId, $nodeAddress->workspaceName, $nodeAddress->dimensionSpacePoint);
+        $contentRepository = $this->contentRepositoryRegistry->get($nodeAddress->contentRepositoryId);
+        // hidden nodes are content too - export them as well (with their hidden state)
+        $subgraph = $contentRepository->getContentGraph($nodeAddress->workspaceName)
+            ->getSubgraph($nodeAddress->dimensionSpacePoint, NeosVisibilityConstraints::excludeRemoved());
         $node = $subgraph->findNodeById($nodeAddress->aggregateId)
             ?? throw new NodeNotFoundException(sprintf('Node "%s" not found in workspace "%s", dimension %s', $nodeAddress->aggregateId->value, $nodeAddress->workspaceName->value, $nodeAddress->dimensionSpacePoint->toJson()), 1727100001);
 
-        $collector = new NodeFixtureCollector($subgraph, $this->contentRepositoryRegistry->get($nodeAddress->contentRepositoryId)->getNodeTypeManager());
-        $nodes = $collector->collectExportTree($node);
-        $exportedIds = array_map(fn ($node) => $node->aggregateId->value, $nodes);
-
-        $references = [];
-        foreach ($nodes as $exportedNode) {
-            foreach ($collector->referencesFor($exportedNode) as $reference) {
-                $limitedReference = $reference->withTargetsLimitedTo($exportedIds);
-                if ($limitedReference !== null) {
-                    $references[] = $limitedReference;
-                }
-            }
-        }
-
-        return [
-            'nodes' => array_map($collector->rowFor(...), $nodes),
-            'references' => $references,
-        ];
-    }
-
-    public function nodeAddress(string $nodeAggregateId, string $workspaceName = 'live', string $dimensionSpacePointJson = '{}', string $contentRepositoryId = 'default'): NodeAddress
-    {
-        return NodeAddress::create(
-            ContentRepositoryId::fromString($contentRepositoryId),
-            WorkspaceName::fromString($workspaceName),
-            DimensionSpacePoint::fromJsonString($dimensionSpacePointJson),
-            NodeAggregateId::fromString($nodeAggregateId),
-        );
-    }
-
-    private function subgraph(ContentRepositoryId $contentRepositoryId, WorkspaceName $workspaceName, DimensionSpacePoint $dimensionSpacePoint): ContentSubgraphInterface
-    {
-        // hidden nodes are content too - export them as well
-        return $this->contentRepositoryRegistry->get($contentRepositoryId)
-            ->getContentGraph($workspaceName)
-            ->getSubgraph($dimensionSpacePoint, NeosVisibilityConstraints::excludeRemoved());
+        $collector = new NodeFixtureCollector($subgraph, $contentRepository->getNodeTypeManager());
+        return $collector->fixtureFor($collector->collectExportTree($node));
     }
 }

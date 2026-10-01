@@ -14,19 +14,10 @@ use Behat\Testwork\Hook\Scope\BeforeSuiteScope;
 use GuzzleHttp\Psr7\ServerRequest;
 use Neos\ContentRepository\Core\ContentRepository;
 use Neos\ContentRepository\Core\DimensionSpace\DimensionSpacePoint;
-use Neos\ContentRepository\Core\DimensionSpace\OriginDimensionSpacePoint;
 use Neos\ContentRepository\Core\Factory\ContentRepositoryServiceFactoryDependencies;
 use Neos\ContentRepository\Core\Factory\ContentRepositoryServiceFactoryInterface;
 use Neos\ContentRepository\Core\Factory\ContentRepositoryServiceInterface;
-use Neos\ContentRepository\Core\Feature\NodeCreation\Command\CreateNodeAggregateWithNode;
-use Neos\ContentRepository\Core\Feature\NodeModification\Dto\PropertyValuesToWrite;
-use Neos\ContentRepository\Core\Feature\NodeModification\Dto\SerializedPropertyValue;
-use Neos\ContentRepository\Core\Feature\NodeReferencing\Command\SetNodeReferences;
-use Neos\ContentRepository\Core\Feature\NodeReferencing\Dto\NodeReferencesForName;
-use Neos\ContentRepository\Core\Feature\NodeReferencing\Dto\NodeReferencesToWrite;
-use Neos\ContentRepository\Core\Feature\NodeReferencing\Dto\NodeReferenceToWrite;
 use Neos\ContentRepository\Core\Feature\RootNodeCreation\Command\CreateRootNodeAggregateWithNode;
-use Neos\ContentRepository\Core\Feature\SubtreeTagging\Command\TagSubtree;
 use Neos\ContentRepository\Core\Infrastructure\Property\PropertyConverter;
 use Neos\ContentRepository\Core\NodeType\NodeTypeName;
 use Neos\ContentRepository\Core\Projection\ContentGraph\Filter\FindClosestNodeFilter;
@@ -34,10 +25,6 @@ use Neos\ContentRepository\Core\Projection\ContentGraph\Node;
 use Neos\ContentRepository\Core\Service\ContentRepositoryMaintainerFactory;
 use Neos\ContentRepository\Core\SharedModel\ContentRepository\ContentRepositoryId;
 use Neos\ContentRepository\Core\SharedModel\Node\NodeAggregateId;
-use Neos\ContentRepository\Core\SharedModel\Node\NodeAggregateIds;
-use Neos\ContentRepository\Core\SharedModel\Node\NodeName;
-use Neos\ContentRepository\Core\SharedModel\Node\NodeVariantSelectionStrategy;
-use Neos\ContentRepository\Core\SharedModel\Node\ReferenceName;
 use Neos\ContentRepository\Core\SharedModel\Workspace\WorkspaceName;
 use Neos\ContentRepositoryRegistry\ContentRepositoryRegistry;
 use Neos\Flow\Cache\CacheManager;
@@ -57,11 +44,13 @@ use Neos\Neos\Domain\Model\WorkspaceTitle;
 use Neos\Neos\Domain\Repository\SiteRepository;
 use Neos\Neos\Domain\Repository\WorkspaceMetadataAndRoleRepository;
 use Neos\Neos\Domain\Service\WorkspaceService;
-use Neos\Neos\Domain\SubtreeTagging\NeosSubtreeTag;
 use Neos\Neos\Domain\SubtreeTagging\NeosVisibilityConstraints;
 use Neos\Neos\FrontendRouting\SiteDetection\SiteDetectionResult;
 use Neos\Utility\Files;
 use PHPUnit\Framework\Assert;
+use Sandstorm\E2ETestTools\Fixture\NodeFixture;
+use Sandstorm\E2ETestTools\Fixture\NodeFixtureGherkin;
+use Sandstorm\E2ETestTools\Fixture\NodeFixtureImporter;
 use Sandstorm\E2ETestTools\FusionRenderingResult;
 use Sandstorm\E2ETestTools\FusionServiceForTesting;
 use Symfony\Component\DomCrawler\Crawler;
@@ -79,11 +68,14 @@ trait FusionRenderingTrait
 
     private string $sitePackageKey;
 
+    /**
+     * Fixtures, rendering and the CR reset all use this content repository.
+     */
+    private const CONTENT_REPOSITORY_ID = 'default';
+
     private ContentRepository $contentRepository;
 
-    private PropertyConverter $propertyConverter;
-
-    private NodeAggregateId $sitesNodeAggregateId;
+    private NodeFixtureImporter $nodeFixtureImporter;
 
     public function setupFusionRendering(string $sitePackageKey)
     {
@@ -133,19 +125,18 @@ trait FusionRenderingTrait
     }
 
     /**
-     * Initialize the Neos 9 content repository for a test scenario.
-     *
-     * Prunes all CR event streams, creates the live workspace and the Neos.Neos:Sites root node.
-     * Must be called before any node creation steps (e.g. from a @BeforeScenario hook).
+     * Starts the scenario with an empty content repository: only the live workspace and the Neos.Neos:Sites root.
+     * Call it before creating nodes, e.g. from a "@BeforeScenario @flowEntities" hook.
      */
     public function setupContentRepository(): void
     {
         /** @var ContentRepositoryRegistry $registry */
         $registry = $this->getObjectManager()->get(ContentRepositoryRegistry::class);
-        $crId = ContentRepositoryId::fromString('default');
+        $crId = ContentRepositoryId::fromString(self::CONTENT_REPOSITORY_ID);
 
         $maintainer = $registry->buildService($crId, new ContentRepositoryMaintainerFactory());
 
+        // setUp() first: on a fresh database the event store and projection tables don't exist yet, prune() needs them
         $setupError = $maintainer->setUp();
         if ($setupError !== null) {
             throw new \RuntimeException('CR setUp failed: ' . $setupError->getMessage());
@@ -161,7 +152,9 @@ trait FusionRenderingTrait
 
         $this->contentRepository = $registry->get($crId);
 
-        $this->propertyConverter = $registry->buildService(
+        // the PropertyConverter is internal to the CR - the only way to get the configured instance is through
+        // the dependencies a ContentRepositoryServiceFactory receives
+        $propertyConverter = $registry->buildService(
             $crId,
             new class implements ContentRepositoryServiceFactoryInterface {
                 public function build(ContentRepositoryServiceFactoryDependencies $deps): ContentRepositoryServiceInterface {
@@ -183,13 +176,15 @@ trait FusionRenderingTrait
             );
         }
 
-        $this->sitesNodeAggregateId = NodeAggregateId::fromString('sites');
+        $sitesNodeAggregateId = NodeAggregateId::fromString('sites');
         $this->contentRepository->handle(CreateRootNodeAggregateWithNode::create(
             WorkspaceName::forLive(),
-            $this->sitesNodeAggregateId,
+            $sitesNodeAggregateId,
             NodeTypeName::fromString('Neos.Neos:Sites')
         ));
+        $this->nodeFixtureImporter = new NodeFixtureImporter($this->contentRepository, $propertyConverter, $sitesNodeAggregateId);
 
+        // routes and rendered content of the previous scenario's nodes must not leak into this one
         $cacheManager = $this->getObjectManager()->get(CacheManager::class);
         foreach (['Flow_Mvc_Routing_Route', 'Flow_Mvc_Routing_Resolve', 'Neos_Fusion_Content'] as $cacheIdentifier) {
             $cacheManager->getCache($cacheIdentifier)->flush();
@@ -231,7 +226,7 @@ trait FusionRenderingTrait
         $node = $this->contentRepository
             ->getContentGraph(WorkspaceName::forLive())
             ->getSubgraph(
-                DimensionSpacePoint::fromArray(json_decode($dimensionSpacePoint, associative: true, flags: JSON_THROW_ON_ERROR)),
+                DimensionSpacePoint::fromJsonString($dimensionSpacePoint),
                 NeosVisibilityConstraints::excludeRemoved()
             )
             ->findNodeById(NodeAggregateId::fromString($nodeAggregateId));
@@ -292,15 +287,15 @@ trait FusionRenderingTrait
         );
         return [
             'node' => $this->currentNode,
-            'documentNode' => $subgraph->findClosestNode($this->currentNode->aggregateId, FindClosestNodeFilter::create(nodeTypes: 'Neos.Neos:Document')),
-            'site' => $subgraph->findClosestNode($this->currentNode->aggregateId, FindClosestNodeFilter::create(nodeTypes: 'Neos.Neos:Site')),
+            'documentNode' => $subgraph->findClosestNode($this->currentNode->aggregateId, FindClosestNodeFilter::create('Neos.Neos:Document')),
+            'site' => $subgraph->findClosestNode($this->currentNode->aggregateId, FindClosestNodeFilter::create('Neos.Neos:Site')),
         ];
     }
 
     private function internalRender(string $fusionPath, string $additionalFusion, $fusionContext = [])
     {
         $fusionService = $this->getObjectManager()->get(FusionServiceForTesting::class);
-        $fusionConfiguration = $fusionService->getMergedFusionObjectTreeForPackage($this->sitePackageKey, $additionalFusion, ContentRepositoryId::fromString('default'));
+        $fusionConfiguration = $fusionService->getMergedFusionObjectTreeForPackage($this->sitePackageKey, $additionalFusion, ContentRepositoryId::fromString(self::CONTENT_REPOSITORY_ID));
 
         // to generate links without /index.php/
         putenv('FLOW_REWRITEURLS=1');
@@ -468,208 +463,33 @@ trait FusionRenderingTrait
     }
 
     /**
-     * Deserialises fixture property values from their JSON-decoded form to the PHP types
-     * expected by Neos 9 CR, using the same Symfony Serializer normalizer stack that the
-     * event store uses when reading properties back.
-     *
-     * Feature files should express values in the event-store serialised form:
-     *   - scalars (string/int/float/bool) as-is
-     *   - DateTime as ISO 8601 string, e.g. "2022-08-02T00:00:00+00:00"
-     *   - Doctrine entities as {"__flow_object_type":"…","__identifier":"uuid"}
-     *   - null or omitted key to leave a property unset
-     */
-    private function deserializePropertyValues(array $properties, string $nodeTypeName): array
-    {
-        $nodeType = $this->contentRepository->getNodeTypeManager()->getNodeType($nodeTypeName);
-
-        foreach ($properties as $propertyName => $value) {
-            if ($value === null) {
-                continue;
-            }
-            $declaredType = $nodeType->getPropertyType($propertyName);
-            $properties[$propertyName] = $this->propertyConverter->deserializePropertyValue(
-                SerializedPropertyValue::create($value, $declaredType)
-            );
-        }
-
-        return $properties;
-    }
-
-    /**
-     * Creates nodes in the content repository from a Gherkin table.
-     *
-     * Supported columns: NodeAggregateId, Parent, NodeType, Properties (JSON), DimensionSpacePoint (JSON),
-     * optional Hidden ("true" hides the node and with it its descendants; empty/"false" or no column: visible)
-     * The /sites root node is created automatically by setupContentRepository() and must not be repeated here.
+     * Columns: NodeAggregateId, Parent, NodeType, Properties (JSON), DimensionSpacePoint (JSON), optional Hidden -
+     * see {@see NodeFixtureGherkin::nodesFromTable()}. The /sites root node is created by setupContentRepository().
      */
     #[Given("I have the following nodes in site :siteName:")]
     #[Given("I create the following nodes in site :siteName:")]
-    public function iHaveTheFollowingNodesInSite(string $siteName, $table)
+    public function iHaveTheFollowingNodesInSite(string $siteName, TableNode $table): void
     {
-        // TODO:
-        //   - allow setting defaults for dimensionSpacePoint ("Given I am in ...")
-        //   - add option to specify content repository and workspace (optional, use default/live if not given/empty)
-        $rows = $table instanceof TableNode ? $table->getHash() : $table->getHash();
-
-        foreach ($rows as $row) {
-            $parentValue = $row['Parent'] ?? '';
-            $isDirectSiteChild = $parentValue === '';
-
-            $nodeAggregateId = NodeAggregateId::fromString($row['NodeAggregateId']);
-
-            //TODO: default for dimension space point
-            $dimensionSpacePointJson = !empty($row['DimensionSpacePoint']) ? $row['DimensionSpacePoint'] : null;
-            $dimensionSpacePoint = $dimensionSpacePointJson !== null
-                ? DimensionSpacePoint::fromArray(json_decode($dimensionSpacePointJson, associative: true, flags: JSON_THROW_ON_ERROR))
-                : DimensionSpacePoint::fromArray([]);
-            $originDimensionSpacePoint = OriginDimensionSpacePoint::fromDimensionSpacePoint($dimensionSpacePoint);
-
-            if ($isDirectSiteChild) {
-                $parentNodeAggregateId = $this->sitesNodeAggregateId;
-            } elseif (str_contains($parentValue, '/')) {
-                [$ownerId, $childString] = explode('/', $parentValue, 2);
-                $children = explode('/', $childString);
-
-                $parentNodeAggregateId = NodeAggregateId::fromString($ownerId);
-                foreach ($children as $childName) {
-                    $parentNodeAggregateId = $this->findTetheredChildId(
-                        $parentNodeAggregateId,
-                        NodeName::fromString($childName)
-                    );
-                }
-            } else {
-                $parentNodeAggregateId = NodeAggregateId::fromString($parentValue);
-            }
-
-            $propertiesJson = !empty($row['Properties']) ? $row['Properties'] : '[]';
-            // invalid JSON must fail loudly - otherwise all properties would silently be dropped. Note that Gherkin
-            // table cells unescape \\ to \, so a JSON-escaped backslash (e.g. in a PHP class name) needs \\\\ in the table.
-            try {
-                $propertiesArray = json_decode($propertiesJson, true, flags: JSON_THROW_ON_ERROR) ?? [];
-            } catch (\JsonException $e) {
-                throw new \RuntimeException(sprintf('Invalid JSON in Properties of node "%s": %s', $row['NodeAggregateId'], $e->getMessage()), 0, $e);
-            }
-            $propertiesArray = $this->deserializePropertyValues($propertiesArray, $row['NodeType']);
-            $propertyValues = PropertyValuesToWrite::fromArray($propertiesArray);
-
-            $command = CreateNodeAggregateWithNode::create(
-                WorkspaceName::forLive(),
-                $nodeAggregateId,
-                NodeTypeName::fromString($row['NodeType']),
-                $originDimensionSpacePoint,
-                $parentNodeAggregateId,
-                initialPropertyValues: $propertyValues
-            );
-
-            if ($isDirectSiteChild) {
-                // deprecated for regular nodes, but site nodes are still identified by their name in Neos 9
-                $command = $command->withNodeName(NodeName::fromString($siteName));
-            }
-
-            $this->contentRepository->handle($command);
-
-            if ($this->isHidden($row)) {
-                $this->contentRepository->handle(TagSubtree::create(
-                    WorkspaceName::forLive(),
-                    $nodeAggregateId,
-                    $dimensionSpacePoint,
-                    NodeVariantSelectionStrategy::STRATEGY_ALL_SPECIALIZATIONS,
-                    NeosSubtreeTag::disabled()
-                ));
-            }
-        }
-    }
-
-    private function isHidden(array $row): bool
-    {
-        return match ($row['Hidden'] ?? '') {
-            'true' => true,
-            'false', '' => false,
-            default => throw new \RuntimeException(sprintf('Invalid Hidden value "%s" for node "%s" - use "true", "false" or leave it empty.', $row['Hidden'], $row['NodeAggregateId'])),
-        };
+        $this->importNodeFixture(new NodeFixture(NodeFixtureGherkin::nodesFromTable($table)), $siteName);
     }
 
     /**
-     * Sets node references (type: references) from a Gherkin table.
-     *
-     * Use this step after "I have the following nodes in site" to express node references.
-     *
-     * Supported columns: NodeAggregateId, ReferenceName, Targets (comma-separated NodeAggregateIds), DimensionSpacePoint,
-     * optional Properties (JSON reference properties, set for every target of the row)
+     * Columns: NodeAggregateId, ReferenceName, Targets (comma-separated), DimensionSpacePoint, optional Properties -
+     * see {@see NodeFixtureGherkin::referencesFromTable()}. Use it after the nodes are created.
      */
     #[Given("the following node references:")]
-    public function iSetTheFollowingNodeReferencesInSite(TableNode $table): void
+    public function theFollowingNodeReferences(TableNode $table): void
     {
-        foreach ($table->getHash() as $row) {
-            $dimensionSpacePointJson = !empty($row['DimensionSpacePoint']) ? $row['DimensionSpacePoint'] : null;
-            $dimensionSpacePoint = $dimensionSpacePointJson !== null
-                ? DimensionSpacePoint::fromArray(json_decode($dimensionSpacePointJson, associative: true, flags: JSON_THROW_ON_ERROR))
-                : DimensionSpacePoint::fromArray([]);
-
-            $targetIds = array_map(
-                fn(string $id) => NodeAggregateId::fromString(trim($id)),
-                explode(',', $row['Targets'])
-            );
-            $sourceNodeAggregateId = NodeAggregateId::fromString($row['NodeAggregateId']);
-            $referenceName = ReferenceName::fromString($row['ReferenceName']);
-            $properties = $this->referencePropertyValues($row, $sourceNodeAggregateId, $dimensionSpacePoint, $referenceName);
-
-            $this->contentRepository->handle(SetNodeReferences::create(
-                WorkspaceName::forLive(),
-                $sourceNodeAggregateId,
-                OriginDimensionSpacePoint::fromDimensionSpacePoint($dimensionSpacePoint),
-                NodeReferencesToWrite::create(
-                    $properties === null
-                        ? NodeReferencesForName::fromTargets($referenceName, NodeAggregateIds::create(...$targetIds))
-                        : NodeReferencesForName::fromReferences($referenceName, array_map(
-                            fn (NodeAggregateId $targetId) => NodeReferenceToWrite::fromTargetAndProperties($targetId, $properties),
-                            $targetIds
-                        ))
-                )
-            ));
+        foreach (NodeFixtureGherkin::referencesFromTable($table) as $reference) {
+            $this->nodeFixtureImporter->setReferences($reference);
         }
-    }
-
-    private function findTetheredChildId(NodeAggregateId $parentId, NodeName $childName): NodeAggregateId
-    {
-        $contentGraph = $this->contentRepository->getContentGraph(WorkspaceName::forLive());
-        $childAggregate = $contentGraph->findChildNodeAggregateByName($parentId, $childName);
-        if ($childAggregate === null) {
-            throw new \RuntimeException(sprintf(
-                'No tethered child "%s" found under node "%s". Make sure the parent node is inserted before this row.',
-                $childName->value,
-                $parentId->value
-            ));
-        }
-        return $childAggregate->nodeAggregateId;
     }
 
     /**
-     * Deserializes the optional Properties column of the reference step with the property types the source node's
-     * NodeType declares for that reference.
+     * @param string $siteName node name of the site node (the node with empty parent)
      */
-    private function referencePropertyValues(array $row, NodeAggregateId $sourceNodeAggregateId, DimensionSpacePoint $dimensionSpacePoint, ReferenceName $referenceName): ?PropertyValuesToWrite
+    protected function importNodeFixture(NodeFixture $fixture, string $siteName): void
     {
-        if (($row['Properties'] ?? '') === '') {
-            return null;
-        }
-        try {
-            $properties = json_decode($row['Properties'], true, flags: JSON_THROW_ON_ERROR);
-        } catch (\JsonException $e) {
-            throw new \RuntimeException(sprintf('Invalid JSON in Properties of reference "%s" of node "%s": %s', $referenceName->value, $sourceNodeAggregateId->value, $e->getMessage()), 0, $e);
-        }
-        $sourceNode = $this->contentRepository->getContentGraph(WorkspaceName::forLive())
-            ->getSubgraph($dimensionSpacePoint, NeosVisibilityConstraints::excludeRemoved())
-            ->findNodeById($sourceNodeAggregateId)
-            ?? throw new \RuntimeException(sprintf('Node "%s" for reference "%s" not found.', $sourceNodeAggregateId->value, $referenceName->value));
-        $propertyTypes = $this->contentRepository->getNodeTypeManager()->getNodeType($sourceNode->nodeTypeName)?->getReferences()[$referenceName->value]['properties'] ?? [];
-
-        $values = [];
-        foreach ($properties as $propertyName => $value) {
-            $type = $propertyTypes[$propertyName]['type']
-                ?? throw new \RuntimeException(sprintf('Reference "%s" of node "%s" has no property "%s".', $referenceName->value, $sourceNodeAggregateId->value, $propertyName));
-            $values[$propertyName] = $value === null ? null : $this->propertyConverter->deserializePropertyValue(SerializedPropertyValue::create($value, $type));
-        }
-        return PropertyValuesToWrite::fromArray($values);
+        $this->nodeFixtureImporter->import($fixture, $siteName);
     }
 }

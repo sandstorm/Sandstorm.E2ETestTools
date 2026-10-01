@@ -10,7 +10,9 @@ use Neos\ContentRepository\Core\Projection\ContentGraph\Filter\FindChildNodesFil
 use Neos\ContentRepository\Core\Projection\ContentGraph\Node;
 use Neos\Media\Domain\Model\ImageInterface;
 use Neos\Utility\ObjectAccess;
+use Sandstorm\E2ETestTools\Fixture\NodeFixture;
 use Sandstorm\E2ETestTools\Fixture\NodeFixtureCollector;
+use Sandstorm\E2ETestTools\Fixture\NodeFixtureGherkin;
 use Sandstorm\E2ETestTools\Fixture\NodeFixtureRow;
 use Sandstorm\E2ETestTools\Fixture\ReferenceFixtureRow;
 
@@ -41,6 +43,10 @@ class NodeTable
      */
     private array $references = [];
 
+    /**
+     * @param array<string,mixed> $defaultPersistentResourceProperties
+     * @param array<string,mixed> $defaultImageProperties
+     */
     public function __construct(
         private readonly ContentSubgraphInterface $subgraph,
         NodeTypeManager $nodeTypeManager,
@@ -60,10 +66,8 @@ class NodeTable
      */
     public function addNode(Node $node, bool $includeTetheredNode = false): void
     {
-        if (array_key_exists($node->aggregateId->value, $this->addedNodes) || $node->classification->isRoot() || !$this->collector->hasKnownNodeType($node)) {
-            return;
-        }
-        if (!$includeTetheredNode && $node->classification->isTethered()) {
+        $wanted = $this->collector->needsRow($node) || ($includeTetheredNode && $node->classification->isTethered());
+        if (!$wanted || !$this->collector->hasKnownNodeType($node) || array_key_exists($node->aggregateId->value, $this->addedNodes)) {
             return;
         }
         $this->addedNodes[$node->aggregateId->value] = true;
@@ -153,20 +157,12 @@ class NodeTable
 
         $this->imageTable->print();
 
-        echo sprintf('Given I have the following nodes in site "%s":', $siteName) . "\n";
-        FixtureTables::nodes($this->rows)->print();
-
-        $references = array_values(array_filter(array_map(
-            fn (ReferenceFixtureRow $reference) => $reference->withTargetsLimitedTo(array_keys($this->addedNodes)),
-            $this->references
-        )));
-        $referenceTable = FixtureTables::references($references);
-        if (!$referenceTable->isEmpty()) {
-            echo 'And the following node references:' . "\n";
-            $referenceTable->print();
-        }
+        echo NodeFixtureGherkin::steps((new NodeFixture($this->rows, $this->references))->withReferencesLimitedToNodes(), $siteName);
     }
 
+    /**
+     * @return iterable<Node>
+     */
     private function findChildNodes(Node $node, string $nodeTypeFilter, ?int $limit): iterable
     {
         return $this->subgraph->findChildNodes(

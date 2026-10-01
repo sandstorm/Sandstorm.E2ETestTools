@@ -32,6 +32,7 @@ use Neos\Flow\Tests\UnitTestCase;
 use Neos\Neos\Domain\SubtreeTagging\NeosSubtreeTag;
 use PHPUnit\Framework\Attributes\Test;
 use Sandstorm\E2ETestTools\Fixture\NodeFixtureCollector;
+use Sandstorm\E2ETestTools\Fixture\ReferenceFixtureRow;
 use Symfony\Component\Serializer\Serializer;
 
 /**
@@ -237,10 +238,10 @@ class NodeFixtureCollectorTest extends UnitTestCase
 
         $rows = $this->collector->referencesFor($this->nodes['site']);
 
-        self::assertSame([
-            ['nodeAggregateId' => 'site', 'referenceName' => 'teasers', 'targets' => ['page-text', 'text'], 'dimensionSpacePoint' => ['language' => 'de']],
-            ['nodeAggregateId' => 'site', 'referenceName' => 'privacyPage', 'targets' => ['page'], 'dimensionSpacePoint' => ['language' => 'de']],
-        ], array_map(fn ($row) => $row->toYamlArray(), $rows));
+        self::assertEquals([
+            new ReferenceFixtureRow('site', 'teasers', ['page-text', 'text'], ['language' => 'de']),
+            new ReferenceFixtureRow('site', 'privacyPage', ['page'], ['language' => 'de']),
+        ], $rows);
     }
 
     #[Test]

@@ -4,13 +4,16 @@ declare(strict_types=1);
 
 namespace Sandstorm\E2ETestTools\Command;
 
+use Neos\ContentRepository\Core\DimensionSpace\DimensionSpacePoint;
+use Neos\ContentRepository\Core\SharedModel\ContentRepository\ContentRepositoryId;
+use Neos\ContentRepository\Core\SharedModel\Node\NodeAddress;
+use Neos\ContentRepository\Core\SharedModel\Node\NodeAggregateId;
+use Neos\ContentRepository\Core\SharedModel\Workspace\WorkspaceName;
 use Neos\Flow\Annotations as Flow;
 use Neos\Flow\Cli\CommandController;
-use Sandstorm\E2ETestTools\Fixture\NodeFixtureRow;
+use Sandstorm\E2ETestTools\Fixture\NodeFixtureGherkin;
 use Sandstorm\E2ETestTools\Fixture\NodeFixtureYaml;
-use Sandstorm\E2ETestTools\Fixture\ReferenceFixtureRow;
 use Sandstorm\E2ETestTools\Service\NodeExportService;
-use Sandstorm\E2ETestTools\StepGenerator\FixtureTables;
 
 class E2eFixtureCommandController extends CommandController
 {
@@ -50,25 +53,13 @@ class E2eFixtureCommandController extends CommandController
             $this->outputLine('<error>Unknown format "%s" - use "yaml" or "gherkin".</error>', [$format]);
             $this->quit(1);
         }
-        $export = $this->nodeExportService->exportNodeTree(
-            $this->nodeExportService->nodeAddress($node, $workspace, $dimension, $contentRepository)
-        );
+        $fixture = $this->nodeExportService->exportNodeTree(NodeAddress::create(
+            ContentRepositoryId::fromString($contentRepository),
+            WorkspaceName::fromString($workspace),
+            DimensionSpacePoint::fromJsonString($dimension),
+            NodeAggregateId::fromString($node),
+        ));
 
-        $this->output($format === 'yaml'
-            ? NodeFixtureYaml::dump($export['nodes'], $export['references'])
-            : $this->gherkin($export['nodes'], $export['references'], $siteName));
-    }
-
-    /**
-     * @param list<NodeFixtureRow> $nodes
-     * @param list<ReferenceFixtureRow> $references
-     */
-    private function gherkin(array $nodes, array $references, string $siteName): string
-    {
-        $output = sprintf('Given I have the following nodes in site "%s":', $siteName) . "\n" . FixtureTables::nodes($nodes)->toString();
-        if ($references !== []) {
-            $output .= "And the following node references:\n" . FixtureTables::references($references)->toString();
-        }
-        return $output;
+        $this->output($format === 'yaml' ? NodeFixtureYaml::dump($fixture) : NodeFixtureGherkin::steps($fixture, $siteName));
     }
 }

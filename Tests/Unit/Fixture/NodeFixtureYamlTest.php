@@ -7,49 +7,84 @@ namespace Sandstorm\E2ETestTools\Tests\Unit\Fixture;
 use Neos\Flow\Tests\UnitTestCase;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
+use Sandstorm\E2ETestTools\Fixture\NodeFixture;
 use Sandstorm\E2ETestTools\Fixture\NodeFixtureRow;
 use Sandstorm\E2ETestTools\Fixture\NodeFixtureYaml;
 use Sandstorm\E2ETestTools\Fixture\ReferenceFixtureRow;
-use Sandstorm\E2ETestTools\Service\NodeImportService;
 use Symfony\Component\Yaml\Yaml;
 
 /**
- * The export (button, CLI) writes what the import reads - this pins that contract.
+ * The YAML fixture format: written by the export (button, CLI), read by "I have the following nodes from file ...".
  */
 class NodeFixtureYamlTest extends UnitTestCase
 {
+    /**
+     * @var list<string>
+     */
+    private array $temporaryFiles = [];
+
+    protected function tearDown(): void
+    {
+        array_map(unlink(...), array_filter($this->temporaryFiles, file_exists(...)));
+        parent::tearDown();
+    }
+
+    // ---------------------------------------------------------------- dump
+
+    #[Test]
+    public function nodesAreDumpedWithTheImportFields(): void
+    {
+        $yaml = Yaml::parse(NodeFixtureYaml::dump(new NodeFixture([new NodeFixtureRow('headline', 'section', 'Vendor.Site:Content.Headline', ['title' => 'Hi'], ['language' => 'de'])])));
+
+        self::assertSame(['nodes' => [[
+            'nodeAggregateId' => 'headline',
+            'parent' => 'section',
+            'nodeType' => 'Vendor.Site:Content.Headline',
+            'properties' => ['title' => 'Hi'],
+            'dimensionSpacePoint' => ['language' => 'de'],
+        ]]], $yaml);
+    }
+
+    #[Test]
+    public function hiddenAndReferencePropertiesAreOnlyDumpedWhenSet(): void
+    {
+        $yaml = Yaml::parse(NodeFixtureYaml::dump(new NodeFixture(
+            [new NodeFixtureRow('visible', '', 'Vendor.Site:Document.Page', [], []), new NodeFixtureRow('hidden', 'visible', 'Vendor.Site:Document.Page', [], [], true)],
+            [new ReferenceFixtureRow('visible', 'r', ['hidden'], []), new ReferenceFixtureRow('visible', 'r', ['visible'], [], ['label' => 'x'])]
+        )));
+
+        self::assertArrayNotHasKey('hidden', $yaml['nodes'][0]);
+        self::assertTrue($yaml['nodes'][1]['hidden']);
+        self::assertArrayNotHasKey('properties', $yaml['references'][0]);
+        self::assertSame(['label' => 'x'], $yaml['references'][1]['properties']);
+        self::assertSame(['hidden'], $yaml['references'][0]['targets'], 'targets stay a list');
+    }
+
     #[Test]
     public function referencesAreOmittedWhenThereAreNone(): void
     {
-        $yaml = Yaml::parse(NodeFixtureYaml::dump([new NodeFixtureRow('home', '', 'Vendor.Site:Document.Page', [], [])]));
-
-        self::assertArrayHasKey('nodes', $yaml);
-        self::assertArrayNotHasKey('references', $yaml);
+        self::assertArrayNotHasKey('references', Yaml::parse(NodeFixtureYaml::dump(new NodeFixture([new NodeFixtureRow('home', '', 'Vendor.Site:Document.Page', [], [])]))));
     }
 
-    #[Test]
-    public function emptyExportIsStillAValidFixture(): void
-    {
-        self::assertSame(['nodes' => []], NodeImportService::parseYamlFile($this->writeTemporaryFile(NodeFixtureYaml::dump([]))));
-    }
+    // ---------------------------------------------------------------- dump -> parse (the export/import contract)
 
     #[Test]
     #[DataProvider('propertyValues')]
-    public function exportedNodesImportToTheSameRows(array $properties): void
+    public function exportedFixtureImportsUnchanged(array $properties): void
     {
-        $rows = [
-            new NodeFixtureRow('home', '', 'Vendor.Site:Document.Page', ['uriPathSegment' => 'site', 'title' => 'Home'], ['language' => 'de']),
-            new NodeFixtureRow('section', 'home/main', 'Vendor.Site:Content.Section', [], ['language' => 'de']),
-            new NodeFixtureRow('text', 'section', 'Vendor.Site:Content.Text', $properties, ['language' => 'de']),
-        ];
-
-        $imported = NodeImportService::createTableNodeFromYamlArray(Yaml::parse(NodeFixtureYaml::dump($rows)));
-
-        // the import table always has the optional Hidden column - visible rows leave it empty
-        self::assertSame(
-            array_map(fn (NodeFixtureRow $row) => [...$row->toTableCells(), 'Hidden' => ''], $rows),
-            $this->normalizeJsonCells($imported->getHash())
+        $fixture = new NodeFixture(
+            [
+                new NodeFixtureRow('home', '', 'Vendor.Site:Document.Page', ['uriPathSegment' => 'site', 'title' => 'Home'], ['language' => 'de', 'market' => 'eu']),
+                new NodeFixtureRow('section', 'home/main', 'Vendor.Site:Content.Section', [], ['language' => 'de', 'market' => 'eu'], true),
+                new NodeFixtureRow('text', 'section', 'Vendor.Site:Content.Text', $properties, ['language' => 'de', 'market' => 'eu']),
+            ],
+            [
+                new ReferenceFixtureRow('home', 'teasers', ['text', 'section'], ['language' => 'de', 'market' => 'eu']),
+                new ReferenceFixtureRow('text', 'link', ['home'], [], ['label' => 'Read more', 'weight' => 2]),
+            ]
         );
+
+        self::assertEquals($fixture, NodeFixtureYaml::parseFile($this->temporaryYamlFile(NodeFixtureYaml::dump($fixture))));
     }
 
     /**
@@ -70,76 +105,200 @@ class NodeFixtureYamlTest extends UnitTestCase
     }
 
     #[Test]
-    public function exportedReferencesImportToTheSameRows(): void
+    public function emptyExportIsStillAValidFixture(): void
     {
-        $references = [
-            new ReferenceFixtureRow('teaser', 'targets', ['a', 'b'], ['language' => 'de']),
-            new ReferenceFixtureRow('home', 'privacyPage', ['privacy'], []),
-        ];
+        self::assertEquals(new NodeFixture([]), NodeFixtureYaml::parseFile($this->temporaryYamlFile(NodeFixtureYaml::dump(new NodeFixture([])))));
+    }
 
-        $imported = NodeImportService::createReferencesTableNodeFromYamlArray(Yaml::parse(NodeFixtureYaml::dump([], $references)));
+    // ---------------------------------------------------------------- reading nodes
 
-        self::assertNotNull($imported);
-        self::assertSame(
-            [['teaser', 'targets', ['a', 'b'], '{"language":"de"}'], ['home', 'privacyPage', ['privacy'], '']],
-            array_map(fn (array $row) => [$row['NodeAggregateId'], $row['ReferenceName'], array_map(trim(...), explode(',', $row['Targets'])), $row['DimensionSpacePoint']], $imported->getHash()),
+    #[Test]
+    public function optionalFieldsDefaultToSiteParentNoPropertiesNoDimensionVisible(): void
+    {
+        self::assertEquals(
+            new NodeFixtureRow('homepage', '', 'Vendor.Site:Document.Page', [], [], false),
+            $this->singleNode(['nodeAggregateId' => 'homepage', 'nodeType' => 'Vendor.Site:Document.Page'])
         );
     }
 
     #[Test]
-    public function hiddenStateSurvivesTheRoundTrip(): void
+    public function nullParentMeansTheSiteNode(): void
     {
-        $rows = [
-            new NodeFixtureRow('visible', 'p', 'Vendor.Site:Content.Text', [], []),
-            new NodeFixtureRow('hidden', 'p', 'Vendor.Site:Content.Text', [], [], true),
-        ];
-
-        $imported = NodeImportService::createTableNodeFromYamlArray(Yaml::parse(NodeFixtureYaml::dump($rows)))->getHash();
-
-        self::assertSame(['', 'true'], array_column($imported, 'Hidden'));
+        self::assertSame('', $this->singleNode(['nodeAggregateId' => 'homepage', 'parent' => null, 'nodeType' => 'Vendor.Site:Document.Page'])->parent);
     }
 
     #[Test]
-    public function referencePropertiesSurviveTheRoundTrip(): void
+    public function numericIdsFromYamlBecomeStrings(): void
     {
-        $references = [new ReferenceFixtureRow('teaser', 'targets', ['a'], [], ['label' => 'Read more', 'weight' => 2])];
+        // YAML parses unquoted `nodeAggregateId: 123` as int - node aggregate ids are strings
+        $node = $this->singleNode(['nodeAggregateId' => 123, 'parent' => 45, 'nodeType' => 'Vendor.Site:Content.Text']);
 
-        $imported = NodeImportService::createReferencesTableNodeFromYamlArray(Yaml::parse(NodeFixtureYaml::dump([], $references)));
-
-        self::assertNotNull($imported);
-        self::assertSame(['label' => 'Read more', 'weight' => 2], json_decode($imported->getHash()[0]['Properties'], true));
+        self::assertSame(['123', '45'], [$node->nodeAggregateId, $node->parent]);
     }
 
     #[Test]
-    public function dimensionWithSeveralDimensionsSurvives(): void
+    public function nodesKeepTheOrderOfTheFile(): void
     {
-        $row = new NodeFixtureRow('n', 'p', 'Vendor.Site:Content.Text', [], ['language' => 'de', 'market' => 'eu']);
+        $fixture = NodeFixtureYaml::fromArray(['nodes' => [
+            ['nodeAggregateId' => 'parent', 'nodeType' => 'Vendor.Site:Document.Page'],
+            ['nodeAggregateId' => 'child', 'parent' => 'parent', 'nodeType' => 'Vendor.Site:Document.Page'],
+        ]]);
 
-        $imported = NodeImportService::createTableNodeFromYamlArray(Yaml::parse(NodeFixtureYaml::dump([$row])))->getHash()[0];
-
-        self::assertSame(['language' => 'de', 'market' => 'eu'], json_decode($imported['DimensionSpacePoint'], true));
+        self::assertSame(['parent', 'child'], array_map(fn (NodeFixtureRow $node) => $node->nodeAggregateId, $fixture->nodes));
     }
 
-    /**
-     * Export and import may encode JSON slightly differently (escaped slashes/unicode) - compare decoded values.
-     */
-    private function normalizeJsonCells(array $rows): array
+    #[Test]
+    #[DataProvider('invalidNodeEntries')]
+    public function invalidNodeEntriesFailWithTheirPosition(mixed $node, string $expectedMessagePattern): void
     {
-        return array_map(function (array $row) {
-            foreach (['Properties', 'DimensionSpacePoint'] as $column) {
-                if ($row[$column] !== '' && $row[$column] !== '{}') {
-                    $row[$column] = json_encode(json_decode($row[$column], true, flags: JSON_THROW_ON_ERROR), JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-                }
-            }
-            return $row;
-        }, $rows);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessageMatches($expectedMessagePattern);
+
+        NodeFixtureYaml::fromArray(['nodes' => [
+            ['nodeAggregateId' => 'ok', 'nodeType' => 'Vendor.Site:Document.Page'],
+            $node,
+        ]]);
     }
 
-    private function writeTemporaryFile(string $content): string
+    public static function invalidNodeEntries(): iterable
     {
-        $file = sys_get_temp_dir() . '/e2e-fixture-' . bin2hex(random_bytes(6)) . '.yaml';
+        yield 'missing nodeAggregateId' => [['nodeType' => 'Vendor.Site:Content.Text'], '/#1.*nodeAggregateId/'];
+        yield 'missing nodeType' => [['nodeAggregateId' => 'x'], '/#1.*nodeType/'];
+        yield 'empty nodeAggregateId' => [['nodeAggregateId' => '', 'nodeType' => 'Vendor.Site:Content.Text'], '/#1.*nodeAggregateId/'];
+        yield 'properties is a list' => [['nodeAggregateId' => 'x', 'nodeType' => 'Vendor.Site:Content.Text', 'properties' => ['a', 'b']], '/#1.*properties/'];
+        yield 'properties is a scalar' => [['nodeAggregateId' => 'x', 'nodeType' => 'Vendor.Site:Content.Text', 'properties' => 'title'], '/#1.*properties/'];
+        yield 'dimensionSpacePoint is a scalar' => [['nodeAggregateId' => 'x', 'nodeType' => 'Vendor.Site:Content.Text', 'dimensionSpacePoint' => 'de'], '/#1.*dimensionSpacePoint/'];
+        // `hidden: "no"` must not end up hidden just because the string is non-empty
+        yield 'hidden is a string' => [['nodeAggregateId' => 'x', 'nodeType' => 'Vendor.Site:Content.Text', 'hidden' => 'no'], '/#1.*hidden/'];
+        yield 'entry is a list' => [['x'], '/#1/'];
+        yield 'entry is a scalar' => ['x', '/#1/'];
+    }
+
+    #[Test]
+    public function oldNeos8ExportFormatIsRejected(): void
+    {
+        // Neos 8 exports: nodes keyed by identifier with path/type/children - must not be half-imported
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessageMatches('/format/i');
+
+        NodeFixtureYaml::fromArray(['nodes' => [
+            '5cb3a5f7-b501-40b2-b5a8-9de169ef1105' => ['path' => '/sites/site', 'type' => 'Vendor.Site:Document.Page', 'properties' => [], 'children' => []],
+        ]]);
+    }
+
+    // ---------------------------------------------------------------- reading references
+
+    #[Test]
+    public function missingOrEmptyReferencesAreNoReferences(): void
+    {
+        self::assertSame([], NodeFixtureYaml::fromArray(['nodes' => []])->references);
+        self::assertSame([], NodeFixtureYaml::fromArray(['nodes' => [], 'references' => []])->references);
+        self::assertSame([], NodeFixtureYaml::fromArray(['nodes' => [], 'references' => null])->references);
+    }
+
+    #[Test]
+    public function referenceTargetsCanBeAListOrASingleId(): void
+    {
+        $fixture = NodeFixtureYaml::fromArray(['nodes' => [], 'references' => [
+            ['nodeAggregateId' => 'teaser', 'referenceName' => 'targets', 'targets' => ['a', 'b'], 'dimensionSpacePoint' => ['language' => 'de']],
+            ['nodeAggregateId' => 'home', 'referenceName' => 'privacyPage', 'targets' => 'privacy'],
+        ]]);
+
+        self::assertEquals([
+            new ReferenceFixtureRow('teaser', 'targets', ['a', 'b'], ['language' => 'de']),
+            new ReferenceFixtureRow('home', 'privacyPage', ['privacy'], []),
+        ], $fixture->references);
+    }
+
+    #[Test]
+    #[DataProvider('invalidReferenceEntries')]
+    public function invalidReferenceEntriesFailWithTheirPosition(array $reference, string $expectedMessagePattern): void
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessageMatches($expectedMessagePattern);
+
+        NodeFixtureYaml::fromArray(['nodes' => [], 'references' => [
+            ['nodeAggregateId' => 'ok', 'referenceName' => 'r', 'targets' => ['t']],
+            $reference,
+        ]]);
+    }
+
+    public static function invalidReferenceEntries(): iterable
+    {
+        yield 'missing nodeAggregateId' => [['referenceName' => 'r', 'targets' => ['t']], '/#1.*nodeAggregateId/'];
+        yield 'missing referenceName' => [['nodeAggregateId' => 'n', 'targets' => ['t']], '/#1.*referenceName/'];
+        yield 'missing targets' => [['nodeAggregateId' => 'n', 'referenceName' => 'r'], '/#1.*targets/'];
+        // an empty target would later fail with an unrelated "invalid NodeAggregateId ''" error
+        yield 'empty targets list' => [['nodeAggregateId' => 'n', 'referenceName' => 'r', 'targets' => []], '/#1.*targets/'];
+        yield 'empty target id' => [['nodeAggregateId' => 'n', 'referenceName' => 'r', 'targets' => ['a', '']], '/#1.*targets/'];
+        yield 'properties is a list' => [['nodeAggregateId' => 'n', 'referenceName' => 'r', 'targets' => ['t'], 'properties' => ['a']], '/#1.*properties/'];
+    }
+
+    // ---------------------------------------------------------------- parseFile
+
+    #[Test]
+    public function validFileIsParsed(): void
+    {
+        $file = $this->temporaryYamlFile("nodes:\n  - nodeAggregateId: homepage\n    nodeType: 'Vendor.Site:Document.Page'\n");
+
+        self::assertEquals(new NodeFixture([new NodeFixtureRow('homepage', '', 'Vendor.Site:Document.Page', [], [])]), NodeFixtureYaml::parseFile($file));
+    }
+
+    #[Test]
+    public function missingFileFailsWithNotFoundMessage(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessageMatches('/not found.*does-not-exist\.yaml/s');
+
+        NodeFixtureYaml::parseFile(sys_get_temp_dir() . '/does-not-exist.yaml');
+    }
+
+    #[Test]
+    public function invalidYamlFailsWithParseErrorNotWithNotFound(): void
+    {
+        $file = $this->temporaryYamlFile("nodes:\n  - nodeAggregateId: [unclosed\n");
+
+        try {
+            NodeFixtureYaml::parseFile($file);
+            self::fail('Expected an exception');
+        } catch (\RuntimeException $exception) {
+            self::assertStringNotContainsStringIgnoringCase('not found', $exception->getMessage());
+            self::assertStringContainsString($file, $exception->getMessage());
+        }
+    }
+
+    #[Test]
+    #[DataProvider('invalidStructures')]
+    public function invalidStructureFails(string $yaml): void
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessageMatches('/nodes/');
+
+        NodeFixtureYaml::parseFile($this->temporaryYamlFile($yaml));
+    }
+
+    public static function invalidStructures(): iterable
+    {
+        yield 'empty file' => [''];
+        yield 'scalar document' => ["just text\n"];
+        yield 'no nodes key' => ["references: []\n"];
+        yield 'nodes is a scalar' => ["nodes: homepage\n"];
+        yield 'nodes is null' => ["nodes: ~\n"];
+    }
+
+    // ---------------------------------------------------------------- helpers
+
+    private function singleNode(array $node): NodeFixtureRow
+    {
+        return NodeFixtureYaml::fromArray(['nodes' => [$node]])->nodes[0];
+    }
+
+    private function temporaryYamlFile(string $content): string
+    {
+        $base = tempnam(sys_get_temp_dir(), 'e2e-fixture-');
+        $file = $base . '.yaml';
         file_put_contents($file, $content);
-        register_shutdown_function(fn () => @unlink($file));
+        array_push($this->temporaryFiles, $base, $file);
         return $file;
     }
 }

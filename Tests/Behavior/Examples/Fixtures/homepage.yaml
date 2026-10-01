@@ -1,4 +1,4 @@
-# Same rows as the "I have the following nodes in site" table - see Classes/Service/NodeImportService.php
+# Same rows as the "I have the following nodes in site" table - see Classes/Fixture/NodeFixtureYaml.php
 nodes:
   - nodeAggregateId: homepage
     parent: ''
