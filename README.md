@@ -32,6 +32,7 @@ the test framework for writing all kinds of BDD tests.
   - [Sandstorm.NeosAcl](#sandstormneosacl)
 - [Running Behat Tests](#running-behat-tests)
   - [Debugging](#debugging)
+- [Unit and functional tests](#unit-and-functional-tests)
 - [Troubleshooting](#troubleshooting)
 - [Architecture](#architecture)
 
@@ -287,13 +288,20 @@ And I have the following nodes in site "site":
 - `Properties` is JSON; invalid JSON fails the step. Gherkin unescapes `\\` to `\` in table cells, so a JSON-escaped
   backslash (e.g. in a PHP class name) is written as `\\\\`.
 - Respect NodeType `constraints` (see [Troubleshooting](#troubleshooting) item 2).
+- Optional `Hidden` column: `true` hides the node (and with it its descendants); empty, `false` or no column at all
+  means visible.
 - References: `And the following node references:` with columns `NodeAggregateId | ReferenceName | Targets |
-  DimensionSpacePoint` (Targets comma-separated) — see
+  DimensionSpacePoint` (Targets comma-separated), optional `Properties` (JSON, set for every target of the row, typed
+  by the reference's property declaration in the NodeType) — see
   [References.feature](Tests/Behavior/Examples/Fixtures/References.feature).
 - YAML: `I have the following nodes from file "homepage.yaml" in site "site"` (optionally `... with overwrites:`),
   path relative to the feature file, format see
-  [homepage.yaml](Tests/Behavior/Examples/Fixtures/homepage.yaml) — same fields as the table, plus an optional
-  `references:` list (`nodeAggregateId`, `referenceName`, `targets`, `dimensionSpacePoint`).
+  [homepage.yaml](Tests/Behavior/Examples/Fixtures/homepage.yaml) — same fields as the table (`hidden: true` for the
+  optional hidden flag), plus an optional `references:` list (`nodeAggregateId`, `referenceName`, `targets`,
+  `dimensionSpacePoint`, optional `properties`). Invalid entries fail with their position in the file; nodes keyed by
+  identifier (the old Neos 8 export) are rejected.
+- Overwrite values (`nodeAggregateId | property | value`) are decoded when they are valid JSON (`true`, `42`, `null`,
+  `"42"`, `[...]`, `{...}`) and used as text otherwise; an overwrite for a node that isn't in the file fails.
 - Assets: `I have a textual persistent resource ...` and `I have the following images:` create file/image assets
   that node properties can reference — see
   [Download.feature](Tests/Behavior/Examples/PersistentResources/Download.feature). They're published right away;
@@ -303,8 +311,8 @@ And I have the following nodes in site "site":
 
 Instead of writing node tables by hand, build the content in the Neos backend and export it. All three ways produce
 the format above and export the same tree: the node's closest document with all its ancestors and descendants, plus
-references between them. Tethered nodes and nodes of unknown NodeTypes are left out, as are properties the NodeType
-doesn't declare (anymore). **Assets are not exported** — asset properties keep the asset id; create those assets in
+references between them, including the hidden state of explicitly hidden nodes and reference properties. Tethered
+nodes and nodes of unknown NodeTypes are left out, as are properties the NodeType doesn't declare (anymore). **Assets are not exported** — asset properties keep the asset id; create those assets in
 the scenario (`I have the following images:` …).
 
 - **Export Node button** (inspector, tab with the gear icon, group "Export"): downloads the YAML for the selected
@@ -490,6 +498,20 @@ project's tasks, see [Project tasks](#6-project-tasks-recommended)).
 - **Pausing the browser**: `And I pause for debugging` (from `FeatureContext.php.default`, calls Playwright's
   `page.pause()`) opens the Playwright inspector on the bridge side. Run Behat with `PAUSE_FOR_DEBUGGING=true` —
   otherwise the connection to the playwright-bridge times out after 30 seconds.
+
+# Unit and functional tests
+
+The fixture tooling (YAML format, export/import contract, Gherkin escaping, node tree collection, export endpoint
+security) is covered by PHPUnit tests in `Tests/Unit` and `Tests/Functional`. They run in the Flow distribution the
+package is installed in, e.g.:
+
+```bash
+FLOW_CONTEXT=Testing ./bin/phpunit -c Build/BuildEssentials/PhpUnit/UnitTests.xml Packages/Application/Sandstorm.E2ETestTools/Tests/Unit
+FLOW_CONTEXT=Testing ./bin/phpunit -c Build/BuildEssentials/PhpUnit/FunctionalTests.xml Packages/Application/Sandstorm.E2ETestTools/Tests/Functional
+```
+
+The Behat traits themselves aren't tested inside the package (that would need a distribution of its own) — the
+[examples](Tests/Behavior/Examples/README.md) are verified in a consuming project instead.
 
 # Troubleshooting
 

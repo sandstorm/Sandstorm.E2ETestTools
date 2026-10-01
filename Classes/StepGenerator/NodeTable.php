@@ -11,6 +11,7 @@ use Neos\ContentRepository\Core\Projection\ContentGraph\Node;
 use Neos\Media\Domain\Model\ImageInterface;
 use Neos\Utility\ObjectAccess;
 use Sandstorm\E2ETestTools\Fixture\NodeFixtureCollector;
+use Sandstorm\E2ETestTools\Fixture\NodeFixtureRow;
 use Sandstorm\E2ETestTools\Fixture\ReferenceFixtureRow;
 
 /**
@@ -22,7 +23,6 @@ use Sandstorm\E2ETestTools\Fixture\ReferenceFixtureRow;
 class NodeTable
 {
     private NodeFixtureCollector $collector;
-    private GherkinTable $nodeTable;
     private ImageTable $imageTable;
     private PersistentResourceFixtures $persistentResourceFixtures;
 
@@ -30,6 +30,11 @@ class NodeTable
      * @var array<string,true> NodeAggregateIds already added
      */
     private array $addedNodes = [];
+
+    /**
+     * @var list<NodeFixtureRow>
+     */
+    private array $rows = [];
 
     /**
      * @var list<ReferenceFixtureRow>
@@ -44,7 +49,6 @@ class NodeTable
         array $defaultImageProperties = []
     ) {
         $this->collector = new NodeFixtureCollector($subgraph, $nodeTypeManager);
-        $this->nodeTable = new GherkinTable(['NodeAggregateId', 'Parent', 'NodeType', 'Properties', 'DimensionSpacePoint']);
         $this->persistentResourceFixtures = new PersistentResourceFixtures($fixtureBasePath, $defaultPersistentResourceProperties);
         $this->imageTable = new ImageTable($this->persistentResourceFixtures, $defaultImageProperties);
     }
@@ -64,7 +68,7 @@ class NodeTable
         }
         $this->addedNodes[$node->aggregateId->value] = true;
 
-        $this->nodeTable->addRow($this->collector->rowFor($node)->toTableCells());
+        $this->rows[] = $this->collector->rowFor($node);
         array_push($this->references, ...$this->collector->referencesFor($node));
         foreach ($node->properties as $propertyValue) {
             if ($propertyValue instanceof ImageInterface) {
@@ -150,16 +154,13 @@ class NodeTable
         $this->imageTable->print();
 
         echo sprintf('Given I have the following nodes in site "%s":', $siteName) . "\n";
-        $this->nodeTable->print();
+        FixtureTables::nodes($this->rows)->print();
 
-        // references to nodes that aren't part of the table couldn't be set
-        $referenceTable = new GherkinTable(['NodeAggregateId', 'ReferenceName', 'Targets', 'DimensionSpacePoint']);
-        foreach ($this->references as $reference) {
-            $targets = array_values(array_filter($reference->targets, fn (string $target) => array_key_exists($target, $this->addedNodes)));
-            if ($targets !== []) {
-                $referenceTable->addRow((new ReferenceFixtureRow($reference->nodeAggregateId, $reference->referenceName, $targets, $reference->dimensionSpacePoint))->toTableCells());
-            }
-        }
+        $references = array_values(array_filter(array_map(
+            fn (ReferenceFixtureRow $reference) => $reference->withTargetsLimitedTo(array_keys($this->addedNodes)),
+            $this->references
+        )));
+        $referenceTable = FixtureTables::references($references);
         if (!$referenceTable->isEmpty()) {
             echo 'And the following node references:' . "\n";
             $referenceTable->print();

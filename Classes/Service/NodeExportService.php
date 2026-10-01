@@ -38,7 +38,7 @@ class NodeExportService
     {
         $subgraph = $this->subgraph($nodeAddress->contentRepositoryId, $nodeAddress->workspaceName, $nodeAddress->dimensionSpacePoint);
         $node = $subgraph->findNodeById($nodeAddress->aggregateId)
-            ?? throw new \InvalidArgumentException(sprintf('Node "%s" not found in workspace "%s", dimension %s', $nodeAddress->aggregateId->value, $nodeAddress->workspaceName->value, $nodeAddress->dimensionSpacePoint->toJson()), 1727100001);
+            ?? throw new NodeNotFoundException(sprintf('Node "%s" not found in workspace "%s", dimension %s', $nodeAddress->aggregateId->value, $nodeAddress->workspaceName->value, $nodeAddress->dimensionSpacePoint->toJson()), 1727100001);
 
         $collector = new NodeFixtureCollector($subgraph, $this->contentRepositoryRegistry->get($nodeAddress->contentRepositoryId)->getNodeTypeManager());
         $nodes = $collector->collectExportTree($node);
@@ -47,10 +47,9 @@ class NodeExportService
         $references = [];
         foreach ($nodes as $exportedNode) {
             foreach ($collector->referencesFor($exportedNode) as $reference) {
-                // references to nodes outside the export couldn't be set on import
-                $targets = array_values(array_intersect($reference->targets, $exportedIds));
-                if ($targets !== []) {
-                    $references[] = new ReferenceFixtureRow($reference->nodeAggregateId, $reference->referenceName, $targets, $reference->dimensionSpacePoint);
+                $limitedReference = $reference->withTargetsLimitedTo($exportedIds);
+                if ($limitedReference !== null) {
+                    $references[] = $limitedReference;
                 }
             }
         }

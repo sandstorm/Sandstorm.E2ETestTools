@@ -10,7 +10,7 @@ use Sandstorm\E2ETestTools\Fixture\NodeFixtureRow;
 use Sandstorm\E2ETestTools\Fixture\NodeFixtureYaml;
 use Sandstorm\E2ETestTools\Fixture\ReferenceFixtureRow;
 use Sandstorm\E2ETestTools\Service\NodeExportService;
-use Sandstorm\E2ETestTools\StepGenerator\GherkinTable;
+use Sandstorm\E2ETestTools\StepGenerator\FixtureTables;
 
 class E2eFixtureCommandController extends CommandController
 {
@@ -65,18 +65,9 @@ class E2eFixtureCommandController extends CommandController
      */
     private function gherkin(array $nodes, array $references, string $siteName): string
     {
-        $nodeTable = new GherkinTable(['NodeAggregateId', 'Parent', 'NodeType', 'Properties', 'DimensionSpacePoint']);
-        foreach ($nodes as $row) {
-            $nodeTable->addRow($row->toTableCells());
-        }
-        $output = sprintf('Given I have the following nodes in site "%s":', $siteName) . "\n" . $nodeTable->toString();
-
+        $output = sprintf('Given I have the following nodes in site "%s":', $siteName) . "\n" . FixtureTables::nodes($nodes)->toString();
         if ($references !== []) {
-            $referenceTable = new GherkinTable(['NodeAggregateId', 'ReferenceName', 'Targets', 'DimensionSpacePoint']);
-            foreach ($references as $row) {
-                $referenceTable->addRow($row->toTableCells());
-            }
-            $output .= "And the following node references:\n" . $referenceTable->toString();
+            $output .= "And the following node references:\n" . FixtureTables::references($references)->toString();
         }
         return $output;
     }

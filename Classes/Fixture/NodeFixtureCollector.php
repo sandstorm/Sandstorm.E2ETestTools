@@ -11,6 +11,7 @@ use Neos\ContentRepository\Core\Projection\ContentGraph\Filter\FindClosestNodeFi
 use Neos\ContentRepository\Core\Projection\ContentGraph\Filter\FindReferencesFilter;
 use Neos\ContentRepository\Core\Projection\ContentGraph\Node;
 use Neos\Flow\Annotations as Flow;
+use Neos\Neos\Domain\SubtreeTagging\NeosSubtreeTag;
 
 /**
  * Turns existing nodes of one subgraph into fixture rows - shared by the export button, the CLI export and the
@@ -52,23 +53,39 @@ final readonly class NodeFixtureCollector
             $node->nodeTypeName->value,
             $this->declaredProperties($node),
             $node->dimensionSpacePoint->coordinates,
+            // only explicitly hidden nodes - descendants inherit it on import
+            $node->tags->withoutInherited()->contain(NeosSubtreeTag::disabled()),
         );
     }
 
     /**
-     * @return list<ReferenceFixtureRow> one row per reference name
+     * References without properties are grouped into one row per reference name; references with properties get a
+     * row each (the properties belong to that single target). Rows keep the order of first appearance.
+     *
+     * @return list<ReferenceFixtureRow>
      */
     public function referencesFor(Node $node): array
     {
-        $targetsByName = [];
+        /** @var list<array{name: string, targets: list<string>, properties: array<string,mixed>}> $groups */
+        $groups = [];
+        $plainGroupIndexByName = [];
         foreach ($this->subgraph->findReferences($node->aggregateId, FindReferencesFilter::create()) as $reference) {
-            $targetsByName[$reference->name->value][] = $reference->node->aggregateId->value;
+            $name = $reference->name->value;
+            $target = $reference->node->aggregateId->value;
+            $properties = $reference->properties?->serialized()->getPlainValues() ?? [];
+            if ($properties !== []) {
+                $groups[] = ['name' => $name, 'targets' => [$target], 'properties' => $properties];
+            } elseif (array_key_exists($name, $plainGroupIndexByName)) {
+                $groups[$plainGroupIndexByName[$name]]['targets'][] = $target;
+            } else {
+                $plainGroupIndexByName[$name] = count($groups);
+                $groups[] = ['name' => $name, 'targets' => [$target], 'properties' => []];
+            }
         }
-        $rows = [];
-        foreach ($targetsByName as $referenceName => $targets) {
-            $rows[] = new ReferenceFixtureRow($node->aggregateId->value, $referenceName, $targets, $node->dimensionSpacePoint->coordinates);
-        }
-        return $rows;
+        return array_map(
+            fn (array $group) => new ReferenceFixtureRow($node->aggregateId->value, $group['name'], $group['targets'], $node->dimensionSpacePoint->coordinates, $group['properties']),
+            $groups
+        );
     }
 
     /**

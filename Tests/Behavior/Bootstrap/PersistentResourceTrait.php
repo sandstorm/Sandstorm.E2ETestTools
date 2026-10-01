@@ -55,7 +55,7 @@ trait PersistentResourceTrait
 
     /**
      * @Given I have a textual persistent resource :uuid named :filename with the following content:
-     * @throws Exception failure while storing the resource
+     * @throws \Exception failure while storing the resource
      */
     public function iHaveATextualPersistentResourceWithTheFollowingContent(string $uuid, string $filename, PyStringNode $content): void
     {
@@ -77,6 +77,7 @@ trait PersistentResourceTrait
      */
     public function iHaveTheFollowingImages(TableNode $imageTable): void
     {
+        $persistentResources = [];
         foreach ($imageTable->getHash() as $rowNumber => $row) {
             $persistentResource = $this->PersistentResourceTrait_resourceManager->importResource(
                 fopen(FLOW_PATH_PACKAGES . $row['Path'], 'r'),
@@ -96,7 +97,7 @@ trait PersistentResourceTrait
             $persistentResources[] = $persistentResource;
         }
         $this->PersistentResourceTrait_persistenceManager->persistAll();
-        array_map($this->publishResource(...), $persistentResources ?? []);
+        array_map($this->publishResource(...), $persistentResources);
 
         $this->callResourcePersistedHook();
     }

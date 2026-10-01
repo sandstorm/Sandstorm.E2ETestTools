@@ -13,6 +13,11 @@ Neos:
             resource: 'resource://Sandstorm.E2ETestTools/Public/ExportNodeButton/Plugin.css'
 
   Flow:
+    object:
+      includeClasses:
+        # composer.json autoloads all of Tests/ (the Behat traits live there) - keep the PHPUnit tests out of Flow's
+        # reflection, their base classes only exist when running PHPUnit
+        'Sandstorm.E2ETestTools': ['Sandstorm\\E2ETestTools\\(?!Tests\\(Unit|Functional)\\).*']
     security:
       authentication:
         providers:

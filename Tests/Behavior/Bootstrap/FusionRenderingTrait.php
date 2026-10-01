@@ -24,7 +24,9 @@ use Neos\ContentRepository\Core\Feature\NodeModification\Dto\SerializedPropertyV
 use Neos\ContentRepository\Core\Feature\NodeReferencing\Command\SetNodeReferences;
 use Neos\ContentRepository\Core\Feature\NodeReferencing\Dto\NodeReferencesForName;
 use Neos\ContentRepository\Core\Feature\NodeReferencing\Dto\NodeReferencesToWrite;
+use Neos\ContentRepository\Core\Feature\NodeReferencing\Dto\NodeReferenceToWrite;
 use Neos\ContentRepository\Core\Feature\RootNodeCreation\Command\CreateRootNodeAggregateWithNode;
+use Neos\ContentRepository\Core\Feature\SubtreeTagging\Command\TagSubtree;
 use Neos\ContentRepository\Core\Infrastructure\Property\PropertyConverter;
 use Neos\ContentRepository\Core\NodeType\NodeTypeName;
 use Neos\ContentRepository\Core\Projection\ContentGraph\Filter\FindClosestNodeFilter;
@@ -34,6 +36,7 @@ use Neos\ContentRepository\Core\SharedModel\ContentRepository\ContentRepositoryI
 use Neos\ContentRepository\Core\SharedModel\Node\NodeAggregateId;
 use Neos\ContentRepository\Core\SharedModel\Node\NodeAggregateIds;
 use Neos\ContentRepository\Core\SharedModel\Node\NodeName;
+use Neos\ContentRepository\Core\SharedModel\Node\NodeVariantSelectionStrategy;
 use Neos\ContentRepository\Core\SharedModel\Node\ReferenceName;
 use Neos\ContentRepository\Core\SharedModel\Workspace\WorkspaceName;
 use Neos\ContentRepositoryRegistry\ContentRepositoryRegistry;
@@ -54,12 +57,13 @@ use Neos\Neos\Domain\Model\WorkspaceTitle;
 use Neos\Neos\Domain\Repository\SiteRepository;
 use Neos\Neos\Domain\Repository\WorkspaceMetadataAndRoleRepository;
 use Neos\Neos\Domain\Service\WorkspaceService;
+use Neos\Neos\Domain\SubtreeTagging\NeosSubtreeTag;
 use Neos\Neos\Domain\SubtreeTagging\NeosVisibilityConstraints;
 use Neos\Neos\FrontendRouting\SiteDetection\SiteDetectionResult;
 use Neos\Utility\Files;
 use PHPUnit\Framework\Assert;
-use Sandstorm\E2ETestTools\FusionServiceForTesting;
 use Sandstorm\E2ETestTools\FusionRenderingResult;
+use Sandstorm\E2ETestTools\FusionServiceForTesting;
 use Symfony\Component\DomCrawler\Crawler;
 
 require_once(__DIR__ . "/PersistentResourceTrait.php");
@@ -207,7 +211,7 @@ trait FusionRenderingTrait
             // both used in Root.fusion
             'fusionRenderingResult' => $fusionRenderingResult,
             'renderPath' => $fusionPath
-        ], 'e2eTestRoot');
+        ]);
         $this->lastFusionRenderingResult = $fusionRenderingResult;
     }
 
@@ -494,7 +498,8 @@ trait FusionRenderingTrait
     /**
      * Creates nodes in the content repository from a Gherkin table.
      *
-     * Supported columns: NodeAggregateId, Parent, NodeType, Properties (JSON), DimensionSpacePoint (JSON)
+     * Supported columns: NodeAggregateId, Parent, NodeType, Properties (JSON), DimensionSpacePoint (JSON),
+     * optional Hidden ("true" hides the node and with it its descendants; empty/"false" or no column: visible)
      * The /sites root node is created automatically by setupContentRepository() and must not be repeated here.
      */
     #[Given("I have the following nodes in site :siteName:")]
@@ -557,11 +562,31 @@ trait FusionRenderingTrait
             );
 
             if ($isDirectSiteChild) {
+                // deprecated for regular nodes, but site nodes are still identified by their name in Neos 9
                 $command = $command->withNodeName(NodeName::fromString($siteName));
             }
 
             $this->contentRepository->handle($command);
+
+            if ($this->isHidden($row)) {
+                $this->contentRepository->handle(TagSubtree::create(
+                    WorkspaceName::forLive(),
+                    $nodeAggregateId,
+                    $dimensionSpacePoint,
+                    NodeVariantSelectionStrategy::STRATEGY_ALL_SPECIALIZATIONS,
+                    NeosSubtreeTag::disabled()
+                ));
+            }
         }
+    }
+
+    private function isHidden(array $row): bool
+    {
+        return match ($row['Hidden'] ?? '') {
+            'true' => true,
+            'false', '' => false,
+            default => throw new \RuntimeException(sprintf('Invalid Hidden value "%s" for node "%s" - use "true", "false" or leave it empty.', $row['Hidden'], $row['NodeAggregateId'])),
+        };
     }
 
     /**
@@ -569,7 +594,8 @@ trait FusionRenderingTrait
      *
      * Use this step after "I have the following nodes in site" to express node references.
      *
-     * Supported columns: NodeAggregateId, ReferenceName, Targets (comma-separated NodeAggregateIds), DimensionSpacePoint
+     * Supported columns: NodeAggregateId, ReferenceName, Targets (comma-separated NodeAggregateIds), DimensionSpacePoint,
+     * optional Properties (JSON reference properties, set for every target of the row)
      */
     #[Given("the following node references:")]
     public function iSetTheFollowingNodeReferencesInSite(TableNode $table): void
@@ -584,16 +610,21 @@ trait FusionRenderingTrait
                 fn(string $id) => NodeAggregateId::fromString(trim($id)),
                 explode(',', $row['Targets'])
             );
+            $sourceNodeAggregateId = NodeAggregateId::fromString($row['NodeAggregateId']);
+            $referenceName = ReferenceName::fromString($row['ReferenceName']);
+            $properties = $this->referencePropertyValues($row, $sourceNodeAggregateId, $dimensionSpacePoint, $referenceName);
 
             $this->contentRepository->handle(SetNodeReferences::create(
                 WorkspaceName::forLive(),
-                NodeAggregateId::fromString($row['NodeAggregateId']),
+                $sourceNodeAggregateId,
                 OriginDimensionSpacePoint::fromDimensionSpacePoint($dimensionSpacePoint),
                 NodeReferencesToWrite::create(
-                    NodeReferencesForName::fromTargets(
-                        ReferenceName::fromString($row['ReferenceName']),
-                        NodeAggregateIds::create(...$targetIds)
-                    )
+                    $properties === null
+                        ? NodeReferencesForName::fromTargets($referenceName, NodeAggregateIds::create(...$targetIds))
+                        : NodeReferencesForName::fromReferences($referenceName, array_map(
+                            fn (NodeAggregateId $targetId) => NodeReferenceToWrite::fromTargetAndProperties($targetId, $properties),
+                            $targetIds
+                        ))
                 )
             ));
         }
@@ -611,5 +642,34 @@ trait FusionRenderingTrait
             ));
         }
         return $childAggregate->nodeAggregateId;
+    }
+
+    /**
+     * Deserializes the optional Properties column of the reference step with the property types the source node's
+     * NodeType declares for that reference.
+     */
+    private function referencePropertyValues(array $row, NodeAggregateId $sourceNodeAggregateId, DimensionSpacePoint $dimensionSpacePoint, ReferenceName $referenceName): ?PropertyValuesToWrite
+    {
+        if (($row['Properties'] ?? '') === '') {
+            return null;
+        }
+        try {
+            $properties = json_decode($row['Properties'], true, flags: JSON_THROW_ON_ERROR);
+        } catch (\JsonException $e) {
+            throw new \RuntimeException(sprintf('Invalid JSON in Properties of reference "%s" of node "%s": %s', $referenceName->value, $sourceNodeAggregateId->value, $e->getMessage()), 0, $e);
+        }
+        $sourceNode = $this->contentRepository->getContentGraph(WorkspaceName::forLive())
+            ->getSubgraph($dimensionSpacePoint, NeosVisibilityConstraints::excludeRemoved())
+            ->findNodeById($sourceNodeAggregateId)
+            ?? throw new \RuntimeException(sprintf('Node "%s" for reference "%s" not found.', $sourceNodeAggregateId->value, $referenceName->value));
+        $propertyTypes = $this->contentRepository->getNodeTypeManager()->getNodeType($sourceNode->nodeTypeName)?->getReferences()[$referenceName->value]['properties'] ?? [];
+
+        $values = [];
+        foreach ($properties as $propertyName => $value) {
+            $type = $propertyTypes[$propertyName]['type']
+                ?? throw new \RuntimeException(sprintf('Reference "%s" of node "%s" has no property "%s".', $referenceName->value, $sourceNodeAggregateId->value, $propertyName));
+            $values[$propertyName] = $value === null ? null : $this->propertyConverter->deserializePropertyValue(SerializedPropertyValue::create($value, $type));
+        }
+        return PropertyValuesToWrite::fromArray($values);
     }
 }

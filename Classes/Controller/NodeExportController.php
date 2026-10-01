@@ -11,6 +11,7 @@ use Neos\Flow\Mvc\Controller\ActionController;
 use Sandstorm\E2ETestTools\Fixture\NodeFixtureYaml;
 use Psr\Http\Message\ResponseInterface;
 use Sandstorm\E2ETestTools\Service\NodeExportService;
+use Sandstorm\E2ETestTools\Service\NodeNotFoundException;
 
 /**
  * Backend of the "Export Node" inspector button: downloads the node tree as YAML node fixture.
@@ -33,7 +34,16 @@ class NodeExportController extends ActionController
      */
     public function indexAction(string $node): ResponseInterface
     {
-        $export = $this->nodeExportService->exportNodeTree(NodeAddress::fromJsonString($node));
+        try {
+            $nodeAddress = NodeAddress::fromJsonString($node);
+        } catch (\InvalidArgumentException $e) {
+            return new Response(400, ['Content-Type' => 'text/plain'], 'Invalid node address: ' . $e->getMessage());
+        }
+        try {
+            $export = $this->nodeExportService->exportNodeTree($nodeAddress);
+        } catch (NodeNotFoundException $e) {
+            return new Response(404, ['Content-Type' => 'text/plain'], $e->getMessage());
+        }
 
         return new Response(
             200,
