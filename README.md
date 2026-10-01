@@ -26,6 +26,7 @@ the test framework for writing all kinds of BDD tests.
   - [Tags](#tags)
   - [Fixtures](#fixtures)
   - [Fixtures from existing content](#fixtures-from-existing-content)
+    - [Fixtures for AI agents](#fixtures-for-ai-agents)
   - [Steps](#steps)
   - [Style Guide](#style-guide)
   - [Dynamic SUT URL](#dynamic-sut-url)
@@ -323,8 +324,10 @@ the scenario (`I have the following images:` …).
   backend users see the button disabled, and the endpoint answers them with 403. To allow other roles, grant them
   the privilege target `Sandstorm.E2ETestTools:NodeExport` in your project's `Policy.yaml` - button and endpoint
   both follow it.
-- **CLI**: `./flow e2efixture:export <nodeAggregateId> --dimension '{"language":"de"}'` prints the YAML;
-  `--format gherkin --site-name site` prints the inline steps instead; `--workspace` defaults to `live`.
+- **CLI**: `./flow e2efixture:export <nodeAggregateId> --dimension '{"language":"de"}'` prints the YAML. Instead of
+  the id, `--uri-path about/team` selects the page by its URI path (without dimension prefix and suffix, `/` is the
+  homepage; `--source-site <siteNodeName>` only with several sites). `--format gherkin --site-name site` prints the
+  inline steps instead; `--workspace` defaults to `live`.
 - **StepGenerator** — for your own command controllers, when you want a different selection of nodes, or image
   fixture files (written to `withFixturesBaseDirectory()` and printed as `I have the following images:`):
 
@@ -348,6 +351,25 @@ the scenario (`I have the following images:` …).
   ```
 
   References are only printed for targets that are part of the table.
+
+### Fixtures for AI agents
+
+The CLI is the way for coding agents to get fixtures - no backend login, plain stdout, and the import creates exactly
+what was exported. A workflow that works:
+
+1. Build an example of the feature's content in the backend (a person or the agent) - the export can only export
+   existing nodes.
+2. Export by URL: `./flow e2efixture:export --uri-path <path> --dimension '<json>' > Features/<Feature>/<page>.yaml`.
+   A wrong segment fails with the segments that exist at that level, so the path can be corrected without database
+   access.
+3. Prefer the YAML file over `--format gherkin`: a page easily has hundreds of nodes. Keep the feature short with
+   `I have the following nodes from file ... in site ...` and set only what the scenario asserts via `with overwrites:`.
+4. Assets aren't exported - add `I have the following images:` (or a textual persistent resource) for the asset ids
+   the YAML references.
+5. The exported ids are UUIDs. Rename ids only consistently (`nodeAggregateId`, `parent`, `targets` and `node://`
+   links in properties) - or leave them.
+
+Run the command in the Flow context with the content you export (e.g. inside your app container).
 
 ## Steps
 
