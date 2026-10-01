@@ -1,37 +1,42 @@
 # End-To-End Test Tools for Neos
 
-**Test your Neos 9 site the way visitors and editors see it: in plain Gherkin, against real content, in a real
-browser.**
-
-From a single Fusion component to a whole page - describe the content, render it, assert on the HTML, click through
-it in the browser, and get screenshots and a visual style guide along the way:
+Behat steps and glue code for testing Neos 9 sites at three levels: Fusion rendering in-process, full pages in a real
+browser via Playwright, and the Neos backend. Tests are written in Gherkin and run against a content repository that
+is reset and filled with fixtures for every scenario.
 
 ```gherkin
-@flowEntities @playwright
-Feature: Team page
+@flowEntities
+Feature: Headline integration
 
-  Scenario: the team page shows our team
+  Scenario: a headline node renders as h1
     Given I have a site for Site Node "site" with name "My Site"
-    And I have the following nodes from file "team.yaml" in site "site"
-    When I access the URI path "/team"
-    Then there should be the text "Our Team" on the page
-    And I do a screenshot "team.png"
+    And I have the following nodes in site "site":
+      | NodeAggregateId | Parent        | NodeType                   | Properties                                   | DimensionSpacePoint |
+      | homepage        |               | My.Site:Document.StartPage | {"uriPathSegment":"home","title":"Homepage"} | {"language":"de"}   |
+      | headline        | homepage/main | My.Site:Content.Headline   | {"title":"Hello"}                            | {"language":"de"}   |
+    And I get the node "headline" in dimension '{"language":"de"}'
+    When I render the Fusion object "/testcase" with the current context node:
+      """
+      testcase = My.Site:Content.Headline
+      """
+    Then in the fusion output, the inner HTML of CSS selector "h1" matches "Hello"
 ```
-
-Nobody wrote `team.yaml` by hand: it's the team page as editors built it, exported with one click in the Neos backend
-or one command on the CLI.
 
 ## What you get
 
-- **Fusion tests without a browser** - render a component, or a NodeType's integration with real nodes, and assert on
-  the HTML. Fast and focused.
-- **Real browser tests** - Playwright drives a browser through your site and the Neos backend (login, menus, document
-  tree).
-- **Fixtures from real content** - write node tables, or export existing pages from the backend or the CLI (also made
-  for coding agents) and import them unchanged.
-- **A visual style guide** - store any rendering as HTML and screenshot, desktop and mobile, on one overview page.
-- **Failures you can debug** - a screenshot of every failing step, a Playwright trace of every failing scenario.
-- **Runs in CI** - inside the image you deploy, with JUnit reports for your CI system.
+- **Fusion rendering in the Behat process** - render a component or a NodeType's integration with a context node and
+  assert on the HTML via CSS selectors. No web server or browser involved.
+- **Browser tests via Playwright** - Behat sends Playwright scripts to a small bridge service (HTTP), the browser hits
+  your application on a dedicated port with its own Flow context and database.
+- **Neos backend steps** - create users, log in, navigate menus and the document tree.
+- **Content fixtures** - nodes, references, hidden state and assets as Gherkin tables or YAML files, created through
+  the Neos 9 content repository API.
+- **Fixture export** - export existing pages (backend button or CLI) into that format: realistic test data without
+  writing node tables by hand.
+- **Style guide** - store renderings as HTML snapshots plus screenshots (with configurable viewport widths) on one
+  overview page.
+- **Debugging and CI** - screenshots of failing steps, Playwright traces of failing scenarios, a GitLab CI example
+  running the tests inside the deployed image.
 
 Requires Neos 9 / Flow 9. For Neos 8, use the 8.x releases (latest: 8.3.2). For Symfony projects, see
 [README.Symfony.md](./README.Symfony.md).
