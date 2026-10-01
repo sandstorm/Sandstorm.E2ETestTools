@@ -33,6 +33,7 @@ the test framework for writing all kinds of BDD tests.
 - [Running Behat Tests](#running-behat-tests)
   - [Debugging](#debugging)
 - [Unit and functional tests](#unit-and-functional-tests)
+- [Migrating tests from Neos 8](#migrating-tests-from-neos-8)
 - [Troubleshooting](#troubleshooting)
 - [Architecture](#architecture)
 
@@ -515,6 +516,56 @@ FLOW_CONTEXT=Testing ./bin/phpunit -c Build/BuildEssentials/PhpUnit/FunctionalTe
 
 The Behat traits themselves aren't tested inside the package (that would need a distribution of its own) — the
 [examples](Tests/Behavior/Examples/README.md) are verified in a consuming project instead.
+
+# Migrating tests from Neos 8
+
+Start your `FeatureContext` from [`FeatureContext.php.default`](Tests/Behavior/Bootstrap/FeatureContext.php.default)
+(Neos 9 Behat traits, content repository reset) instead of patching the old one. In the feature files:
+
+| Neos 8 | Neos 9 |
+|---|---|
+| tag `@fixtures` | `@flowEntities`: Neos.Behat resets the database on this tag now (`FlowEntitiesTrait`; the old `FlowContextTrait` with `@fixtures` is deprecated) |
+| `I have/create the following nodes:` | `I have/create the following nodes in site "site":` |
+| columns `Identifier \| Path \| Node Type \| Properties \| Language` | `NodeAggregateId \| Parent \| NodeType \| Properties \| DimensionSpacePoint`, optional `Hidden` |
+| `Path` (`/sites/site/main/foo`), a `/sites` row | `Parent`: empty = site node, `homepage/main` = tethered child, otherwise the parent's `NodeAggregateId`; no `/sites` row |
+| `Language`: `de` | `DimensionSpacePoint`: `{"language":"de"}` |
+| `HiddenInIndex` column | `"hiddenInMenu": true` in `Properties` |
+| reference properties with node identifiers in `Properties` | `And the following node references:` |
+| `I get a node by path "/sites/site" with the following context:` + table | `I get the node "homepage" in dimension '{"language":"de"}'` |
+| `I have the following nodes from file "x.yaml" [with overwrites]` | `... from file "x.yaml" in site "site" [with overwrites:]` |
+| overwrite columns `identifier \| property \| value` | `nodeAggregateId \| property \| value` |
+| YAML exported with the Neos 8 button (nodes keyed by identifier, nested `children`) | rejected - export again ([Fixtures from existing content](#fixtures-from-existing-content)) |
+
+Before:
+
+```gherkin
+@fixtures
+Scenario:
+  Given I have a site for Site Node "site"
+  And I have the following nodes:
+    | Identifier                           | Path                    | Node Type                 | Properties      | Language |
+    | 5cb3a5f7-b501-40b2-b5a8-9de169ef1105 | /sites                  | unstructured              | {}              | de       |
+    | 5e312d5b-9559-4bd2-8251-0182e11b4950 | /sites/site             | PACKAGEKEY:Document.Page  | {}              | de       |
+    | 9cbaa2e2-d779-4936-aa02-0dab324da93e | /sites/site/main/button | PACKAGEKEY:Content.Button | {"title": "Go"} | de       |
+  And I get a node by path "/sites/site/main/button" with the following context:
+    | Workspace | Dimension: language |
+    | live      | de                  |
+```
+
+After:
+
+```gherkin
+@flowEntities
+Scenario:
+  Given I have a site for Site Node "site"
+  And I have the following nodes in site "site":
+    | NodeAggregateId | Parent        | NodeType                  | Properties                                   | DimensionSpacePoint |
+    | homepage        |               | PACKAGEKEY:Document.Page  | {"uriPathSegment":"site","title":"Homepage"} | {"language":"de"}   |
+    | button          | homepage/main | PACKAGEKEY:Content.Button | {"title":"Go"}                               | {"language":"de"}   |
+  And I get the node "button" in dimension '{"language":"de"}'
+```
+
+Details: [Fixtures](#fixtures).
 
 # Troubleshooting
 
