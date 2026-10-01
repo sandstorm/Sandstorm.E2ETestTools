@@ -18,6 +18,7 @@ export default class ExportNodeButton extends PureComponent {
         commit: PropTypes.func.isRequired,
         nodeAddress: PropTypes.string,
         currentUri: PropTypes.string,
+        enabled: PropTypes.bool,
     };
 
     exportNodeButtonOnClick = () => {
@@ -33,9 +34,13 @@ export default class ExportNodeButton extends PureComponent {
     };
 
     render() {
+        // @ts-ignore
+        const enabled = this.props.enabled === true;
         return <button
             className={"neos-button-primary"}
             onClick={this.exportNodeButtonOnClick}
+            disabled={!enabled}
+            title={enabled ? undefined : 'Only administrators can export nodes as test fixtures'}
         >Export Node</button>;
     }
 }

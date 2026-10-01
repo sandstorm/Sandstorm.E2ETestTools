@@ -11,6 +11,10 @@ Neos:
         stylesheets:
           'Sandstorm.E2ETestTools/ExportNodeButton':
             resource: 'resource://Sandstorm.E2ETestTools/Public/ExportNodeButton/Plugin.css'
+      frontendConfiguration:
+        'Sandstorm.E2ETestTools:ExportNodeButton':
+          # evaluated per request for the logged-in user - the button is disabled for everybody who may not export
+          enabled: '${Security.hasAccess("Sandstorm.E2ETestTools:NodeExport")}'
 
   Flow:
     object:

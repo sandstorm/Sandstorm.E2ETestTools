@@ -316,7 +316,10 @@ nodes and nodes of unknown NodeTypes are left out, as are properties the NodeTyp
 the scenario (`I have the following images:` …).
 
 - **Export Node button** (inspector, tab with the gear icon, group "Export"): downloads the YAML for the selected
-  node, from the current workspace and dimension. Backend users only (`Configuration/Policy.yaml`).
+  node, from the current workspace and dimension. **Administrators only** (`Configuration/Policy.yaml`): other
+  backend users see the button disabled, and the endpoint answers them with 403. To allow other roles, grant them
+  the privilege target `Sandstorm.E2ETestTools:NodeExport` in your project's `Policy.yaml` - button and endpoint
+  both follow it.
 - **CLI**: `./flow e2efixture:export <nodeAggregateId> --dimension '{"language":"de"}'` prints the YAML;
   `--format gherkin --site-name site` prints the inline steps instead; `--workspace` defaults to `live`.
 - **StepGenerator** — for your own command controllers, when you want a different selection of nodes, or image

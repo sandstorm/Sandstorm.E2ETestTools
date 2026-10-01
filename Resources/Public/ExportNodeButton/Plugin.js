@@ -74,6 +74,9 @@
     }
   });
 
+  // src/manifest.ts
+  var import_react2 = __toESM(require_react());
+
   // node_modules/@neos-project/neos-ui-extensibility/dist/index.js
   init_readFromConsumerApi();
   var dist_default = readFromConsumerApi("manifest");
@@ -93,11 +96,14 @@
       };
     }
     render() {
+      const enabled = this.props.enabled === true;
       return /* @__PURE__ */ import_react.default.createElement(
         "button",
         {
           className: "neos-button-primary",
-          onClick: this.exportNodeButtonOnClick
+          onClick: this.exportNodeButtonOnClick,
+          disabled: !enabled,
+          title: enabled ? void 0 : "Only administrators can export nodes as test fixtures"
         },
         "Export Node"
       );
@@ -107,7 +113,8 @@
     value: import_prop_types.default.string,
     commit: import_prop_types.default.func.isRequired,
     nodeAddress: import_prop_types.default.string,
-    currentUri: import_prop_types.default.string
+    currentUri: import_prop_types.default.string,
+    enabled: import_prop_types.default.bool
   };
   ExportNodeButton = __decorateClass([
     (0, import_react_redux.connect)((state) => ({
@@ -120,10 +127,11 @@
   ], ExportNodeButton);
 
   // src/manifest.ts
-  dist_default("Sandstorm.E2ETestTools:ExportNodeButton", {}, (globalRegistry) => {
+  dist_default("Sandstorm.E2ETestTools:ExportNodeButton", {}, (globalRegistry, { frontendConfiguration }) => {
+    const enabled = frontendConfiguration?.["Sandstorm.E2ETestTools:ExportNodeButton"]?.enabled === true;
     const editorsRegistry = globalRegistry.get("inspector").get("editors");
     editorsRegistry.set("Sandstorm.E2ETestTools/Inspector/Editors/ExportNodeButton", {
-      component: ExportNodeButton
+      component: (props) => import_react2.default.createElement(ExportNodeButton, { ...props, enabled })
     });
   });
 })();

@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Sandstorm\E2ETestTools\Tests\Functional\Controller;
 
+use Neos\Flow\Configuration\ConfigurationManager;
 use Neos\Flow\Tests\FunctionalTestCase;
+use Neos\Neos\Ui\Domain\Service\ConfigurationRenderingService;
 use Neos\Utility\ObjectAccess;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
@@ -13,7 +15,8 @@ use Sandstorm\E2ETestTools\Service\NodeExportService;
 use Sandstorm\E2ETestTools\Service\NodeNotFoundException;
 
 /**
- * The export endpoint can read content of any workspace - it must only be usable by backend users.
+ * The export endpoint can read content of any workspace - only administrators (i.e. the developers writing tests)
+ * may use it. The UI asks the same privilege target to enable or disable the button.
  */
 class NodeExportControllerTest extends FunctionalTestCase
 {
@@ -28,34 +31,62 @@ class NodeExportControllerTest extends FunctionalTestCase
     }
 
     #[Test]
-    #[DataProvider('backendRoles')]
-    public function backendUsersAreGrantedTheExport(string $role): void
+    public function administratorsAreGrantedTheExport(): void
     {
-        $this->authenticateRoles([$role]);
+        $this->authenticateRoles(['Neos.Neos:Administrator']);
 
         self::assertTrue($this->privilegeManager->isPrivilegeTargetGranted('Sandstorm.E2ETestTools:NodeExport'));
     }
 
-    public static function backendRoles(): iterable
-    {
-        yield 'editor' => ['Neos.Neos:Editor'];
-        yield 'restricted editor' => ['Neos.Neos:RestrictedEditor'];
-        yield 'administrator' => ['Neos.Neos:Administrator'];
-    }
-
     #[Test]
-    #[DataProvider('nonEditorRoles')]
-    public function rolesThatCantEditContentAreNotGrantedTheExport(string $role): void
+    #[DataProvider('nonAdministratorRoles')]
+    public function otherBackendRolesAreNotGrantedTheExport(array $roles): void
     {
-        $this->authenticateRoles([$role]);
+        $this->authenticateRoles($roles);
 
         self::assertFalse($this->privilegeManager->isPrivilegeTargetGranted('Sandstorm.E2ETestTools:NodeExport'));
     }
 
-    public static function nonEditorRoles(): iterable
+    public static function nonAdministratorRoles(): iterable
     {
-        yield 'live publisher' => ['Neos.Neos:LivePublisher'];
-        yield 'user manager' => ['Neos.Neos:UserManager'];
+        yield 'editor' => [['Neos.Neos:Editor']];
+        yield 'restricted editor' => [['Neos.Neos:RestrictedEditor']];
+        yield 'live publisher' => [['Neos.Neos:LivePublisher']];
+        yield 'user manager' => [['Neos.Neos:UserManager']];
+        yield 'editor + user manager' => [['Neos.Neos:Editor', 'Neos.Neos:UserManager']];
+    }
+
+    #[Test]
+    #[DataProvider('buttonStates')]
+    public function exportButtonIsOnlyEnabledForUsersGrantedTheExport(array $roles, bool $expectedEnabled): void
+    {
+        if ($roles !== []) {
+            $this->authenticateRoles($roles);
+        }
+        $frontendConfiguration = $this->objectManager->get(ConfigurationManager::class)
+            ->getConfiguration(ConfigurationManager::CONFIGURATION_TYPE_SETTINGS, 'Neos.Neos.Ui.frontendConfiguration')['Sandstorm.E2ETestTools:ExportNodeButton'];
+
+        $computed = $this->objectManager->get(ConfigurationRenderingService::class)->computeConfiguration($frontendConfiguration, []);
+
+        self::assertSame($expectedEnabled, $computed['enabled']);
+    }
+
+    public static function buttonStates(): iterable
+    {
+        yield 'anonymous' => [[], false];
+        yield 'editor' => [['Neos.Neos:Editor'], false];
+        yield 'administrator' => [['Neos.Neos:Administrator'], true];
+    }
+
+    #[Test]
+    public function editorRequestIsForbidden(): void
+    {
+        $this->authenticateRoles(['Neos.Neos:Editor']);
+
+        $response = $this->browser->request($this->exportUri(self::UNKNOWN_NODE_ADDRESS));
+
+        self::assertSame(403, $response->getStatusCode());
+        self::assertStringNotContainsString('does-not-exist', (string)$response->getBody(), 'the request must be denied before the node is looked up');
     }
 
     #[Test]
@@ -72,7 +103,7 @@ class NodeExportControllerTest extends FunctionalTestCase
     #[DataProvider('malformedNodeAddresses')]
     public function malformedNodeAddressIsABadRequest(string $nodeAddress): void
     {
-        $this->authenticateRoles(['Neos.Neos:Editor']);
+        $this->authenticateRoles(['Neos.Neos:Administrator']);
 
         $response = $this->browser->request($this->exportUri($nodeAddress));
 
@@ -90,7 +121,7 @@ class NodeExportControllerTest extends FunctionalTestCase
     public function unknownNodeIsNotFound(): void
     {
         // e.g. the node was deleted between selecting it in the backend and clicking "Export Node"
-        $this->authenticateRoles(['Neos.Neos:Editor']);
+        $this->authenticateRoles(['Neos.Neos:Administrator']);
         $nodeExportService = $this->createMock(NodeExportService::class);
         $nodeExportService->method('exportNodeTree')->willThrowException(new NodeNotFoundException('Node "does-not-exist" not found'));
         $this->objectManager->setInstance(NodeExportService::class, $nodeExportService);
