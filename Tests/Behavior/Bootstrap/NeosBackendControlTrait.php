@@ -8,6 +8,7 @@ use Neos\Flow\ObjectManagement\ObjectManagerInterface;
 use Neos\Flow\Persistence\PersistenceManagerInterface;
 use Neos\Neos\Domain\Service\UserService;
 use PHPUnit\Framework\Assert;
+use Sandstorm\E2ETestTools\Playwright\JsValue;
 use function PHPUnit\Framework\assertEquals;
 
 /**
@@ -96,11 +97,14 @@ trait NeosBackendControlTrait
     /**
      * @Then the URI path should be :uriPath
      */
-    public function theUriPathShouldBe($uriPath)
+    public function theUriPathShouldBe(string $uriPath): void
     {
-        $actual = $this->playwrightConnector->execute($this->playwrightContext, '
+        // waits for the URL first - after a click or redirect the navigation may still be running
+        $actual = $this->playwrightConnector->execute($this->playwrightContext, sprintf('
+            const expected = %s;
+            await vars.page.waitForURL((url) => url.pathname.replace(/\\/$/, "") === expected, {timeout: 5000}).catch(() => {});
             return vars.page.evaluate(() => window.location.pathname);
-        ');
+        ', JsValue::of(rtrim($uriPath, '/'))));
         Assert::assertEquals(rtrim($uriPath, '/'), rtrim($actual, '/'));
     }
 

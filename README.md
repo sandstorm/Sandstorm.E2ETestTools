@@ -60,6 +60,7 @@ Requires Neos 9 / Flow 9. For Neos 8, use the 8.x releases (latest: 8.3.2). For 
   - [Steps](#steps)
   - [Style Guide](#style-guide)
   - [Dynamic SUT URL](#dynamic-sut-url)
+  - [Mocked third-party APIs (WireMock)](#mocked-third-party-apis-wiremock)
 - [Running Behat Tests](#running-behat-tests)
   - [Debugging](#debugging)
 - [Migrating tests from Neos 8](#migrating-tests-from-neos-8)
@@ -280,6 +281,11 @@ e2e_test:
 Screenshots and traces go to the results directory (see [Debugging](#debugging)) - point it to the same place as
 the JUnit `--out` if your CI keeps one artifact folder.
 
+**Parallelising**: split the feature files across several CI jobs (GitLab `parallel:`), each with its **own** services
+(database, Redis, mock server, Playwright bridge) - generate a Behat config per shard, ideally balanced by the feature
+durations from the last JUnit report. Never run several Behat processes against one set of services: the database is
+reset per scenario, mocks are reset per scenario, and runner and SUT share caches on purpose.
+
 One GitLab-specific quirk worth knowing regardless of the example above: a job's *environment variables* are passed
 to *all* its `services:` too — so DB/Redis credentials set for the main job are what the DB/Redis services
 themselves also start with; there's no separate place to configure them.
@@ -418,7 +424,15 @@ Run the command in the Flow context with the content you export (e.g. inside you
 | `NodeImportTrait` | `I have/create the following nodes from file :fileName in site :siteName [with overwrites:]` |
 | `PersistentResourceTrait` (via `FusionRenderingTrait`) | `I have a textual persistent resource :uuid named :filename with the following content:` · `I have the following images:` |
 | `PlaywrightTrait` | `I do a screenshot :filename` · `I debug the playwright script` (prints the generated Playwright JS) |
-| `NeosBackendControlTrait` | `I access the URI path :uriPath` · `the response status code should be :status` · `there should be the text :expected on the page` · `the URI path should be :uriPath` · `I have a Neos backend user :username with password :password and role :role` · `I log into the backend using credentials :username :password [with username placeholder ... and password placeholder ...]` · `I click the main menu item :menuItem` · `I click the overview dashboard tile :tileTitle` · `I click the document tree entry :documentTitle` |
+| `NeosBackendControlTrait` | `I access the URI path :uriPath` · `the response status code should be :status` · `there should be the text :expected on the page` · `the URI path should be :uriPath` (waits for the navigation) · `I have a Neos backend user :username with password :password and role :role` · `I log into the backend using credentials :username :password [with username placeholder ... and password placeholder ...]` · `I click the main menu item :menuItem` · `I click the overview dashboard tile :tileTitle` · `I click the document tree entry :documentTitle` |
+| `PageAssertionsTrait` | `the page title should be :title` · `there should not be the text :text on the page` · `there should (not) be the text :text in :selector` · `the element with test id :testId should be visible/hidden/focused/enabled/disabled` · `the element with test id :testId should (not) be in the viewport` |
+| `FormInteractionTrait` | `I click the button :caption` · `I click the link :caption` · `I click the element with test id :testId` · `I fill :value into the field :label` · `the field :label should have the value :value` · `I check/uncheck the checkbox :label` · `the checkbox :label should (not) be checked` · `I choose the radio button :label` · `I select :option in the field :label` · `the field :label should have :option selected` · `I upload the file :fileName to the field :label` (relative to the feature file) · `I press the key :key` |
+| `BrowserStateTrait` | `the cookie :name should (not) be set` · `the cookie :name should have the value :value` · `I delete the cookie :name` · `the local/session storage key :key should have the value :value` · `the local/session storage key :key should not be set` · `I remove the local/session storage key :key` |
+| `WireMockTrait` | see [Mocked third-party APIs](#mocked-third-party-apis-wiremock) |
+
+The traits in the last four rows are opt-in: `FeatureContext.php.default` uses the first three. Remove project steps with
+the same wording before using them, otherwise Behat reports the steps as ambiguous. Buttons and links are found by
+their accessible name, fields by their label, elements by `data-testid`.
 
 What to test how:
 
@@ -431,8 +445,8 @@ What to test how:
 - **Page snapshot** (responsive, reproducible screenshots): `I render the page` + style guide —
   [PageRendering/FusionPageSnapshot.feature](Tests/Behavior/Examples/PageRendering/FusionPageSnapshot.feature).
 
-Project-specific steps go into your `FeatureContext`; `Tests/Behavior/Bootstrap/FeatureContext.php.default` has a few
-examples (`I pause for debugging`, `I should see the page title :title`) using `$this->playwrightConnector->execute()`.
+Project-specific steps go into your `FeatureContext`; `Tests/Behavior/Bootstrap/FeatureContext.php.default` has an
+example (`I pause for debugging`) using `$this->playwrightConnector->execute()`.
 
 ## Style Guide
 
@@ -486,6 +500,36 @@ public function mySubdomainIs(string $subdomain): void
     ));
 }
 ```
+
+## Mocked third-party APIs (WireMock)
+
+When the site talks to an external API (shop backend, CRM, newsletter service), tests run against
+[WireMock](https://wiremock.org) instead of the real API:
+
+1. Run WireMock next to the app, locally and in CI (Docker image `wiremock/wiremock`), and point the system under
+   test's E2E context to it (the API base URL setting of your project, e.g. `http://wiremock:8080/shop-api`).
+2. Use `WireMockTrait` in your `FeatureContext` and configure the APIs in its constructor:
+
+   ```php
+   $this->setupWireMock(getenv('WIREMOCK_ADMIN_URL') ?: 'http://wiremock:8080', [
+       'shop' => ['fixtures' => __DIR__ . '/../WireMock/shop', 'pathPrefix' => '/shop-api'],
+   ]);
+   ```
+3. Tag features that use the mock with `@wireMock` - WireMock is reset before each of their scenarios.
+
+Per API, the fixture directory holds `_base/*.json` (WireMock mapping files, loaded before every scenario), response
+bodies for "serves response" and one directory per scenario ("tape") of mapping files:
+
+| Step | |
+|---|---|
+| `the API :api path :path on :method serves response :file [with status :status]` | answers one call with a body file (`.json` may be omitted); wins over base stubs; a path with query string must match exactly |
+| `I load the stubs :tape of the API :api` | imports all mapping files of the tape directory |
+| `I clear all API stubs` | back to the base stubs, e.g. when the API's answer changes after an action |
+| `the API :api should have received :method :path [:count times]` | asserts the outgoing call - when the call is the feature |
+
+While writing a test, `'proxyBaseUrl' => 'https://real.api.example.com'` in the API config forwards unmatched requests
+to the real API, so you see which calls happen - never in CI. The WireMock admin API (`/__admin/mappings`) lists the
+active stubs.
 
 # Running Behat Tests
 

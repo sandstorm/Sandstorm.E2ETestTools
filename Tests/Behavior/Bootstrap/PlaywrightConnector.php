@@ -173,23 +173,25 @@ class PlaywrightConnector
         if ($statusCode === 500) {
             $bodyContents = $response->getBody()->getContents();
             $errorResponse = json_decode($bodyContents, true);
-            if ($errorResponse === false) {
+            // a script error comes with "error" and "js"; anything else (e.g. the bridge's browser crashed) is a
+            // generic error of the HTTP server - show its body instead of failing on the missing keys
+            if (!is_array($errorResponse) || !array_key_exists('js', $errorResponse)) {
                 throw new \RuntimeException(
-                    'Error executing playwright. Status code was: ' . $statusCode . ' - body contents: ' . $bodyContents
+                    'Error executing playwright (is the playwright-bridge healthy? restart it if every script fails). Status code was: ' . $statusCode . ' - body contents: ' . $bodyContents
                 );
             }
 
             throw new \RuntimeException(
                 sprintf(
                     "Error executing playwright script - error was: %s. \n\n Full script: \n %s",
-                    $errorResponse['error'],
+                    $errorResponse['error'] ?? '(none)',
                     $errorResponse['js']
                 )
             );
         } elseif ($statusCode === 200) {
             $bodyContents = $response->getBody()->getContents();
             $successResponse = json_decode($bodyContents, true);
-            if ($successResponse === false) {
+            if (!is_array($successResponse)) {
                 throw new \RuntimeException(
                     'Could not deserialize Playwright response, despite 200 status code. - body contents: ' . $bodyContents
                 );
