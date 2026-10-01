@@ -9,28 +9,18 @@ import {connect} from 'react-redux';
     // the export needs all of it, the node id alone isn't unique anymore.
     // Focused content node if there is one, else the current document (selected in the document tree).
     nodeAddress: state.cr.nodes.focused.contextPaths[0] ?? state.cr.nodes.documentNode,
-    currentUri: state.ui.contentCanvas.src
 }))
 
 export default class ExportNodeButton extends PureComponent {
     static propTypes = {
-        value: PropTypes.string,
-        commit: PropTypes.func.isRequired,
         nodeAddress: PropTypes.string,
-        currentUri: PropTypes.string,
         enabled: PropTypes.bool,
     };
 
     exportNodeButtonOnClick = () => {
+        // the backend and the export route share the host - a download, so no fetch()
         // @ts-ignore
-        const parts = this.props.currentUri.split('/');
-        const neosIndex = parts.indexOf('neos');
-        const baseUri = parts
-            .slice(0, neosIndex === -1 ? parts.length : neosIndex)
-            .join('/');
-
-        // @ts-ignore
-        window.location.href = baseUri + "/api/export-node?node=" + encodeURIComponent(this.props.nodeAddress ?? '');
+        window.location.href = '/api/export-node?node=' + encodeURIComponent(this.props.nodeAddress ?? '');
     };
 
     render() {

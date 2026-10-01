@@ -89,10 +89,7 @@
     constructor() {
       super(...arguments);
       this.exportNodeButtonOnClick = () => {
-        const parts = this.props.currentUri.split("/");
-        const neosIndex = parts.indexOf("neos");
-        const baseUri = parts.slice(0, neosIndex === -1 ? parts.length : neosIndex).join("/");
-        window.location.href = baseUri + "/api/export-node?node=" + encodeURIComponent(this.props.nodeAddress ?? "");
+        window.location.href = "/api/export-node?node=" + encodeURIComponent(this.props.nodeAddress ?? "");
       };
     }
     render() {
@@ -110,10 +107,7 @@
     }
   };
   ExportNodeButton.propTypes = {
-    value: import_prop_types.default.string,
-    commit: import_prop_types.default.func.isRequired,
     nodeAddress: import_prop_types.default.string,
-    currentUri: import_prop_types.default.string,
     enabled: import_prop_types.default.bool
   };
   ExportNodeButton = __decorateClass([
@@ -121,8 +115,7 @@
       // Neos 9: the contextPath is the serialized NodeAddress (content repository, workspace, dimension, node id) -
       // the export needs all of it, the node id alone isn't unique anymore.
       // Focused content node if there is one, else the current document (selected in the document tree).
-      nodeAddress: state.cr.nodes.focused.contextPaths[0] ?? state.cr.nodes.documentNode,
-      currentUri: state.ui.contentCanvas.src
+      nodeAddress: state.cr.nodes.focused.contextPaths[0] ?? state.cr.nodes.documentNode
     }))
   ], ExportNodeButton);
 

@@ -9,7 +9,7 @@ use Neos\ContentRepositoryRegistry\ContentRepositoryRegistry;
 use Neos\Flow\Package\PackageManager;
 
 /**
- * Public builder API to configure and create a NodeTable to use in your step generator command controller.
+ * Configures a {@see NodeTable} - get one from {@see NodeTableBuilderService::nodeTable()}.
  */
 class NodeTableBuilder
 {
@@ -26,7 +26,8 @@ class NodeTableBuilder
     }
 
     /**
-     * Extra columns for every row of the "I have the following images:" table, e.g. ['Copyright Notice' => '...'].
+     * Extra columns for the persistent resource part of every image row (Filename, Collection, ... - see
+     * {@see PersistentResourceFixtures}).
      */
     public function withDefaultPersistentResourceProperties(array $defaultPersistentResourceProperties): NodeTableBuilder
     {
@@ -35,7 +36,8 @@ class NodeTableBuilder
     }
 
     /**
-     * Extra columns for every image row, e.g. ['Copyright Notice' => '...'].
+     * Extra columns for the image part of every image row, e.g. ['Copyright Notice' => '...'] (read by
+     * "I have the following images:").
      */
     public function withDefaultImageProperties(array $defaultImageProperties): NodeTableBuilder
     {

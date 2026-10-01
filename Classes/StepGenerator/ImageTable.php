@@ -31,6 +31,7 @@ class ImageTable
             array_merge(
                 self::$IMAGE_DEFAULT_HEADER,
                 array_keys($defaultProperties),
+                $persistentResourceFixtures->defaultPropertyNames(),
                 PersistentResourceFixtures::$PERSISTENT_RESOURCE_DEFAULT_HEADER
             )
         );

@@ -65,6 +65,14 @@ class PersistentResourceFixtures
         ]);
     }
 
+    /**
+     * @return list<string> the extra columns {@see addPersistentResource()} adds to every row
+     */
+    public function defaultPropertyNames(): array
+    {
+        return array_keys($this->defaultProperties);
+    }
+
     public function storeFixtures(): void
     {
         if (count($this->fixtureResources) === 0) {
