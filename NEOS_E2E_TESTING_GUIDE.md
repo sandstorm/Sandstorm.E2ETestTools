@@ -84,7 +84,7 @@ This is the main workflow - use it for the feature you're building or fixing rig
 
 1. **List the features** you find in the project: NodeTypes (document and content types, their properties, mixins like
    `hiddenInMenu`), Fusion (integration prototypes, page and menu prototypes, lists, tiles and previews, and their
-   `@cache` configuration), settings (dimensions, routing, sites), node queries with FlowQuery in Fusion, PHP
+   `@cache` configuration), settings (dimensions, routing, sites), FlowQueries in Fusion, PHP
    application code (services, controllers, plugins, finishers, route part handlers, API clients), JavaScript
    components, and roles in `Policy.yaml` that change what visitors or editors see.
 2. **Decide what comes first:** business-critical features (checkout, forms, login), then what is used most and what
@@ -139,13 +139,13 @@ filters like "upcoming events". The `@cache` configuration decides when such a r
   after a node was added or changed - or a result that differs per visitor is cached for everybody.
 - **The list as a whole is wrong.** A tile list doesn't show all entries, shows the wrong ones, in the wrong order, or a
   limit or pagination cuts entries off; the empty state is missing.
-- **Visibility isn't respected.** Hidden or removed nodes are still listed, or visible ones are missing (for example
-  below a hidden parent, or in another language).
+- **Visible nodes are missing.** Neos leaves out hidden and removed nodes by itself; what goes wrong is a query that
+  also leaves out nodes that should be there (for example of a new NodeType, or in another language).
 
 **How to test:**
 
-- Create test data that includes the edge cases: a past event, an event without an end date, a hidden one, one below a
-  hidden parent, a node of a type that must not appear, more entries than the limit.
+- Create test data that includes the edge cases: a past event, an event without an end date, a node of a type that
+  must not appear, more entries than the limit.
 - Check the visible entries and their order: "the event list shows only upcoming events, including those without an
   end date".
 - For caching, use the [before/after pattern](#beforeafter-a-change): add or change a node and check that the list
@@ -209,7 +209,7 @@ The behaviour depends on another system: a shop backend, a CRM, a newsletter ser
 
 #### Combined kinds
 
-Most features combine several kinds. In a shop, the product list of a category is a node query, adding and removing
+Most features combine several kinds. In a shop, the product list of a category is a FlowQuery, adding and removing
 items in the basket is client-side logic, the prices come from the shop backend (an external system), voucher rules
 are application logic in PHP, and the mini basket in the header is markup and styling. Test each part where it's
 cheapest, and test in the browser whether the parts work together: does the plugin show up on the page, does the list
@@ -297,8 +297,8 @@ what test data you need, and which [pattern](#scenario-patterns) or pitfall matt
   shortcuts to removed pages and wrong language prefixes. A newly created page must appear in the menu without anyone
   flushing the cache. Neos' menu prototypes leave out hidden pages and pages with `hiddenInMenu` by themselves - check
   that only for menus built with their own query.
-- **Where:** in the browser, because menus depend on the current page and the request. Menus are
-  [node queries](#querying-nodes).
+- **Where:** in the browser, because menus depend on the current page and the request. Menus are built with
+  [FlowQueries](#querying-nodes).
 - **Test data:** the exported page tree, with the edge cases added as overwrites (a shortcut, a very long page title).
 
 ```gherkin
@@ -384,7 +384,7 @@ project relies on URLs or adds routes itself.
   - for fixed URLs: the URL leads to the right page, with `the response status code should be` and
     `the URI path should be`;
   - after renaming a page, the old URL redirects to the new one;
-  - an unknown URL answers with 404 and shows the 404 page; canonical and hreflang tags point to the right URLs.
+  - an unknown URL answers with 404 and shows the 404 page.
 - **Where:** in the browser. Route part handlers and controllers with their own logic also get PHP functional tests.
 
 ### Content elements (every NodeType with a Fusion integration)
@@ -424,57 +424,140 @@ Scenario: teaser without link target renders no link
 
 ### Links and references
 
-- **What breaks:** `node://` and `asset://` links that aren't turned into real URLs, references to hidden or removed
-  nodes that break the page, and references that lose their order.
-- **What to check:** the `href` values (`in the fusion output, the attributes of CSS selector ... are:`), and that the
-  page still works (status 200) when a referenced node is hidden or removed.
-- **Where:** in the browser; many link states can also be rendered directly with Fusion.
-- **Test data:** references with `the following node references:`. To hide or remove a referenced node, use the
+Much of this is Neos' job: a link in a text to a page the editor has hidden is simply not rendered, and references
+to hidden or removed nodes are left out. That needs no tests of your own. What is yours is the decision what a
+component does when its link is missing or of a certain kind - and that decision differs from component to component.
+
+- **What breaks:**
+  - **an empty link target** - the editor selects nothing in the link editor, or the linked page is hidden or removed
+    later. What should happen depends on the component: inside a bigger component (a teaser, a tile) the link is left
+    out and the rest stays; a button is shown disabled or not at all; a component without its link makes no sense and
+    disappears. Without a test, the result is often an `<a>` without `href`, an empty button or a link to the current
+    page;
+  - **external links** are meant to look and behave differently - an icon, a new tab, `rel="noopener"` - and lose that,
+    or internal links get it too;
+  - `node://` and `asset://` values of a link property that your Fusion passes on without turning them into real URLs;
+  - a component that shows referenced nodes renders an empty frame when all of them are hidden or removed.
+- **What to check:**
+  - **one scenario per link state the component handles differently**: internal, external, asset, empty - and, where
+    it matters, a target that is hidden or removed later;
+  - the visible result of each state: the link and its `href` (`in the fusion output, the attributes of CSS selector
+    ... are:`), the disabled button, the icon of the external link, or that there is no link at all - always together
+    with the rest of the component that must still be there (see [assertions](#assertions)).
+- **Where:** link states are rendering states - render them directly with Fusion when there are many of them (like the
+  [teaser example above](#content-elements-every-nodetype-with-a-fusion-integration)). A target that is hidden later
+  needs a real request, because direct Fusion rendering shows hidden nodes.
+- **Test data:** link properties as values in the `Properties` column, references with
+  `the following node references:`. To hide or remove a target later, use the
   [before/after pattern](#beforeafter-a-change).
 
 ### Lists, previews and tiles
 
-These are nodes that show data of *other* nodes: news and event lists, teaser tiles, "related pages", and previews of a
-page on an overview page. They load these nodes with [node queries](#querying-nodes).
+These are nodes that aggregate data of *other* nodes from somewhere else in the tree: news and event lists, teaser
+tiles, "related pages", and previews of a page on an overview page. They collect these nodes with
+[FlowQueries](#querying-nodes). Neos leaves out hidden and removed nodes by itself - the typical bug is the opposite:
+something that should be listed is missing.
 
-- **What breaks:** which nodes are selected (type, category, part of the tree), the sort order, limits and pagination,
-  hidden or removed nodes that are still listed, the empty state, the fields of a preview (title, image, teaser text
-  and what is shown when they're missing), and lists that don't update after a listed node changed.
-- **What to check:** the visible items in the right order (titles, number of items), the empty state and the values a
-  preview takes from its source. Then use the [before/after pattern](#beforeafter-a-change): add a node, change a
-  title, hide one - and check that the list follows.
+- **What breaks:**
+  - **tiles are missing,** because the FlowQuery starts at the wrong node, only looks at direct children or filters by
+    the wrong NodeType or property;
+  - **pagination doesn't work,** so visitors can't reach all available nodes: a page is skipped, the last page is cut
+    off, or the "more" link is missing;
+  - **the sort order is wrong or was never implemented** - usually it's most recent first (by date) or A to Z, and
+    without explicit sorting the list simply follows the order in the tree;
+  - **a new document doesn't show up** in the list, because the `@cache` configuration of the list doesn't cover the
+    listed nodes;
+  - the empty state is missing, and the fields of a preview (title, image, teaser text) are wrong or broken when the
+    source page doesn't have them.
+- **What to check:**
+  - the visible items in the right order - titles and number of items;
+  - with pagination: more nodes than fit on one page, and that every node can be reached by paging through;
+  - the empty state, and the values a preview takes from its source;
+  - caching with the [before/after pattern](#beforeafter-a-change): visit the list, add a document or change a title,
+    visit again without flushing the cache - and check that the list follows.
 - **Where:** in the browser; many selection and preview states can also be rendered directly with Fusion (render the
-  list with its page as context).
-- **Test data:** several nodes with clearly different sort values (dates, titles), one hidden node and one of a type
-  that must not appear.
+  list with its page as context). Check caching in the browser, where the site under test uses its real cache.
+- **Test data:** several nodes with clearly different sort values (dates, titles) created in a different order than
+  the expected one, more nodes than one page shows, and one of a type that must not appear.
 
 ### Assets and media
 
-- **What breaks:** image variants and `srcset`, missing `alt` texts, images that were deleted but are still used by a
-  node, and download links.
-- **What to check:** the attributes (`src`, `srcset`, `alt`), and that a download link answers with status 200 and the
-  right file name.
-- **Where:** in the browser.
+The content of images - the picture, the alt text, the file name - comes from editors or an AI agent and is not a
+matter of tests. What a developer can get wrong or forget is the wiring in the rendering.
+
+- **What breaks:**
+  - **the alt text isn't wired:** the `alt` attribute is missing, empty although the editor entered a text, or shows
+    the text of another property. If your project uses a fallback helper (for example the file name when there's no
+    alt text), the fallback isn't applied;
+  - **`srcset` is missing** - it should be there for most images, otherwise every visitor loads the same large file -
+    or `sizes` is missing, so the browser assumes the image is as wide as the viewport;
+  - **an empty image property** produces an `<img>` without `src`, an empty frame or a rendering error instead of
+    leaving the image out (or showing the placeholder your design defines);
+  - download links point to the wrong file or answer with an error.
+- **What to check:**
+  - `alt` in each case your rendering handles: with the editor's text, without it (fallback or `alt=""` for decorative
+    images);
+  - that `srcset` has several candidates and `sizes` is set - modern browsers also accept `sizes="auto"` for lazily
+    loaded images;
+  - the component without an image;
+  - that a download link answers with status 200 and the right file name.
+
+  Use `in the fusion output, the attributes of CSS selector ... are:` or a check on the element's attributes in the
+  browser.
+- **Don't check which candidate the browser picks** from `srcset`. That depends on viewport size, pixel density, the
+  browser's cache and the image itself - such a test is flaky and tests the browser, not your project.
+- **Where:** in the browser; the attribute checks can also be done with direct Fusion rendering.
 - **Test data:** `I have the following images:` or `I have a textual persistent resource ...`. The asset id in the step
-  must match the id in the node property.
-- **Pitfall:** thumbnails may be generated later, in the background - check attributes, not pixels.
+  must match the id in the node property. One image with alt text and one without.
 
-### Languages and other dimensions
+### Languages and other content dimensions
 
-- **What breaks:** fallbacks (content in a language variant that is missing or wrong), a language switcher that points
-  to untranslated pages, and menus that mix languages.
-- **What to check:** for each language the right text and the right URL prefix, and that the language switcher links to
-  the matching page or to the defined fallback.
+Neos resolves content dimensions and their fallbacks by itself: a page without its own variant in one language shows
+the content of the fallback language as configured. That's Neos' job and needs no tests of your own. Test what your
+project adds on top.
+
+- **What breaks:**
+  - **customized fallbacks:** your own rules how content falls back (for example per market, or only for some
+    NodeTypes) show the wrong variant or none;
+  - **business logic per dimension:** content, prices, legal texts or features that only exist in one country or
+    language show up in the others, or are missing where they belong;
+  - **the language switcher** your project renders links to the wrong page, or doesn't handle pages that have no
+    variant in a language the way your design defines (leave the language out, link to its home page, ...).
+- **What to check:** one scenario per rule of your project - the visible content in the dimension where the rule
+  applies, and in one where it doesn't; for the language switcher, its links on a translated and on an untranslated
+  page.
 - **Where:** in the browser.
-- **Test data:** set `DimensionSpacePoint` on every row, and create every language variant you check.
+- **Test data:** set `DimensionSpacePoint` on every row, and create exactly the variants the rule depends on - a missing
+  variant is often the case under test.
 
-### SEO and meta tags
+### SEO, GEO and meta tags
 
-- **What breaks:** title and description fallbacks, the Open Graph image, the set of hreflang tags, robots tags for
-  hidden or noindex pages, and a `sitemap.xml` that lists hidden pages.
-- **What to check:** the tag values and the content of the sitemap (project steps like
-  `the page should have the meta tag ...` and `the sitemap should (not) contain ...`).
-- **Where:** in the browser; many title and meta states can also be rendered directly with `I render the page`.
+Title, meta description, canonical and hreflang tags, robots tags and the sitemap come from Neos or an SEO package
+like Neos.Seo. Their default logic needs no tests of your own. Test only what your project adds on top - where it
+wires its own content into SEO or deviates from the default logic. The same goes for GEO (generative engine
+optimisation - being found and quoted by AI search): it's mostly built per NodeType, so it's yours to test.
+
+- **What breaks:**
+  - **content wired into SEO:** images of the page are reused as Open Graph or Twitter image, texts like the teaser
+    text become the meta description or title - and the wrong property is used, or nothing when it's empty;
+  - **texts that deviate from the default:** a title pattern, a suffix or a description rule of your project is not
+    applied, or applied on the wrong pages;
+  - **structured data your project builds** (JSON-LD per NodeType: an event as `Event`, an FAQ element as `FAQPage`,
+    a product as `Product`) has wrong or missing values, or is invalid JSON. An `Event` without `startDate` is worse
+    than none;
+  - **content that only JavaScript shows** - tabs filled by fetch, client-side filters - doesn't exist for crawlers,
+    as most AI crawlers don't run JavaScript;
+  - **project rules for indexing:** NodeTypes or areas that must be `noindex`, left out of the sitemap, or - if your
+    project builds them itself - handled in `robots.txt` rules for AI crawlers or an `llms.txt`.
+- **What to check:**
+  - the tag values for each addition of your project, with and without the content it's wired to (project steps like
+    `the page should have the meta tag ...` and `the sitemap should (not) contain ...`);
+  - the JSON-LD of each NodeType in its rendering states, especially with empty optional properties: valid JSON, the
+    right type and the required fields;
+  - for content crawlers must see: that it's in the HTML the server sends - check the response body, not the page
+    after JavaScript ran (a project step, because Playwright checks the rendered page).
+- **Where:** in the browser; many tag and JSON-LD states can also be rendered directly with `I render the page` or
+  direct Fusion rendering.
 
 ### Forms
 
