@@ -4,7 +4,7 @@ This guide helps you write end-to-end tests that are worth having in a Neos 9 pr
 are easy to read and don't break for the wrong reasons. It's written for people and for coding agents. It assumes
 the package is already set up (see the [README](README.md)) and doesn't explain Behat, Gherkin or Playwright
 basics. Many of the rules come from test suites of production Neos projects - from what worked there and from what
-didn't.
+didn't. They are defaults: deviate where your project needs it, and write down why.
 
 **How to read it:** the [principles](#principles) are the short version. When you work on a feature, follow
 [from feature to scenarios](#from-feature-to-scenarios) - it tells you when to look into the other sections.
@@ -12,7 +12,7 @@ didn't.
 **Terms used throughout:** the *site under test* is the copy of your site that the browser visits during a test run
 (its own Flow context, database and port). The *Behat process* is where your steps run - it creates the test data and
 talks to the browser. *Rendering states* are the situations in which a feature looks or behaves differently: with or
-without image, empty or very long text, hidden parts, logged in or not, another language.
+without image, empty or very long text, optional parts, logged in or not, another language.
 
 **Shipped and project steps:** steps marked "project step" in the examples don't come with this package - you write
 them in your project's `FeatureContext`. All other steps are shipped (see the steps overview in the README).
@@ -71,9 +71,9 @@ This is the main workflow - use it for the feature you're building or fixing rig
    [catalogue entry](#feature-catalogue) - the catalogue lists what typically breaks for this kind of feature.
 3. **Decide how to test each behaviour:** [where the test runs](#where-does-the-test-run), and
    [how much interaction it takes](#how-much-interaction-does-it-take-to-test-the-feature) to test it.
-4. **Write down the list of scenarios first** - names only. Cover the rendering states (empty, full, extreme, hidden,
-   other language), the interaction paths of journeys, the edges of the rules, the cases where something must *not*
-   happen, and the bug you're fixing.
+4. **Write down the list of scenarios first** - names only. Cover the rendering states (empty, full, extreme, logged in
+   or not, other language), the interaction paths of journeys, the roles, the edges of the rules, the cases where
+   something must *not* happen, and the bug you're fixing.
    Review the list before writing anything else: changing a list is cheap, rewriting scenarios isn't.
 5. **Prepare the test data.** Build example content in the backend, or find a page that already shows the feature, and
    export it by its URL. Replace external systems by mocks. See [test data and environment](#test-data-and-environment).
@@ -93,119 +93,61 @@ This is the main workflow - use it for the feature you're building or fixing rig
 
 ## Three questions per behaviour
 
-Before writing a scenario, answer three questions for the behaviour it tests. Where the behaviour comes from decides
-where its logic is best tested; where the test runs decides how fast and how realistic it is; and how much interaction
-it takes to test the feature decides how long the scenario gets.
+Before writing a scenario, answer three questions for the behaviour it tests: where it comes from decides where its
+logic is tested cheapest, where the test runs decides how fast and realistic it is, and how much interaction it takes
+decides how long the scenario gets. What typically breaks is listed per feature in the [catalogue](#feature-catalogue).
 
 ### Where does the behaviour come from?
 
 #### Markup and styling
 
 The content of a node is turned into HTML, CSS styles it, and presentation JavaScript (a slider, an accordion) adds
-behaviour without real logic. In Neos this rendering is mostly done with Fusion, sometimes with Fluid templates or
-helpers written in PHP - for the test it doesn't matter how, only what the visitor gets. Content elements, page
-layouts and SEO tags are markup and styling.
+behaviour without real logic. In Neos this is mostly Fusion, sometimes Fluid templates or helpers written in PHP - for
+the test it doesn't matter how, only what the visitor gets. Typical bugs: a property that isn't rendered, a missing
+condition, markup that breaks for unusual content.
 
-**What breaks** - and why:
-
-- **A property isn't rendered,** because it was renamed in the NodeType but not in the rendering, or isn't passed on.
-- **A condition is missing or wrong** - something is shown that should be hidden. Example: a teaser renders a link
-  even though no link target is selected.
-- **The markup breaks for unusual content** - empty fields, very long texts, umlauts, HTML in a text property.
-- **CSS hides or cuts off content,** for example a long title that is clipped or a layout that breaks on mobile.
-- **Constraints allow content in the wrong place,** so an element ends up where its markup doesn't work.
-
-**How to test:**
-
-- One scenario per rendering state: "teaser without link target renders no link", "teaser with a long title is not
-  cut off".
-- Many rendering states of one element can be rendered directly with Fusion; one browser scenario checks the element
-  in a real page.
+**How to test:** one scenario per rendering state ("teaser without link target renders no link"). Many states of one
+element can be rendered [directly with Fusion](#direct-fusion-rendering---for-many-rendering-states); one browser
+scenario checks the element in a real page.
 
 #### Querying nodes
 
-Fusion loads other nodes from the content repository with FlowQuery: news and event lists, menus, "related pages",
-filters like "upcoming events". The `@cache` configuration decides when such a result is calculated again.
+Fusion loads other nodes from the content repository with FlowQuery: lists, tiles, menus, "related pages", filters like
+"upcoming events". The `@cache` configuration decides when such a result is calculated again. Typical bugs: the query
+starts at the wrong node, the filter misses an edge case, the cache doesn't notice new nodes.
 
-**What breaks** - and why:
-
-- **The query looks in the wrong place.** It starts at the wrong node or walks the tree the wrong way (only direct
-  children instead of all descendants, the current page instead of the whole site) - entries are missing or come from
-  the wrong part of the site.
-- **The filter is wrong.** It checks the wrong NodeType or property, or forgets an edge case - the list shows entries
-  that don't belong there. Example: the event list shows past events, because the filter doesn't handle events without
-  an end date.
-- **The `@cache` configuration doesn't fit.** Its entry tags don't cover the listed nodes, so the list stays the same
-  after a node was added or changed - or a result that differs per visitor is cached for everybody.
-- **The list as a whole is wrong.** A tile list doesn't show all entries, shows the wrong ones, in the wrong order, or a
-  limit or pagination cuts entries off; the empty state is missing.
-- **Visible nodes are missing.** Neos leaves out hidden and removed nodes by itself; what goes wrong is a query that
-  also leaves out nodes that should be there (for example of a new NodeType, or in another language).
-
-**How to test:**
-
-- Create test data that includes the edge cases: a past event, an event without an end date, a node of a type that
-  must not appear, more entries than the limit.
-- Check the visible entries and their order: "the event list shows only upcoming events, including those without an
-  end date".
-- For caching, use the [before/after pattern](#beforeafter-a-change): add or change a node and check that the list
-  follows.
+**How to test:** test data with the edge cases (a node of a type that must not appear, more entries than the limit),
+then check the visible entries and their order. For caching, change something after the first visit
+([before/after](#beforeafter-a-change)).
 
 #### Client-side logic
 
 JavaScript decides what happens when the visitor interacts with the page: filters, configurators, price calculators, the
-basket, the cookie consent. This is real logic with code branches and state, even if no PHP is involved.
-
-**What breaks** - and why:
-
-- **A code branch nobody tried** - for example a filter combination that leads to an empty or wrong result.
-- **The state gets out of sync** - for example the basket after removing the last item, or after going back in the
-  browser.
-- **An interaction path behaves differently** - the same actions in a different order. Example: the price calculator
-  forgets the quantity when the size is changed afterwards; choosing the size first works fine.
-- **Timing** - a click before the script is ready, or two quick clicks in a row.
+basket, the cookie consent. This is real logic with code branches and state, even if no PHP is involved. Typical bugs:
+a code branch nobody tried, state that gets out of sync, an interaction path that behaves differently.
 
 **How to test:**
 
-- Test the calculation and state logic with JavaScript unit tests - they're fast and can cover every code branch.
-- Add browser scenarios for how it works together with the page, one per interaction path that leads to a different
-  result: "changing the size after the quantity keeps the quantity and updates the price".
+- the calculation and state logic with JavaScript unit tests - fast, and they can cover every code branch;
+- in the browser, one scenario per interaction path that leads to a different result: "changing the size after the
+  quantity keeps the quantity and updates the price".
 
 #### Application logic in PHP
 
-PHP code you write to model business rules or to connect other systems: services, domain models, controllers and
-plugins, form finishers, route part handlers, API clients.
+PHP code you write for business rules or to connect other systems: services, domain models, controllers and plugins,
+form finishers, route part handlers, API clients. Typical bugs: a gap in a business rule, data from another system
+mapped wrongly, parts that don't fit together (the plugin isn't on the page, the finisher isn't called).
 
-**What breaks** - and why:
-
-- **A business rule has a gap** - a code branch or edge case nobody thought of. Example: a voucher is still accepted
-  after its expiry date, because the PHP service compares the dates in the wrong timezone.
-- **Data from another system is mapped wrongly** - a missing field, a different format, an unexpected value.
-- **The parts don't fit together** - the plugin isn't shown on the page, or the form finisher isn't called.
-
-**How to test:**
-
-- Mainly with PHP unit and functional tests - they're fast and can cover every code branch.
-- In the browser, only the normal case and one error case, to check that the parts work together: "a valid voucher
-  reduces the total", "an expired voucher shows an error message".
+**How to test:** mainly with PHP unit and functional tests. In the browser only the normal case and one error case, to
+check that the parts work together: "a valid voucher reduces the total", "an expired voucher shows an error message".
 
 #### External systems
 
-The behaviour depends on another system: a shop backend, a CRM, a newsletter service, a mail server.
+The behaviour depends on another system: a shop backend, a CRM, a newsletter service, a mail server. Typical bugs: the
+agreement between the systems changes, error answers aren't handled, the call isn't made or carries the wrong data.
 
-**What breaks** - and why:
-
-- **The agreement between the systems changes** - for example a field is renamed in the API answer.
-- **Error answers aren't handled.** Example: the order page crashes when the shop backend answers with an error.
-- **The call isn't made, or made with the wrong data** - the page looks fine, but the order never reaches the shop
-  backend.
-
-**How to test:**
-
-- Browser scenarios against mocks of the other system (see [external APIs](#external-apis) and
-  [mail catching](#mail-catching-mailpit)).
-- Include the error answers: "a failing shop backend shows a retry message".
-- Check the outgoing call when it is the feature: the order was sent with the right data.
+**How to test:** browser scenarios against mocks of the other system, including its error answers (see
+[external APIs](#external-apis) and [mail catching](#mail-catching-mailpit)).
 
 #### Combined kinds
 
@@ -220,9 +162,9 @@ show the right products, does the form finisher really send the mail.
 #### In the browser - the default
 
 `I access the URI path ...` sends a real request through the web server, routing and caches, and the page runs its
-JavaScript in a real browser - exactly what a visitor gets. Example: "the hidden page is not in the main menu" needs a
-real request, because visibility and the current page only exist there; "the slider shows the next image" needs
-JavaScript. A browser scenario is what proves that a feature works.
+JavaScript in a real browser - exactly what a visitor gets. Example: "the main menu marks the current page" needs a real
+request, because the current page only exists there; "the slider shows the next image" needs JavaScript. A browser
+scenario is what proves that a feature works.
 
 #### Direct Fusion rendering - for many rendering states
 
@@ -231,10 +173,10 @@ real node - directly to HTML, inside the Behat process. There is no HTTP request
 and when it fails you know the cause is in Fusion or in how the NodeType is wired. Strictly speaking, this is a
 component test written with Behat, not an end-to-end test.
 
-Use it when one element has many rendering states. Ten teaser states (empty, full, extreme, with and without link
-and so on) render in about a second this way. Then one browser scenario is enough to check that the teaser also works
-in a real page. Keep in mind what direct rendering can't see: routing, the visibility rules of the website (it shows
-hidden nodes), caches and JavaScript.
+Use it when one element has many rendering states: ten teaser states render in about a second, and one browser
+scenario then checks the teaser in a real page. Direct rendering can't see routing, caches, JavaScript, or the
+visibility and access rules of the website - `I get the node` only leaves out removed nodes, so hidden nodes are
+rendered.
 
 #### In the backend - for the editor experience
 
@@ -244,30 +186,20 @@ editor without the right role can't open the order module".
 
 ### How much interaction does it take to test the feature?
 
-This is about how much interaction - and how complex a visitor's behaviour - a scenario has to simulate before the
-feature can be checked. A button only needs to be rendered; a checkout needs a whole sequence of actions, maybe ending
-with a confirmation mail.
-
 #### None - opening the page is enough (the default)
 
-The result depends only on content and state that you can set up as test data. The scenario creates the test data,
-visits the page once and checks the result - a handful of steps. Content elements, menus, visibility, routing, SEO and
-lists are tested this way.
-
-Example: "the button links to the contact page" or "the main menu marks the current page" - create the content, open
-the page, check the result. Anything you can set up as test data belongs there, not into steps that click it together
-in the browser. Short scenarios fail precisely and run fast.
+The result depends only on content and state that you can set up as test data: create it, visit the page once, check
+the result - a handful of steps. "The button links to the contact page", "the main menu marks the current page".
+Anything you can set up as test data belongs there, not into steps that click it together in the browser. Short
+scenarios fail precisely and run fast.
 
 #### Journey - when the interaction is the feature
 
 Here the visitor's actions change something that later results depend on: basket and checkout, login and account,
-consent, user preferences, wishlists, forms with several steps. The order of the steps *is* the feature.
-
-Example: "a completed checkout shows the order confirmation and sends the confirmation mail" can only be tested by
-adding items, going through the checkout steps and checking the page and the mail at the end. Likewise, "the basket
-keeps its items after login" needs adding items, logging in and looking at the basket again. In shops and app-like
-sites, such journeys *are* the integration test, and the test suite grows large - that's fine, as long as you follow
-these rules:
+consent, wishlists, forms with several steps. The order of the steps *is* the feature. "A completed checkout shows the
+order confirmation and sends the confirmation mail" can only be tested by adding items, going through the checkout and
+checking the page and the mail at the end. In shops and app-like sites, such journeys *are* the integration test, and
+the suite grows large - that's fine, as long as you follow these rules:
 
 - **One behaviour per journey.** Test one discount type per scenario (or use a `Scenario Outline` with one row per
   type), not one long scenario that walks through product page, search, mini basket and basket for every type.
@@ -276,11 +208,9 @@ these rules:
   different result as its own scenario - bugs often hide where paths meet, for example going back after changing the
   address.
 - **Start as late as possible.** Set up everything that isn't the behaviour you're testing as test data: content,
-  mocked API answers, a logged-in user if the login isn't what you test. See
-  [reaching a late start state](#reaching-a-late-start-state).
+  mocked API answers, a logged-in user if the login isn't what you test, the cookie consent if the banner isn't what
+  you test. See [reaching a late start state](#reaching-a-late-start-state).
 - **Check at the moments that matter** - after each action that belongs to the behaviour, not after every click.
-- **Name the journey after the behaviour** ("voucher is removed when the basket falls below its minimum value"), not
-  after the path through the site ("order flow 3").
 
 ## Feature catalogue
 
@@ -293,9 +223,9 @@ what test data you need, and which [pattern](#scenario-patterns) or pitfall matt
   point nowhere, menus in other languages - and, very often, caching: a newly created or renamed page doesn't appear in
   the menu, because the cached menu isn't updated.
 - **What to check:** the resulting structure - labels in the right order, nesting, which item is marked as current -
-  rather than markup details. Every link in the menu must answer with status 200; this catches broken URL segments,
-  shortcuts to removed pages and wrong language prefixes. A newly created page must appear in the menu without anyone
-  flushing the cache. Neos' menu prototypes leave out hidden pages and pages with `hiddenInMenu` by themselves - check
+  rather than markup details. Every link in the menu must answer with status 200 - a cheap check that catches broken
+  URL segments and wrong language prefixes. A newly created page must appear in the menu without anyone flushing the
+  cache. Neos' menu prototypes leave out hidden pages and pages with `hiddenInMenu` by themselves - check
   that only for menus built with their own query.
 - **Where:** in the browser, because menus depend on the current page and the request. Menus are built with
   [FlowQueries](#querying-nodes).
@@ -313,10 +243,8 @@ Scenario: main menu shows the pages in order and marks the current one
   And all links in "nav.main" should respond with 200         # project step
 ```
 
-Caching needs its own scenario that follows the [before/after pattern](#beforeafter-a-change) in one go: set up the
-page tree, open a page and check the menu, create a new page, reload and check again. There must be no cache flush in
-between - whether the menu updates by itself is exactly what's tested (see [caches](#caches) for what the test setup
-needs for this).
+Caching needs its own scenario that follows the [before/after pattern](#beforeafter-a-change) - with no cache flush
+in between, because whether the menu updates by itself is exactly what's tested (see [caching](#caching)).
 
 ```gherkin
 Scenario: a newly created page appears in the main menu without a cache flush
@@ -333,36 +261,30 @@ Scenario: a newly created page appears in the main menu without a cache flush
 ### Visibility and access
 
 Neos already keeps hidden nodes and pages with `hiddenInMenu` out of the website - that's Neos' job and doesn't need
-your tests (see [principles](#principles)). Two things are worth testing: visible content that doesn't show up, and
-content that is meant for certain users only.
+your tests. What's worth testing is content meant for certain users only, and places where your project bypasses
+Neos. Visible content that a list or query leaves out is covered under [lists](#lists-previews-and-tiles).
 
 - **What breaks:**
-  - visible content is missing, because a project condition, filter or query leaves out too much (for example a
-    teaser list that skips nodes of a new NodeType, or content that only appears in one language);
   - **content for certain frontend users** (an intranet, a members area) is shown to the wrong visitors - or not to the
     ones who may see it. These pages are not hidden in the tree; who sees them depends on the visitor's login and role;
   - **restricted editing in the backend:** some editors may only see and edit a certain subtree, and see or change more
     or less than their role allows;
   - hidden content leaks where your project bypasses Neos' visibility rules: its own PHP queries, a search index, the
     sitemap, meta tags or exports.
-- **What to check:**
-  - that the visible content is there - the page, the teaser, the menu entry;
-  - for content for certain users: **one scenario per role**, because every role is its own path. A user with the
-    role sees the page, its menu entry, teasers and search results; a user without it and an anonymous visitor see none
-    of these, and opening the page's URL directly leads to the login or an access error;
-  - for restricted editing, also one scenario per role: the editor sees and can edit their subtree, and can neither see
-    nor edit the rest - neither in the document tree nor by opening a page directly;
+- **What to check** - [one scenario per role](#one-scenario-per-role):
+  - for content for certain users: a user with the role sees the page, its menu entry, teasers and search results; a
+    user without it and an anonymous visitor see none of these, and opening the page's URL directly leads to the login
+    or an access error;
+  - for restricted editing: the editor sees and can edit their subtree, and can neither see nor edit the rest -
+    neither in the document tree nor by opening a page directly;
   - absence of hidden content only where your project bypasses Neos' visibility rules - and always together with
     something visible (see [assertions](#assertions)).
-- **Where:** in the browser for the website, in the backend for restricted editing. Direct Fusion rendering shows
-  hidden nodes, because `I get the node` only leaves out removed nodes - only a real request applies the website's
-  visibility and access rules.
+- **Where:** in the browser for the website, in the backend for restricted editing - only a real request applies the
+  website's visibility and access rules.
 - **Test data:** users with the roles of your project - backend users with
   `I have a Neos backend user :username with password :password and role :role`, frontend users with a project step.
   The `Hidden` column or `hidden: true` where a hidden node is part of the case; child nodes inherit it, so hide the
   parent to test a whole subtree.
-- **Pitfall:** showing pages only within a time range (publish and unpublish dates) isn't part of Neos 9 itself. Only
-  test it if your project uses a package for it, and then control the clock in the test.
 
 ### Routing and URLs
 
@@ -379,8 +301,8 @@ project relies on URLs or adds routes itself.
   - custom route part handlers resolve the wrong node or build wrong URLs.
 - **What to check:**
   - for your own controllers and actions: the route answers with status 200 for the users who may use it, and with
-    the login or an access error for everyone else - **one scenario per role**, because every role is its own path.
-    Invalid input leads to an error page or message (400, 404), not to a crash (500);
+    the login or an access error for everyone else ([one scenario per role](#one-scenario-per-role)). Invalid input
+    leads to an error page or message (400, 404), not to a crash (500);
   - for fixed URLs: the URL leads to the right page, with `the response status code should be` and
     `the URI path should be`;
   - after renaming a page, the old URL redirects to the new one;
@@ -389,9 +311,10 @@ project relies on URLs or adds routes itself.
 
 ### Content elements (every NodeType with a Fusion integration)
 
-- **What breaks:** a property that isn't passed to the component, empty required properties that produce broken
-  markup, child nodes that aren't rendered, editing markup of the backend that shows up on the live site, and
-  constraints that allow content in places where it doesn't belong.
+- **What breaks:** a property that isn't passed to the component (often after a rename in the NodeType), empty
+  properties that produce broken markup, child nodes that aren't rendered, editing markup of the backend that shows up
+  on the live site, CSS that cuts off long texts or breaks on mobile, and constraints that allow content in places
+  where it doesn't belong.
 - **What to check:**
   - **Every building block renders without an error.** Each component and each NodeType integration must render with
     only its required properties filled - one broken element can break the whole page. A `Scenario Outline` over all
@@ -446,7 +369,7 @@ component does when its link is missing or of a certain kind - and that decision
     with the rest of the component that must still be there (see [assertions](#assertions)).
 - **Where:** link states are rendering states - render them directly with Fusion when there are many of them (like the
   [teaser example above](#content-elements-every-nodetype-with-a-fusion-integration)). A target that is hidden later
-  needs a real request, because direct Fusion rendering shows hidden nodes.
+  needs a real request (see [direct Fusion rendering](#direct-fusion-rendering---for-many-rendering-states)).
 - **Test data:** link properties as values in the `Properties` column, references with
   `the following node references:`. To hide or remove a target later, use the
   [before/after pattern](#beforeafter-a-change).
@@ -459,8 +382,8 @@ tiles, "related pages", and previews of a page on an overview page. They collect
 something that should be listed is missing.
 
 - **What breaks:**
-  - **tiles are missing,** because the FlowQuery starts at the wrong node, only looks at direct children or filters by
-    the wrong NodeType or property;
+  - **tiles are missing,** because the FlowQuery starts at the wrong node, only looks at direct children, filters by
+    the wrong NodeType or property, or misses an edge case (an event list that drops events without an end date);
   - **pagination doesn't work,** so visitors can't reach all available nodes: a page is skipped, the last page is cut
     off, or the "more" link is missing;
   - **the sort order is wrong or was never implemented** - usually it's most recent first (by date) or A to Z, and
@@ -473,12 +396,12 @@ something that should be listed is missing.
   - the visible items in the right order - titles and number of items;
   - with pagination: more nodes than fit on one page, and that every node can be reached by paging through;
   - the empty state, and the values a preview takes from its source;
-  - caching with the [before/after pattern](#beforeafter-a-change): visit the list, add a document or change a title,
-    visit again without flushing the cache - and check that the list follows.
+  - that the list follows a new document or a changed title (see [caching](#caching)).
 - **Where:** in the browser; many selection and preview states can also be rendered directly with Fusion (render the
-  list with its page as context). Check caching in the browser, where the site under test uses its real cache.
+  list with its page as context).
 - **Test data:** several nodes with clearly different sort values (dates, titles) created in a different order than
-  the expected one, more nodes than one page shows, and one of a type that must not appear.
+  the expected one, more nodes than one page shows, and one of a type that must not appear. For lists that depend on
+  today ("upcoming events"), see [dates](#dates-relative-to-today).
 
 ### Assets and media
 
@@ -561,11 +484,15 @@ optimisation - being found and quoted by AI search): it's mostly built per NodeT
 
 ### Forms
 
-- **What breaks:** validation messages, required fields, the effects of the form finishers (mail, CRM, database), and
-  spam protection that blocks valid input.
+- **What breaks:** validation messages, required fields, the effects of the form finishers (mail, CRM, database), spam
+  protection that blocks valid input - and forms in cached content: Flow checks a CSRF token for logged-in users, and a
+  cached form carries the token of whoever filled the cache.
 - **What to check:** the visible validation errors, the success message and what the finisher did: the mail (see
-  [mails](#mails)), the call to the external system, or the database entry (a project step).
+  [mails](#mails)), the call to the external system, or the database entry (a project step). For forms that logged-in
+  users send: send the form on a page that was already cached by an earlier visit.
 - **Where:** the form flow in the browser; the logic of the finishers with PHP unit or functional tests.
+- **Pitfall:** time-based spam protection (a minimum time to fill in the form) rejects the browser's instant input.
+  Lower the threshold in the test context and say so in a comment - don't add a wait to the scenario.
 
 ### Mails
 
@@ -586,31 +513,40 @@ that says "Thank you" but sends nothing - or sends the mail twice - is broken.
   [journey ending in a mail](#journey-ending-in-a-mail)).
 - **Setup:** see [mail catching](#mail-catching-mailpit). When another system sends the mail, check the call to that
   system instead.
-- **Not tested here:** the layout of the mail and how mail programs display it.
+- **Usually not tested here:** the layout of the mail and how mail programs display it.
 
 ### Caching
+
+Caching is the most common reason why menus, lists and teasers show outdated content. This entry holds the rules;
+menus and lists link here.
 
 - **What breaks:** a content change that doesn't show up on pages that show this content elsewhere (teaser, menu,
   footer, lists), a wrong `@cache` configuration, and personal content that is cached for everybody.
 - **What to check:** what the `@cache` configuration promises, using the [before/after pattern](#beforeafter-a-change):
   - `mode: cached` with `entryTags` (for example `Everything`, `NodeType_...`, `DescendantOf_...`, `Node_...`): when a
-    node covered by the tags changes or is added, the next request shows it;
+    node covered by the tags changes or is added, the next request shows it - with no cache flush in between;
   - `mode: uncached` or `dynamic` for parts that differ per visitor (basket, login state, consent): two visitors (or a
-    logged-in and an anonymous one) each see their own content, not the content of whoever came first;
+    logged-in and an anonymous one) each see their own content, not the content of whoever came first. Two visitors
+    need two browser contexts - a project step;
   - `maximumLifetime`: content that refreshes after some time - usually better tested with unit tests than by waiting.
-- **Where:** in the browser.
-- **Pitfalls:** see [caches](#caches). A cache test only proves something if caching is switched on in the site under
-  test and the change actually reaches its cache.
+- **Where:** in the browser - direct Fusion rendering doesn't go through the site under test's cache.
+- **Setup:** see [caches](#caches) - caching must be switched on in the site under test, and the change must reach its
+  cache.
 
 ### JavaScript components
 
-- **What breaks:** sliders, accordions, tabs, consent banners, lazy loading, filters and calculators - and the state
-  without JavaScript or without consent.
+- **What breaks:** sliders, accordions, tabs, consent banners, lazy loading, filters, configurators and calculators:
+  - a code branch nobody tried - a filter combination that leads to an empty or wrong result;
+  - state that gets out of sync - the basket after removing the last item, or after going back in the browser;
+  - an interaction path that behaves differently - the price calculator forgets the quantity when the size is changed
+    afterwards;
+  - the state without JavaScript or without consent.
 - **What to check:** the behaviour after an interaction (`the element with test id ... should be visible` or
-  `... hidden`, the resulting texts and values) - not that a script tag exists. For components with a lot of logic,
-  test the logic with JavaScript unit tests and the interaction with the page in the browser (see
-  [client-side logic](#client-side-logic)).
+  `... hidden`, the resulting texts and values) - not that a script tag exists. Test the logic of complex components
+  with JavaScript unit tests and the interaction in the browser (see [client-side logic](#client-side-logic)).
 - **Where:** in the browser.
+- **Pitfall:** a consent banner or another overlay covers the page and blocks clicks in every scenario. Set the consent
+  in the `Given` (a cookie or storage entry) and test the banner in its own scenarios.
 
 ### Accessibility behaviour
 
@@ -619,7 +555,8 @@ that says "Thank you" but sends nothing - or sends the mail twice - is broken.
 - **What to check:** which element has the focus or is in view after the action (`the element with test id ... should
   be focused`, `... should be in the viewport`, `I press the key :key`). Static checks like contrast and missing
   labels are better done by an accessibility scanner.
-- **Where:** in the browser.
+- **Where:** in the browser, with a fixed viewport size. Smooth scrolling and sticky headers change what is "in the
+  viewport" - the shipped steps wait for the final state; project steps must do the same.
 
 ### Backend, editor experience and modules
 
@@ -633,14 +570,6 @@ that says "Thank you" but sends nothing - or sends the mail twice - is broken.
 - **Test data:** create the records with a domain step (`Given I have the following orders:`, or
   `Given I have 26 orders` to test the page boundary of a 25-item list).
 
-### Error resilience
-
-- **What breaks:** empty collections, missing references, nodes of NodeTypes that no longer exist, the 404 page and
-  the error pages.
-- **What to check:** that the page still renders (status 200) and simply leaves out the broken part, and that the 404
-  page answers with status 404 and shows its content.
-- **Where:** in the browser.
-
 ## Scenario patterns
 
 ### Before/after: a change
@@ -653,8 +582,8 @@ anything that shows data of other nodes, change something *after* the first visi
    project steps like `I set the property ...`, `I hide the node ...`, `I remove the node ...`).
 3. Visit the page again and check the new state: the new item appears in the right place, the old title is gone.
 
-In browser tests, the change happens in the Behat process. It only reaches the cache of the site under test if both
-use the same cache storage (see [caches](#caches)) - and that is exactly what such a test should prove.
+In browser tests, the change happens in the Behat process. It only reaches the site under test if both use the same
+cache storage - a setup requirement, see [caches](#caches).
 
 ```gherkin
 Scenario: a new news article shows up in the news list on the homepage
@@ -679,17 +608,23 @@ A rule with a threshold ("free shipping from an order value of 50 €") needs on
 threshold, with the numbers visible in the scenario - for example as a `Scenario Outline` or with
 [mock data from a table](#external-apis). A single "happy" value doesn't prove the rule.
 
+### One scenario per role
+
+When what a user sees or may do depends on their role - members area, intranet, restricted editing, your own
+controllers - every role is its own path. Write one scenario per role, plus one for anonymous visitors: what this role
+sees, and that it gets the login or an access error for the rest.
+
+### Dates relative to today
+
+Test data with fixed dates breaks silently: the "upcoming" event of today's fixture is a past event in a few months.
+When a rule compares with today, use dates far from it (`2099-06-01` for "upcoming", `2001-06-01` for "past"), or a
+project step that computes them (`an event starting in 3 days`). Dates that only decide the order can stay fixed.
+
 ### Reaching a late start state
 
 In processes with several steps, reach the starting point of a scenario with one combined step
 (`Given I completed the checkout steps 1 to 3 as a business customer`). Otherwise every "step 4" scenario repeats the
 50 steps of steps 1 to 3.
-
-### Regression scenario
-
-A scenario that guards against a fixed bug says which bug it is: a comment like
-`# issue 123: items vanished from the basket after login` above the scenario (or a tag) tells the next person why
-this unusual scenario exists.
 
 ### Journey ending in a mail
 
@@ -730,8 +665,9 @@ Scenario: newsletter sign-up is confirmed via the link in the mail
   imports a named, dated snapshot (`Given I imported the shop "demo-2026-02"`). When the data needs to change, add a
   new snapshot instead of editing the old one, so older scenarios keep working.
 - **Tag every scenario that creates nodes with `@flowEntities`** - the content repository is then reset before the
-  scenario.
-- **Never run against the development database** - the tests have their own database (README, setup step 2).
+  scenario (all tags: [README](README.md#tags)).
+- **Never run against the development database** - the tests have their own database
+  ([README](README.md#2-two-flow-contexts-two-ports)).
 - **Avoid** copies of the production database (personal data, huge, unreadable, outdated with the next NodeType
   change), inserting data with SQL (that bypasses the content repository) and one big fixture for the whole suite.
 
@@ -758,6 +694,8 @@ WireMock instance can stand in for several APIs under different path prefixes.
   rule are visible right there.
 - **Change answers explicitly.** When the API answers differently after an action, use `I clear all API stubs` and set
   up the new answers - then the scenario shows the expected interaction.
+- **Mock the error answers too** - an error status, an empty or unexpected answer. Most crashes in production come
+  from answers nobody tried.
 - **Check the outgoing call when it is the feature** (for example: the order was sent with the voucher code):
   `Then the API "shop" should have received "POST" "/order"`. What the page shows doesn't prove that the call happened.
 - **While writing a test, let unknown requests through** to the real API (`proxyBaseUrl`) to see which calls happen.
@@ -778,8 +716,8 @@ WireMock instance can stand in for several APIs under different path prefixes.
 ### Caches
 
 - **The site under test only sees cache flushes that reach its cache.** Test data steps run in the Behat process, so
-  both need to use the same cache storage - or you flush the cache in the site under test (README, troubleshooting
-  item 4).
+  both need to use the same cache storage - or you flush the cache in the site under test
+  ([README troubleshooting](README.md#troubleshooting), item 4).
 - **Caching must be switched on in the site under test.** A cache test that passes because caching is switched off
   proves nothing.
 - **Caches per session or user** (user details, basket) leak from one scenario into the next when the login mock gives
@@ -788,29 +726,25 @@ WireMock instance can stand in for several APIs under different path prefixes.
 
 ## Writing feature files
 
+General Gherkin practice applies - Given for the starting state, When for the action, Then for the result, a short
+description per feature, scenarios named after the behaviour (see Cucumber's
+[Writing better Gherkin](https://cucumber.io/docs/bdd/better-gherkin/)). The rules below matter most in Neos projects.
+
 ### Wording
 
 - **Use one language** for all steps (and ideally the scenario names too). With mixed languages, there are twice as
   many steps and nobody finds the one that already exists.
-- **Given describes the starting state, When the action, Then the expected result.** `Then I navigate to ...` hides
-  where the checks begin - write `When` (or `And` after a `When`).
-- **One step per action.** Two steps that do the same thing (`I access the URI path` and `I navigate to path`) split
-  the vocabulary - pick one.
-- **One way to refer to a thing.** Refer to a product always by id *or* always by name. Ids are stable, names are
-  easier to read - decide once for each kind of thing.
+- **One step per action, one way to refer to a thing.** Two steps that do the same (`I access the URI path` and
+  `I navigate to path`) split the vocabulary. Refer to a product always by id *or* always by name.
 - **Write generic steps in the visitor's words.** `I fill "..." into the field "Password"` and
   `I click the button "Log in"` read like the page and check its accessibility on the way. Technical identifiers like
   `the field with the id "passwordCurrent"` belong into step implementations.
 - **No waiting in step names** (`I sign in ... and wait for "/my-profile"`). The step itself waits until the page is
   ready for the next step.
-- **Start each feature with a short description** - one or two sentences about what the feature does for the user,
-  not about how it's tested.
-- **Comment what isn't obvious:** the business rule behind the scenarios, why the test data is ordered the way it is,
-  what you deliberately don't check. Feature files are read more often than step code.
-- **Don't keep commented-out scenarios.** They look like test coverage but test nothing. Delete them, or tag them
-  `@skip` with the reason and an issue number.
-- **No cleanup steps at the end of a scenario.** They don't run when an earlier step fails. Clean up in
-  `@AfterScenario` hooks instead.
+- **Comment what isn't obvious:** the business rule behind the scenarios, why the test data looks the way it does,
+  what you deliberately don't check, and the issue a regression scenario guards against.
+- **No cleanup steps at the end of a scenario.** They don't run when an earlier step fails - clean up in
+  `@AfterScenario` hooks. Don't keep commented-out scenarios: delete them, or tag them `@skip` with the reason.
 
 ### Assertions
 
@@ -819,9 +753,8 @@ WireMock instance can stand in for several APIs under different path prefixes.
   element shows, check that, not just that the element exists.
 - **Use stable selectors:** roles, labels, ARIA attributes, semantic elements or `data-testid`. Utility or design
   system classes like `.mt-4.text-blue-600` change with the styling.
-- **Pair every "is not there" with an "is there".** "The hidden teaser isn't shown" also passes on an empty page, so
-  check something visible in the same scenario.
-- **Use status codes for reachability:** 200 for every page a visitor can reach, 404 for hidden or removed pages.
+- **Pair every "is not there" with an "is there".** "The teaser without link target shows no link" also passes on an
+  empty page, so check the teaser's title in the same scenario.
 - **Only check what is stable.** When a value depends on something the test doesn't control, check the stable part
   ("a delivery date is shown") and explain in a comment why the exact value isn't checked.
 - **Screenshots and the style guide document the result, they don't check it.** Use them for reviews and visual
@@ -830,13 +763,11 @@ WireMock instance can stand in for several APIs under different path prefixes.
 
 ## Writing step implementations
 
-- **Look for a shipped step first** (steps overview in the README). Steps that every project needs belong into this
-  package; steps for your project's own concepts go into your `FeatureContext` or a trait of your project.
-- **Domain language in the feature, selectors in the step.** Write `When I open the main menu` and
-  `Then the menu ... should contain` in the feature, and keep "click `.nav-toggle`, wait, read the `li` elements" in
-  the step. When the markup changes, you fix one step instead of many scenarios.
-- **Make steps generic with parameters.** One `the element with test id :testId should be visible` is better than five
-  steps for five elements.
+- **Look for a shipped step first** (steps overview in the [README](README.md#steps)). Steps for your project's own
+  concepts go into your `FeatureContext` or a trait of your project.
+- **Domain language in the feature, selectors in the step.** `Then the menu ... should contain` in the feature; "click
+  `.nav-toggle`, read the `li` elements" in the step. When the markup changes, you fix one step instead of many
+  scenarios.
 - **Change content through the content repository API** - with commands like `SetNodeProperties`, `TagSubtree` or
   `RemoveNodeAggregate`, and read it with subgraph queries. Never use SQL: the projections and caches depend on the
   events.
@@ -847,32 +778,27 @@ WireMock instance can stand in for several APIs under different path prefixes.
   (`getByLabel`) - then a field without a label fails the test. Let Playwright wait for elements, return values to PHP
   and check them there with PHPUnit's `Assert`.
 - **Pass step parameters safely into scripts.** Step texts contain quotes and backslashes; pass them into Playwright
-  scripts as JSON values, never by pasting the raw text into the script.
-- **Write error messages that show the actual state:** "the menu contains [Home, About], expected Team" instead of
-  "assertion failed".
+  scripts as JSON values (`JsValue::of()`), never by pasting the raw text into the script.
 - **Wait for a state, not for a fixed time:** for an element, a URL, or the response the next step depends on
-  (`page.waitForResponse()`) - never `sleep` or `waitForTimeout`. If the wait times out, the step must fail. A wait that
-  only logs the timeout moves the error to a later step, where it's confusing.
+  (`page.waitForResponse()`) - never `sleep` or `waitForTimeout`. If the wait times out, the step must fail with the
+  actual state ("the menu contains [Home, About], expected Team"). A wait that only logs the timeout moves the error to
+  a later step, where it's confusing.
 - **Don't retry silently.** A step that retries until it passes hides features that only work sometimes.
-- **Reset what a step changes** - static state, settings, a changed clock - in an `@AfterScenario` hook.
+- **Reset what a step changes** - static state, settings - in an `@AfterScenario` hook.
 
 ## Review checklist
 
 Before you commit a feature - whether you're a person or an agent:
 
-- [ ] The scenarios test the project's behaviour, not Neos ([principles](#principles)), and each name says which
-      behaviour.
-- [ ] Browser by default; direct Fusion rendering only for many rendering states; the backend only for the editor
+- [ ] Each scenario tests one behaviour of the project, not of Neos, and its name says which.
+- [ ] It runs in the browser, unless many rendering states call for direct Fusion rendering or it's about the editor
       experience ([where does the test run](#where-does-the-test-run)).
-- [ ] One behaviour per scenario; journeys only where the interaction is the feature, one scenario per interaction
-      path, starting as late as possible.
-- [ ] The rendering states are covered: empty, full, extreme, hidden, other language, the edges of the rules, the bug
-      being fixed.
-- [ ] Test data is minimal and realistic, with readable ids, a dimension on every row and `@flowEntities`; no copied
-      tables, no database copies.
-- [ ] External systems are mocked (`@wireMock`), mails are caught (`@mailpit`); no calls to real APIs.
+- [ ] Journeys only where the interaction is the feature: one scenario per interaction path, starting as late as
+      possible.
+- [ ] The rendering states, the interaction paths, the roles, the edges of the rules and the fixed bug are covered.
+- [ ] Test data is minimal and realistic: readable ids, a dimension on every row, `@flowEntities`, no copied tables, no
+      database copies, no dates that expire.
+- [ ] External systems are mocked (`@wireMock`), including error answers; mails are caught (`@mailpit`).
 - [ ] The checks are about meaning and use stable selectors; every "is not there" has an "is there".
-- [ ] No fixed waits, no waiting in step names, no cleanup steps, no commented-out scenarios.
-- [ ] Wording: one language, Given/When/Then used for their purpose, one step per action, the visitor's words.
+- [ ] No fixed waits, no silent retries, no waiting in step names, no cleanup steps.
 - [ ] Rules that aren't obvious, choices in the test data and checks left out on purpose are commented.
-- [ ] New steps: shipped steps checked first, parameters passed safely, error messages show the actual state.
