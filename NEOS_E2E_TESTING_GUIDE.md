@@ -21,6 +21,7 @@ them in your project's `FeatureContext`. All other steps are shipped (see the st
 - [Principles](#principles)
 - [From feature to scenarios](#from-feature-to-scenarios)
   - [Covering an existing project](#covering-an-existing-project)
+- [Prioritising](#prioritising)
 - [Three questions per behaviour](#three-questions-per-behaviour)
   - [Where does the behaviour come from?](#where-does-the-behaviour-come-from)
   - [Where does the test run?](#where-does-the-test-run)
@@ -32,6 +33,7 @@ them in your project's `FeatureContext`. All other steps are shipped (see the st
   - [External APIs](#external-apis)
   - [Mail catching (Mailpit)](#mail-catching-mailpit)
   - [Caches](#caches)
+- [Keeping the suite fast](#keeping-the-suite-fast)
 - [Writing feature files](#writing-feature-files)
 - [Writing step implementations](#writing-step-implementations)
 - [Review checklist](#review-checklist)
@@ -45,12 +47,13 @@ them in your project's `FeatureContext`. All other steps are shipped (see the st
 - **Test what a visitor or editor notices.** Check texts, links, states and whether pages can be reached - not how
   they're built. Fusion prototypes get renamed during refactoring; the test should only fail when the page really
   changed.
-- **Use the browser by default.** A scenario normally visits the page in a real browser, just like a visitor - that's
-  what proves the feature works. Only when one element has many rendering states, render those states directly with
-  Fusion instead - it's much faster. Use the Neos backend only for what editors experience. See
-  [where does the test run](#where-does-the-test-run).
+- **Prove each feature in the browser, cover its states cheaply.** One scenario visits the page in a real browser,
+  just like a visitor - that's what proves the feature works. Further rendering states are rendered directly with
+  Fusion, and logic is tested with unit tests - much faster. Use the Neos backend only for what editors experience.
+  See [where does the test run](#where-does-the-test-run) and [keeping the suite fast](#keeping-the-suite-fast).
 - **One behaviour per scenario.** Then the scenario's name tells you what broke, and one failure doesn't hide the
-  checks that come after it.
+  checks that come after it. Several independent checks on the same page state are fine; a sequence of actions for
+  different behaviours is not.
 - **Realistic data, but only as much as needed.** Start from real content exported from the site, keep only what the
   scenario needs, and add the edge cases on top. See [content fixtures](#content-fixtures).
 - **Make results reproducible.** The tests use their own database, which is reset before each scenario. External
@@ -87,9 +90,30 @@ This is the main workflow - use it for the feature you're building or fixing rig
    `@cache` configuration), settings (dimensions, routing, sites), FlowQueries in Fusion, PHP
    application code (services, controllers, plugins, finishers, route part handlers, API clients), JavaScript
    components, and roles in `Policy.yaml` that change what visitors or editors see.
-2. **Decide what comes first:** business-critical features (checkout, forms, login), then what is used most and what
-   has broken before.
+2. **Decide what comes first** - see [prioritising](#prioritising).
 3. **Run the workflow above** for one feature after the other.
+
+## Prioritising
+
+Not every feature deserves the same tests. Write the tests that matter for your domain - and decide by risk, not by
+what's easy to test.
+
+- **Risk = likelihood of breaking × cost of failing.** A feature breaks more likely when it changes often, is complex,
+  has broken before, or editors fill it with many different kinds of content. A failure costs more when it loses
+  revenue or leads (checkout, contact forms), creates legal risk, produces support requests or damages the reputation.
+  Test what scores high on both first and in depth; what scores low on both maybe not at all.
+- **Formal requirements are must-haves, however rarely the feature changes.** Accessibility is a legal obligation in
+  many cases - for example for e-commerce and many services in the EU under the European Accessibility Act, and for
+  public sector sites. The same goes for consent (no tracking before the visitor agreed), legally required pages
+  (imprint, privacy policy) and access restrictions.
+- **Spend the expensive tests where they pay off.** A practical split:
+  - **must not break** - revenue, legal requirements, access: journeys including their error paths, run on every
+    merge request;
+  - **content features editors use a lot**: their rendering states, mostly with direct Fusion rendering, plus one
+    browser scenario each;
+  - **cosmetic or rarely changed**: the style guide and a visual review, no assertions.
+- **Count the cost of keeping a test green.** Backend tests and long journeys break more often for reasons that have
+  nothing to do with the feature. Use them for the first group only.
 
 ## Three questions per behaviour
 
@@ -159,7 +183,7 @@ show the right products, does the form finisher really send the mail.
 
 ### Where does the test run?
 
-#### In the browser - the default
+#### In the browser - one scenario per feature
 
 `I access the URI path ...` sends a real request through the web server, routing and caches, and the page runs its
 JavaScript in a real browser - exactly what a visitor gets. Example: "the main menu marks the current page" needs a real
@@ -176,7 +200,7 @@ component test written with Behat, not an end-to-end test.
 Use it when one element has many rendering states: ten teaser states render in about a second, and one browser
 scenario then checks the teaser in a real page. Direct rendering can't see routing, caches, JavaScript, or the
 visibility and access rules of the website - `I get the node` only leaves out removed nodes, so hidden nodes are
-rendered.
+rendered. A pure component without a node doesn't need the content repository at all - the fastest scenario there is.
 
 #### In the backend - for the editor experience
 
@@ -545,8 +569,11 @@ menus and lists link here.
   `... hidden`, the resulting texts and values) - not that a script tag exists. Test the logic of complex components
   with JavaScript unit tests and the interaction in the browser (see [client-side logic](#client-side-logic)).
 - **Where:** in the browser.
-- **Pitfall:** a consent banner or another overlay covers the page and blocks clicks in every scenario. Set the consent
-  in the `Given` (a cookie or storage entry) and test the banner in its own scenarios.
+- **Cookie consent** gets its own scenarios, which start without a preset decision: the banner is shown, no tracker
+  or third-party request happens before consent (a project step that watches the network requests), "accept all",
+  "necessary only" and a custom choice each load the right embeds and scripts, the decision persists across pages,
+  and the settings can be opened and changed again. All other scenarios preset the decision (see
+  [keeping the suite fast](#make-each-scenario-cheaper)).
 
 ### Accessibility behaviour
 
@@ -724,6 +751,62 @@ WireMock instance can stand in for several APIs under different path prefixes.
   out the same session id every time. Flush them in the site under test before each scenario, and write down why
   next to the flush.
 
+## Keeping the suite fast
+
+A slow suite gets run less often, and then it stops catching bugs early. Most time is lost per scenario, not in the
+number of scenarios.
+
+### Choose the cheapest test that catches the bug
+
+- **Unit and functional tests first.** When logic can be tested without a browser - a PHP service, a calculation in
+  JavaScript - test its code branches there. E2E only proves that the parts work together: one scenario for the normal
+  case and one for an error case per seam (see [where the behaviour comes from](#where-does-the-behaviour-come-from)).
+- **Direct Fusion rendering for rendering states.** It checks the HTML - texts, attributes, elements - in
+  milliseconds, without a request or a browser. A pure component (`I render the Fusion object` without a node) doesn't
+  even need the content repository, so its scenarios need no `@flowEntities`. One browser scenario per feature still
+  proves that it works in a real page.
+- **Leave to tools what tools do better.** Don't write tests that repeat what static analysis already checks - it's
+  much faster and runs before the suite:
+  - PHPStan for types and wrong calls, the TypeScript compiler and linters for the frontend code;
+  - a project linter for your own Neos conventions (naming, structure, missing `@cache` configuration);
+  - an accessibility scanner (axe, pa11y) for contrast, missing labels and alt texts, landmarks. A scanner finds only
+    part of the problems - behaviour like focus and keyboard operation stays in
+    [E2E tests](#accessibility-behaviour);
+  - `./flow configuration:validate` for settings and NodeType configuration.
+
+  Run them before or in parallel with the E2E suite, so a typo fails in a minute, not after twenty.
+
+### Make each scenario cheaper
+
+- **Several checks on one state are fine.** One page with three buttons - internal link, external link, no link -
+  visited once and checked three times is cheaper than three scenarios, and nothing can hide a later check: no action
+  happens between the checks, and each failure names its button. What must not be combined is a sequence of actions
+  for different behaviours - that's a journey, and its first failure hides the rest. (For many rendering states,
+  direct Fusion rendering with a `Scenario Outline` is cheaper still.)
+- **Start late.** Set up as test data what isn't the behaviour under test (see
+  [reaching a late start state](#reaching-a-late-start-state)).
+- **Skip the login form** when the login isn't what you test - with a project step that sets up the session
+  directly, or Playwright's `storageState` from one recorded login. Logging in through the form in
+  every scenario adds several seconds each time.
+- **Preset the cookie consent** instead of clicking the banner away in every scenario: set the cookie or storage entry
+  of your consent tool before the first visit (`Given the cookie :name has the value :value` or
+  `Given the :storage storage key :key has the value :value`), in a `@BeforeScenario` hook for the default decision.
+  A tag can select another decision (`@consentNecessaryOnly`). The real consent code still runs, so embeds behave as
+  in production. Keep the cookie's name and format in one place - it changes with the consent tool. The banner itself
+  gets its own scenarios (see [JavaScript components](#javascript-components)).
+- **Avoid expensive work in hooks.** Every `./flow` command a hook starts boots Flow again - per scenario. Flush caches
+  in the Behat process when both processes share the cache storage, and warm up caches once per run, not per
+  scenario. Import content through the content repository, not by restoring SQL dumps.
+
+### Measure, then run in parallel
+
+- **Measure first.** The JUnit report shows the duration of every scenario - start with the slowest features.
+- **Then run in parallel:** split the feature files over several CI jobs, each with its own services, balanced by the
+  durations from the last report (see the [README](README.md#7-ci-pipeline-optional)). Running in parallel without
+  making scenarios cheaper first only multiplies the waste.
+- **A smoke subset only when needed.** A second, faster subset (`@smoke` for merge requests, everything on the main
+  branch) adds a tag that drifts out of date. Introduce it only when the parallel suite still takes too long.
+
 ## Writing feature files
 
 General Gherkin practice applies - Given for the starting state, When for the action, Then for the result, a short
@@ -790,9 +873,11 @@ description per feature, scenarios named after the behaviour (see Cucumber's
 
 Before you commit a feature - whether you're a person or an agent:
 
+- [ ] The feature's risk justifies the tests' cost ([prioritising](#prioritising)); nothing a linter or scanner
+      already checks.
 - [ ] Each scenario tests one behaviour of the project, not of Neos, and its name says which.
-- [ ] It runs in the browser, unless many rendering states call for direct Fusion rendering or it's about the editor
-      experience ([where does the test run](#where-does-the-test-run)).
+- [ ] One browser scenario per feature; further rendering states with direct Fusion rendering, logic in unit tests;
+      the backend only for the editor experience ([where does the test run](#where-does-the-test-run)).
 - [ ] Journeys only where the interaction is the feature: one scenario per interaction path, starting as late as
       possible.
 - [ ] The rendering states, the interaction paths, the roles, the edges of the rules and the fixed bug are covered.
