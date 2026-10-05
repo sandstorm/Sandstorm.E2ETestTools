@@ -30,14 +30,24 @@ final class WireMockAdmin
     private \Closure $transport;
 
     /**
+     * @var \Closure(int $microseconds): void
+     */
+    private \Closure $sleep;
+
+    /**
      * @param \Closure(string $method, string $url, array<mixed>|null $body): array<mixed>|null $transport for tests;
      *     default: curl
+     * @param \Closure(int $microseconds): void|null $sleep for tests; default: usleep
      */
     public function __construct(
         private readonly string $adminUrl,
         ?\Closure $transport = null,
+        ?\Closure $sleep = null,
     ) {
         $this->transport = $transport ?? self::curlTransport(...);
+        $this->sleep = $sleep ?? static function (int $microseconds): void {
+            usleep($microseconds);
+        };
     }
 
     /**
@@ -105,6 +115,25 @@ final class WireMockAdmin
             ...(str_contains($path, '?') ? ['url' => $path] : ['urlPath' => $path]),
         ]);
         return (int)($result['count'] ?? 0);
+    }
+
+    /**
+     * Polls the request journal until at least $minimum matching requests arrived, or the timeout passed - a call that
+     * JavaScript triggers after a click can arrive after the page already shows the result.
+     *
+     * @return int the last count - compare it with what you expect
+     */
+    public function waitForRequests(string $method, string $path, int $minimum, int $timeoutMilliseconds = 5000): int
+    {
+        $intervalMilliseconds = 100;
+        $attempts = max(1, intdiv($timeoutMilliseconds, $intervalMilliseconds));
+        for ($attempt = 1; ; $attempt++) {
+            $count = $this->countRequests($method, $path);
+            if ($count >= $minimum || $attempt >= $attempts) {
+                return $count;
+            }
+            ($this->sleep)($intervalMilliseconds * 1000);
+        }
     }
 
     /**

@@ -7,6 +7,7 @@ namespace Sandstorm\E2ETestTools\Tests\Behavior\Bootstrap;
 use Behat\Testwork\Tester\Result\TestResult;
 use Closure;
 use Neos\Utility\Files;
+use Sandstorm\E2ETestTools\Debugging\LogDirectory;
 
 /**
  * This trait is useful both for Symfony and for Neos.
@@ -16,7 +17,8 @@ use Neos\Utility\Files;
  * For each Scenario, we use an extra playwright BrowserContext, but we reuse the same Playwright instance; so we
  * do not close the browser between tests. This makes the system very fast.
  *
- * In case of errors, a screenshot is taken automatically.
+ * In case of errors, a screenshot is taken automatically. The Flow logs are cleared before every scenario and copied
+ * into the results directory when it fails - with or without browser.
  *
  *
  * SET UP:
@@ -76,6 +78,24 @@ trait PlaywrightTrait
     private int $playwrightTracingMode = 2;
 
     /**
+     * Data/Logs by default; null in projects without Flow.
+     */
+    private ?string $flowLogsDirectory = null;
+
+    private bool $flowLogsDirectoryConfigured = false;
+
+    /**
+     * Where the site under test writes its Flow logs, as seen from the Behat process - only needed when they don't
+     * share Data/Logs (e.g. a separate container with the logs mounted somewhere else). null switches clearing and
+     * copying off - for example when the development site writes into the same directory.
+     */
+    protected final function setFlowLogsDirectory(?string $directory): void
+    {
+        $this->flowLogsDirectory = $directory;
+        $this->flowLogsDirectoryConfigured = true;
+    }
+
+    /**
      * This is the programmatic API, env var 'PLAYWRIGHT_TRACE_MODE' TODO !!!
      * @param int $mode
      */
@@ -121,6 +141,9 @@ trait PlaywrightTrait
 
 
         $this->playwrightConnector = new PlaywrightConnector($playwrightApiUrl, $systemUnderTestUrl, $this->resultsDir);
+        if (!$this->flowLogsDirectoryConfigured && defined('FLOW_PATH_DATA')) {
+            $this->flowLogsDirectory = FLOW_PATH_DATA . 'Logs';
+        }
     }
 
     /**
@@ -162,6 +185,37 @@ trait PlaywrightTrait
                 $event->getScenario()->getLine(),
                 $keepTrace
             );
+        }
+    }
+
+    /**
+     * @BeforeScenario
+     */
+    public function clearFlowLogsBeforeScenario(): void
+    {
+        if ($this->flowLogsDirectory !== null) {
+            (new LogDirectory($this->flowLogsDirectory))->clear();
+        }
+    }
+
+    /**
+     * An exception in the site under test only shows up as an error page in the browser - the stack trace is in the
+     * logs, so they're put next to the error screenshot.
+     *
+     * @AfterScenario
+     */
+    public function copyFlowLogsOfFailedScenario(\Behat\Behat\Hook\Scope\AfterScenarioScope $event): void
+    {
+        if ($this->flowLogsDirectory === null || $event->getTestResult()->getResultCode() !== TestResult::FAILED) {
+            return;
+        }
+        $target = sprintf(
+            '%s/logs_%s',
+            $this->resultsDir,
+            preg_replace('/[^a-zA-Z0-9_]/', '', basename($event->getFeature()->getFile()) . '_' . $event->getScenario()->getLine() . '_' . $event->getScenario()->getTitle())
+        );
+        if ((new LogDirectory($this->flowLogsDirectory))->copyTo($target) !== []) {
+            echo sprintf("You can find the log entries of this scenario in %s\n", $target);
         }
     }
 

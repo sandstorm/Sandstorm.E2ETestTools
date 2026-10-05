@@ -95,14 +95,14 @@ trait WireMockTrait
     #[Then('the API :api should have received :method :path')]
     public function theApiShouldHaveReceived(string $api, string $method, string $path): void
     {
-        $count = $this->wireMock_requireAdmin()->countRequests($method, $this->wireMock_url($api, $path));
-        Assert::assertGreaterThan(0, $count, sprintf('The API "%s" received no %s %s.', $api, strtoupper($method), $path));
+        $count = $this->wireMock_requireAdmin()->waitForRequests($method, $this->wireMock_url($api, $path), 1);
+        Assert::assertGreaterThan(0, $count, sprintf('The API "%s" received no %s %s (waited 5 s).', $api, strtoupper($method), $path));
     }
 
     #[Then('the API :api should have received :method :path :count times')]
     public function theApiShouldHaveReceivedTimes(string $api, string $method, string $path, int $count): void
     {
-        $actual = $this->wireMock_requireAdmin()->countRequests($method, $this->wireMock_url($api, $path));
+        $actual = $this->wireMock_requireAdmin()->waitForRequests($method, $this->wireMock_url($api, $path), $count);
         Assert::assertSame($count, $actual, sprintf('Unexpected number of %s %s requests to the API "%s".', strtoupper($method), $path, $api));
     }
 

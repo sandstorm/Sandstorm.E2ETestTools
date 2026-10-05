@@ -9,6 +9,7 @@ use Neos\Behat\FlowBootstrapTrait;
 use Neos\Behat\FlowEntitiesTrait;
 use Neos\Flow\ObjectManagement\ObjectManagerInterface;
 use Sandstorm\E2ETestTools\Tests\Behavior\Bootstrap\BrowserStateTrait;
+use Sandstorm\E2ETestTools\Tests\Behavior\Bootstrap\DebuggingTrait;
 use Sandstorm\E2ETestTools\Tests\Behavior\Bootstrap\FormInteractionTrait;
 use Sandstorm\E2ETestTools\Tests\Behavior\Bootstrap\FusionRenderingTrait;
 use Sandstorm\E2ETestTools\Tests\Behavior\Bootstrap\NeosBackendControlTrait;
@@ -23,6 +24,7 @@ require_once(__DIR__ . '/../../../../../../Packages/Application/Sandstorm.E2ETes
 require_once(__DIR__ . '/../../../../../../Packages/Application/Sandstorm.E2ETestTools/Tests/Behavior/Bootstrap/PageAssertionsTrait.php');
 require_once(__DIR__ . '/../../../../../../Packages/Application/Sandstorm.E2ETestTools/Tests/Behavior/Bootstrap/FormInteractionTrait.php');
 require_once(__DIR__ . '/../../../../../../Packages/Application/Sandstorm.E2ETestTools/Tests/Behavior/Bootstrap/BrowserStateTrait.php');
+require_once(__DIR__ . '/../../../../../../Packages/Application/Sandstorm.E2ETestTools/Tests/Behavior/Bootstrap/DebuggingTrait.php');
 
 /**
  * This class is copied to new projects when setting up behat E2E tests via Sandstorm.E2ETestTools
@@ -53,13 +55,10 @@ class FeatureContext implements Context
     use FormInteractionTrait;
     use BrowserStateTrait;
 
+    // "I pause for debugging" (see README, Debugging)
+    use DebuggingTrait;
+
     // Mocked third-party APIs: use WireMockTrait and call setupWireMock() in the constructor (see README)
-
-    // !!! Set this to the Flow context the SYSTEM UNDER TEST actually runs under -
-    // NOT this runner's own context. Used by executeFlowCommand() below to shell
-    // commands into the SUT rather than into this Behat process. E.g. 'Production/E2E-SUT'.
-    protected string $flowContextForSystemUnderTest = 'Testing/Behat';
-
 
     public function __construct()
     {
@@ -92,32 +91,5 @@ class FeatureContext implements Context
     public function beforeFixturesScenario(BeforeScenarioScope $scope): void
     {
         $this->setupContentRepository();
-    }
-
-    protected function executeFlowCommand(string $command, string $errorDescription): bool
-    {
-        $output = [];
-        $resultCode = -100;
-        exec("FLOW_CONTEXT=$this->flowContextForSystemUnderTest ./flow $command", $output, $resultCode);
-        if ($resultCode !== 0) {
-            echo "ERROR: could not $errorDescription";
-            echo print_r($output, true);
-            return false;
-        }
-        print_r($output);
-        return true;
-    }
-
-    /**
-     * @When /^I pause for debugging$/
-     */
-    public function iPauseForDebugging(): void
-    {
-        $this->playwrightConnector->execute(
-            $this->requirePlaywrightContext(),
-            <<<JS
-                await vars.page.pause();
-            JS
-        );
     }
 }

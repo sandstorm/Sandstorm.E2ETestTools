@@ -120,6 +120,43 @@ class WireMockAdminTest extends UnitTestCase
         self::assertSame(['method' => 'POST', 'urlPath' => '/shop-api/order'], $this->requests[0]['body']);
     }
 
+    #[Test]
+    public function waitingPollsUntilTheCallArrived(): void
+    {
+        $counts = [0, 0, 2];
+        $sleeps = [];
+        $admin = new WireMockAdmin(
+            'http://wiremock:8080',
+            function () use (&$counts): array {
+                return ['count' => array_shift($counts)];
+            },
+            function (int $microseconds) use (&$sleeps): void {
+                $sleeps[] = $microseconds;
+            }
+        );
+
+        self::assertSame(2, $admin->waitForRequests('POST', '/shop-api/order', 1));
+        self::assertSame([100000, 100000], $sleeps);
+    }
+
+    #[Test]
+    public function waitingGivesUpAfterTheTimeoutWithTheLastCount(): void
+    {
+        $polls = 0;
+        $admin = new WireMockAdmin(
+            'http://wiremock:8080',
+            function () use (&$polls): array {
+                $polls++;
+                return ['count' => 0];
+            },
+            static function (): void {
+            }
+        );
+
+        self::assertSame(0, $admin->waitForRequests('POST', '/shop-api/order', 1, 500));
+        self::assertSame(5, $polls);
+    }
+
     private function admin(string $adminUrl = 'http://wiremock:8080'): WireMockAdmin
     {
         return new WireMockAdmin($adminUrl, function (string $method, string $url, ?array $body): array {

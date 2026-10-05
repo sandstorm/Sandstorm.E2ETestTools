@@ -66,7 +66,8 @@ const { chromium } = require('playwright');
 const Hapi = require('@hapi/hapi');
 
 const init = async () => {
-    const browser = await chromium.launch({headless: true});
+    // HEADLESS=false node index.js opens a visible browser to watch the tests (or debug them)
+    const browser = await chromium.launch({headless: process.env.HEADLESS !== 'false'});
 
     // the "key" is the context identifier (from the URL)
     // the "value" is an object: {

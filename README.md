@@ -29,14 +29,17 @@ Feature: Headline integration
 - **Browser tests via Playwright** - Behat sends Playwright scripts to a small bridge service (HTTP), the browser hits
   your application on a dedicated port with its own Flow context and database.
 - **Neos backend steps** - create users, log in, navigate menus and the document tree.
+- **Generic browser steps** - page texts and titles, buttons, links and form fields by their caption or label, cookies
+  and web storage (including presetting a cookie consent before the first visit).
 - **Content fixtures** - nodes, references, hidden state and assets as Gherkin tables or YAML files, created through
   the Neos 9 content repository API.
 - **Fixture export** - export existing pages (backend button or CLI) into that format: realistic test data without
   writing node tables by hand.
 - **Style guide** - store renderings as HTML snapshots plus screenshots (with configurable viewport widths) on one
   overview page.
-- **Debugging and CI** - screenshots of failing steps, Playwright traces of failing scenarios, a GitLab CI example
-  running the tests inside the deployed image.
+- **Mocked third-party APIs** - WireMock stubs per scenario, and checks of the calls your site made.
+- **Debugging and CI** - screenshots of failing steps, Playwright traces and server logs of failing scenarios, a
+  pause step, a GitLab CI example running the tests inside the deployed image.
 
 Requires Neos 9 / Flow 9. For Neos 8, use the 8.x releases (latest: 8.3.2). For Symfony projects, see
 [README.Symfony.md](./README.Symfony.md).
@@ -117,8 +120,8 @@ mysql -e 'CREATE DATABASE IF NOT EXISTS neos_e2etest'   # or your DB's equivalen
 FLOW_CONTEXT=Production/E2E-SUT ./flow doctrine:migrate
 ```
 
-Caches the test runner must invalidate between scenarios (e.g. Fusion content cache) either need a backend shared by
-both contexts (e.g. the same Redis database), or an explicit flush in the SUT's context — see
+Caches the test runner must invalidate between scenarios (e.g. the Fusion content cache) need the same storage in both
+contexts (e.g. the same Redis database), so a flush in the Behat process reaches the SUT — see
 [Troubleshooting](#troubleshooting) item 4.
 
 If you use asset fixtures (`I have a textual persistent resource ...`, `I have the following images:`), the Behat
@@ -173,15 +176,9 @@ cp Packages/Application/Sandstorm.E2ETestTools/Tests/Behavior/Bootstrap/FeatureC
 The `require_once` paths at the top are relative to **your copy's own location**, not the
 package's — 6 `../` to reach `Packages/Application/Sandstorm.E2ETestTools/...` assumes your file
 sits at `DistributionPackages/Your.SitePackageKey/Tests/Behavior/Features/Bootstrap/FeatureContext.php` (where
-`behat.yml.dist` from step 3 autoloads it). A
-different depth needs a different number of `../`. Then edit two
-placeholders — the template ships with values that intentionally don't work, so it fails loudly
-if left unedited rather than silently pointing at the wrong package/context:
-
-- the site package key passed to `setupFusionRendering(...)`.
-- **`$flowContextForSystemUnderTest`** — the context the *served* SUT actually runs under (step 2
-  above), **not** this runner's own context. Used by `executeFlowCommand()` to shell commands
-  into the SUT; leaving it at its default is a common source of confusing failures.
+`behat.yml.dist` from step 3 autoloads it). A different depth needs a different number of `../`. Then replace the site
+package key passed to `setupFusionRendering(...)` - the template ships with a placeholder that fails loudly if left
+unedited.
 
 ## 5. Playwright (playwright-bridge)
 
@@ -296,7 +293,7 @@ Feature files live in your site package (`Tests/Behavior/Features/`), step defin
 in your `FeatureContext` (see [Setup](#4-featurecontextphp)). **Working, commented Neos 9 examples for everything
 below are in [`Tests/Behavior/Examples/`](Tests/Behavior/Examples/README.md)** — copy one and adapt it.
 
-What to test in a Neos project, on which level, and how to write fixtures, assertions and steps that stay meaningful:
+What to test in a Neos project, where to test it, and the pitfalls specific to Neos, Flow and this package:
 **[Neos E2E Testing Guide](NEOS_E2E_TESTING_GUIDE.md)**.
 
 ## Tags
@@ -306,6 +303,10 @@ What to test in a Neos project, on which level, and how to write fixtures, asser
   creates nodes.
 - `@playwright` — starts a browser context in the playwright-bridge. Needed for page visits, backend steps,
   screenshots and the style guide.
+- `@wireMock` — resets WireMock to its base stubs before the scenario (`WireMockTrait`, see
+  [Mocked third-party APIs](#mocked-third-party-apis-wiremock)).
+
+Other tags in the guide's examples, like `@mailpit`, are project tags with a hook of your own.
 
 ## Fixtures
 
@@ -428,13 +429,23 @@ Run the command in the Flow context with the content you export (e.g. inside you
 | `PageAssertionsTrait` | `the page title should be :title` · `there should not be the text :text on the page` · `there should (not) be the text :text in :selector` · `the element with test id :testId should be visible/hidden/focused/enabled/disabled` · `the element with test id :testId should (not) be in the viewport` |
 | `FormInteractionTrait` | `I click the button :caption` · `I click the link :caption` · `I click the element with test id :testId` · `I fill :value into the field :label` · `the field :label should have the value :value` · `I check/uncheck the checkbox :label` · `the checkbox :label should (not) be checked` · `I choose the radio button :label` · `I select :option in the field :label` · `the field :label should have :option selected` · `I upload the file :fileName to the field :label` (relative to the feature file) · `I press the key :key` |
 | `BrowserStateTrait` | `the cookie :name has the value :value` (before the first visit, e.g. consent) · `the local/session storage key :key has the value :value` · `the cookie :name should (not) be set` · `the cookie :name should have the value :value` · `I delete the cookie :name` · `the local/session storage key :key should have the value :value` · `the local/session storage key :key should not be set` · `I remove the local/session storage key :key` |
+| `DebuggingTrait` | `I pause for debugging` (see [Debugging](#debugging)) |
 | `WireMockTrait` | see [Mocked third-party APIs](#mocked-third-party-apis-wiremock) |
 
-The traits in the last four rows are opt-in: `FeatureContext.php.default` uses the first three. Remove project steps with
-the same wording before using them, otherwise Behat reports the steps as ambiguous. Buttons and links are found by
-their accessible name, fields by their label, elements by `data-testid`.
+The traits in the last five rows are opt-in: `FeatureContext.php.default` uses all but `WireMockTrait`. Remove project
+steps with the same wording before using them, otherwise Behat reports the steps as ambiguous. Buttons and links are
+found by their accessible name, fields by their label, elements by `data-testid`.
 
-What to test how:
+Notes on the steps:
+
+- `the Fusion output should equal to` compares the whole HTML - it breaks with every changed space or class. Prefer
+  the CSS selector steps.
+- `... the inner HTML of CSS selector ... matches ...` compares for equality, not as a regular expression.
+- Escaped quotes (`\"`) inside a `"..."` step parameter don't match the step - put values that contain double quotes
+  in single quotes (`'{"all":true}'`).
+- Screenshots and the style guide document a result, they don't check it.
+
+Examples by level (when to use which: [testing guide](NEOS_E2E_TESTING_GUIDE.md#where-to-test)):
 
 - **Component** (a Fusion prototype, like a pure function): `I render the Fusion object` without nodes —
   [FusionComponent/Button.feature](Tests/Behavior/Examples/FusionComponent/Button.feature).
@@ -445,8 +456,9 @@ What to test how:
 - **Page snapshot** (responsive, reproducible screenshots): `I render the page` + style guide —
   [PageRendering/FusionPageSnapshot.feature](Tests/Behavior/Examples/PageRendering/FusionPageSnapshot.feature).
 
-Project-specific steps go into your `FeatureContext`; `Tests/Behavior/Bootstrap/FeatureContext.php.default` has an
-example (`I pause for debugging`) using `$this->playwrightConnector->execute()`.
+Project-specific steps go into your `FeatureContext` or a trait of your project; the shipped traits in
+`Tests/Behavior/Bootstrap/` (e.g. `DebuggingTrait`) show how to drive the browser with
+`$this->playwrightConnector->execute()`.
 
 ## Style Guide
 
@@ -536,7 +548,7 @@ active stubs.
 1. Start the Playwright bridge on your machine and keep it running (e.g. all day):
 
    ```bash
-   cd playwright-bridge && node index.js   # listens on localhost:3000
+   cd playwright-bridge && node index.js   # listens on localhost:3000; HEADLESS=false node index.js shows the browser
    ```
 
 2. Make sure your application runs and the E2E database exists and is migrated (see
@@ -559,6 +571,8 @@ project's tasks, see [Project tasks](#6-project-tasks-recommended)).
 
 ## Debugging
 
+- **Watch the tests**: start the bridge with `HEADLESS=false node index.js` to see the browser while writing or
+  debugging a test - worth a project task next to the headless one used by CI and agents.
 - **Screenshots**: add `And I do a screenshot "name.png"` to a `@playwright` scenario. When a step fails, an
   `error_*.png` screenshot is taken automatically. Both are written to the results directory — `e2e-results/` relative
   to where Behat runs, or whatever you pass to `setupPlaywright($resultsDir)` in your `FeatureContext` (e.g. read from
@@ -567,13 +581,24 @@ project's tasks, see [Project tasks](#6-project-tasks-recommended)).
   results directory. Open it with
   `npx playwright show-trace path/to/report_....zip` (e.g. after `npm install -g playwright`). To keep traces of passing
   scenarios too (or none), call `setPlaywrightTracingMode()` in your `FeatureContext`.
+- **Server logs**: an exception in the site under test shows up in the browser only as an error page - the stack
+  trace is in the logs. The Flow logs (`Data/Logs`) are cleared before every scenario, and a failed scenario gets its
+  log files and exception files copied into `logs_<feature>_<line>_<scenario>/` in the results directory. When the
+  site under test writes its logs somewhere else (another container), call
+  `setFlowLogsDirectory('/path/as/seen/from/behat')` in your `FeatureContext`; `setFlowLogsDirectory(null)` switches
+  clearing and copying off, for example when your development site shares `Data/Logs` and you need its logs.
 - **Stop at the first failure**: `--stop-on-failure` stops the run at the first error, so you can inspect the E2E
   database and reproduce the bug manually.
 - **Stack traces**: `-vvv` (extra verbose) prints the full exception stack trace.
 - **Run only what you're debugging**: tag scenarios (e.g. `@debug`) and run `bin/behat ... --tags=debug`.
-- **Pausing the browser**: `And I pause for debugging` (from `FeatureContext.php.default`, calls Playwright's
-  `page.pause()`) opens the Playwright inspector on the bridge side. Run Behat with `PAUSE_FOR_DEBUGGING=true` —
-  otherwise the connection to the playwright-bridge times out after 30 seconds.
+- **Pausing the browser**: `And I pause for debugging` (`DebuggingTrait`, calls Playwright's `page.pause()`) opens
+  the Playwright inspector on the bridge side. It needs a bridge with a visible browser (`HEADLESS=false`) and Behat
+  run with `PAUSE_FOR_DEBUGGING=true` - otherwise the connection to the playwright-bridge times out after 30 seconds,
+  so the step fails right away without it. The site under test and its database keep the scenario's state, so you
+  can click around and inspect it.
+- **Let an agent analyse failures**: after a failed run, the results directory holds the error screenshots, traces,
+  server logs and - with `--format junit --out <dir>` - the JUnit report. A coding agent like Claude can read them and
+  propose a fix; tell it where the results directory is.
 
 # Migrating tests from Neos 8
 
@@ -667,18 +692,17 @@ Details: [Fixtures](#fixtures).
 
 4. **Content changes don't show up on the SUT after resetting the content repository.**
 
-   Cause: a project-specific cache (e.g. a full-page/HTTP response cache) isn't covered by
-   `setupContentRepository()`'s generic cache flush, and/or isn't on a cache backend shared between the runner's
-   context and the SUT's context.
+   Cause: a cache of the SUT (e.g. a full-page/HTTP response cache) isn't flushed between scenarios -
+   `setupContentRepository()` flushes no caches - or it isn't on storage shared between the runner's context and the
+   SUT's context, so a flush in the runner doesn't reach it.
 
-   Fix: flush it explicitly, in the SUT's own context, from a `@BeforeScenario` hook:
+   Fix: give the cache the same storage in both contexts' `Caches.yaml` (e.g. the same Redis database; for a file
+   backend, `backendOptions.cacheDirectory` in `Testing/Behat` pointing to the SUT's cache directory), and flush it in
+   PHP from a `@BeforeScenario` hook - not with a `./flow` command:
 
    ```php
-   exec("FLOW_CONTEXT=$this->flowContextForSystemUnderTest ./flow cache:flushone <YourCacheIdentifier>");
+   $this->getObject(CacheManager::class)->getCache('<YourCacheIdentifier>')->flush();
    ```
-
-   unless it's already on a backend shared between both contexts (e.g. the same Redis database), in which case an
-   in-process flush from the runner reaches it directly.
 
 5. **Files/images created by fixture steps return 404 on the SUT.**
 
@@ -692,9 +716,10 @@ For contributors: how the package is tested and how it works inside.
 
 ## Unit and functional tests
 
-The fixture tooling (YAML format, export/import contract, Gherkin escaping, node tree collection, export endpoint
-security) is covered by PHPUnit tests in `Tests/Unit` and `Tests/Functional`. They run in the Flow distribution the
-package is installed in, e.g.:
+The classes in `Classes/` are covered by PHPUnit tests in `Tests/Unit` and `Tests/Functional`: the fixture tooling
+(YAML format, export/import contract, Gherkin escaping, node tree collection, URI path lookup, export endpoint
+security), the WireMock admin client, script escaping (`JsValue`) and the log copying (`LogDirectory`). They run in
+the Flow distribution the package is installed in, e.g.:
 
 ```bash
 FLOW_CONTEXT=Testing ./bin/phpunit -c Build/BuildEssentials/PhpUnit/UnitTests.xml Packages/Application/Sandstorm.E2ETestTools/Tests/Unit
