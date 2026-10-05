@@ -1,6 +1,6 @@
-# With content dimensions every fixture row needs a dimension space point. Set a default once - per scenario with this
-# step, for all scenarios with setDefaultDimensionSpacePoint() in the FeatureContext - and leave out the
-# DimensionSpacePoint column, or its cell on rows of the default. Rows with their own dimension keep it.
+# With content dimensions every fixture row needs a dimension space point. Set a default with this step - usually in
+# the Background, so the feature shows its dimension - and leave out the DimensionSpacePoint column, or its cell on rows
+# of the default. Rows with their own dimension keep it. The default lasts until the end of the scenario.
 # The test site's language "ch" specializes "de": ch shows the de content plus its own nodes.
 @flowEntities
 Feature: Default dimension space point
@@ -22,9 +22,9 @@ Feature: Default dimension space point
     When I get the node "homepage"
     And I render the Fusion object "/testcase" with the current context node:
       """
-      testcase = ${q(node).referenceNodes('privacyPage').property('title')}
+      testcase = ${Json.stringify(node.dimensionSpacePoint.coordinates) + ' ' + q(node).referenceNodes('privacyPage').property('title')}
       """
-    Then the Fusion output should equal to "Nested"
+    Then the Fusion output should equal to '{"language":"de"} Nested'
     When I access the URI path "/"
     Then there should be the text "German headline" on the page
 
@@ -64,3 +64,21 @@ Feature: Default dimension space point
     And I have the following nodes from file "homepage-without-dimension.yaml" in site "site"
     When I access the URI path "/"
     Then there should be the text "From YAML without dimension" on the page
+
+  @playwright
+  Scenario: another default for this scenario
+    Given I have a site for Site Node "site" with name "TestSite"
+    And the default dimension space point is '{"language":"en"}'
+    And I have the following nodes in site "site":
+      | NodeAggregateId | Parent        | NodeType                                           | Properties                                   |
+      | homepage        |               | Sandstorm.E2ETestTools.TestSite:Document.StartPage | {"uriPathSegment":"site","title":"Homepage"} |
+      | section         | homepage/main | Sandstorm.E2ETestTools.TestSite:Content.Section    | {}                                           |
+      | headline        | section       | Sandstorm.E2ETestTools.TestSite:Content.Headline   | {"title":"<h1>English headline<\/h1>"}       |
+    When I get the node "headline"
+    And I render the Fusion object "/testcase" with the current context node:
+      """
+      testcase = ${Json.stringify(node.dimensionSpacePoint.coordinates)}
+      """
+    Then the Fusion output should equal to '{"language":"en"}'
+    When I access the URI path "/en"
+    Then there should be the text "English headline" on the page

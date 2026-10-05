@@ -175,9 +175,7 @@ cp Packages/Application/Sandstorm.E2ETestTools/Templates/FeatureContext.php.defa
 
 The traits live in `Classes/Behat/` (namespace `Sandstorm\E2ETestTools\Behat`) and are autoloaded by Composer - no
 `require_once` needed. Replace the site package key passed to `setupFusionRendering(...)` - the template ships with a
-placeholder that fails loudly if left unedited. With content dimensions, set the default dimension space point there
-too (`setDefaultDimensionSpacePoint(...)`, see [Fixtures](#default-dimension-space-point)), so fixture tables can leave
-out the `DimensionSpacePoint` column.
+placeholder that fails loudly if left unedited.
 
 ## 5. Playwright (playwright-bridge)
 
@@ -354,15 +352,12 @@ And I have the following nodes in site "site":
 
 ### Default dimension space point
 
-Set it once and leave out the `DimensionSpacePoint` column - for all scenarios in the `FeatureContext` constructor, or
-per scenario with a step (until the end of the scenario; before each scenario the constructor's value is back):
-
-```php
-$this->setDefaultDimensionSpacePoint(['language' => 'de']);
-```
+Set it with a step and leave out the `DimensionSpacePoint` column. It lasts until the end of the scenario - put it
+into the Background, so every feature shows which dimension its fixtures are in:
 
 ```gherkin
-Given the default dimension space point is '{"language":"de"}'
+Background:
+  Given the default dimension space point is '{"language":"de"}'
 ```
 
 Rows without a dimension space point get the default - in node and reference tables and YAML files - and so does

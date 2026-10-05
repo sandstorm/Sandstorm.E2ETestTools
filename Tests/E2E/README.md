@@ -20,8 +20,7 @@ mise run tests:e2e
 | [PageRendering/FusionPage.feature](Features/PageRendering/FusionPage.feature) | render a whole page via Fusion (no request, no browser), assert HTML |
 | [Fixtures/FromFile.feature](Features/Fixtures/FromFile.feature) + [homepage.yaml](Features/Fixtures/homepage.yaml) | create nodes from a YAML file, overwrite properties |
 | [Fixtures/References.feature](Features/Fixtures/References.feature) | set node references |
-| [Fixtures/DefaultDimension.feature](Features/Fixtures/DefaultDimension.feature) | default dimension space point by step: tables and YAML without the column, mixed with rows of another dimension |
-| [Fixtures/DefaultDimensionSetter.feature](Features/Fixtures/DefaultDimensionSetter.feature) | default from the FeatureContext (`setDefaultDimensionSpacePoint()`): no column at all, the step for one scenario only, overriding rows |
+| [Fixtures/DefaultDimension.feature](Features/Fixtures/DefaultDimension.feature) | default dimension space point: tables and YAML without the column, mixed with rows of another dimension, another default per scenario |
 | [Backend/Login.feature](Features/Backend/Login.feature) | create a backend user, log into the Neos backend, use the document tree, main menu and dashboard |
 | [PersistentResources/Download.feature](Features/PersistentResources/Download.feature) | create a file asset fixture and reference it from a node |
 | [PersistentResources/Images.feature](Features/PersistentResources/Images.feature) | create an image asset fixture and render it |
@@ -36,11 +35,6 @@ The [FeatureContext](Features/Bootstrap/FeatureContext.php) uses every shipped t
 from the README. Pages for the browser steps come from the test site's Fusion fixtures
 (`Resources/Private/Fusion/TestMarkup/`), placed with a `Content.TestMarkup` node: `{"markup":"Form"}` renders
 `TestMarkup.Form`.
-
-`behat.yml.dist` has two suites: `behat` with the [FeatureContext](Features/Bootstrap/FeatureContext.php), and
-`defaultDimensionSetter` for features tagged `@defaultDimensionSetter`, with
-[DefaultDimensionFeatureContext](Features/Bootstrap/DefaultDimensionFeatureContext.php) - the same context plus a
-default dimension space point set in the constructor. `mise run tests:e2e` runs both; `--suite <name>` one of them.
 
 The export features test the package itself and use steps only this suite has
 ([FixtureExportTrait](Features/Bootstrap/FixtureExportTrait.php)) - they aren't examples to copy.

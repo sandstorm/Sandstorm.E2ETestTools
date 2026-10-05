@@ -66,11 +66,6 @@ trait FusionRenderingTrait
     private string $sitePackageKey;
 
     /**
-     * @var array<string,string> set by setDefaultDimensionSpacePoint(), restored before each scenario
-     */
-    private array $suiteDefaultDimensionSpacePoint = [];
-
-    /**
      * @var array<string,string> for rows without a DimensionSpacePoint - see theDefaultDimensionSpacePointIs()
      */
     private array $defaultDimensionSpacePoint = [];
@@ -92,30 +87,19 @@ trait FusionRenderingTrait
     }
 
     /**
-     * Dimension space point for fixture rows (node and reference tables, YAML files) without one, and for "I get the
-     * node" without "in dimension" - set once for all scenarios, e.g. in the FeatureContext constructor:
-     *
-     *   $this->setDefaultDimensionSpacePoint(['language' => 'de']);
-     *
-     * A scenario can change it with "the default dimension space point is ...".
-     *
-     * @param array<string,string> $dimensionSpacePoint
+     * Every scenario starts without a default dimension space point.
      */
-    public function setDefaultDimensionSpacePoint(array $dimensionSpacePoint): void
-    {
-        $this->suiteDefaultDimensionSpacePoint = $dimensionSpacePoint;
-        $this->defaultDimensionSpacePoint = $dimensionSpacePoint;
-    }
-
     #[BeforeScenario]
     public function resetDefaultDimensionSpacePoint(): void
     {
-        $this->defaultDimensionSpacePoint = $this->suiteDefaultDimensionSpacePoint;
+        $this->defaultDimensionSpacePoint = [];
     }
 
     /**
-     * Rows without a DimensionSpacePoint get this one from now on, rows with one keep theirs - write the dimension only
-     * on the rows of another variant. Until the end of the scenario.
+     * Fixture rows without a DimensionSpacePoint (node and reference tables, YAML files) get this one from now on, and
+     * so does "I get the node" without "in dimension"; rows with one keep theirs - write the dimension only on the rows
+     * of another variant. Until the end of the scenario - put it into the Background, so every feature shows its
+     * dimension.
      *
      * @param string $dimensionSpacePoint JSON object, e.g. '{"language":"de"}'
      */

@@ -8,13 +8,3 @@ default:
         - "%paths.base%/Features"
       contexts:
         - FeatureContext
-      filters:
-        tags: "~@defaultDimensionSetter"
-    # the same steps, with setDefaultDimensionSpacePoint() called in the FeatureContext constructor
-    defaultDimensionSetter:
-      paths:
-        - "%paths.base%/Features"
-      contexts:
-        - DefaultDimensionFeatureContext
-      filters:
-        tags: "@defaultDimensionSetter"

@@ -58,8 +58,6 @@ class FeatureContext implements Context
 
         // !!! You need to add the Site Package Key here, so that we are able to load the Fusion code properly.
         $this->setupFusionRendering('Site.Package.Key.Here');
-        // With content dimensions: fixture rows without a DimensionSpacePoint get this one (see README, Fixtures)
-        // $this->setDefaultDimensionSpacePoint(['language' => 'de']);
 
         // Resources created by fixture steps are published automatically. For the system under test to find them,
         // Testing/Behat must use the same persistent resource storage and target as the SUT context (see README).
