@@ -194,6 +194,30 @@ class NodeFixtureGherkinTest extends UnitTestCase
     }
 
     #[Test]
+    public function dimensionSpacePointParameterIsAJsonObject(): void
+    {
+        self::assertSame(['language' => 'de'], NodeFixtureGherkin::dimensionSpacePoint('{"language":"de"}', 'the default'));
+        self::assertSame([], NodeFixtureGherkin::dimensionSpacePoint('{}', 'the default'));
+    }
+
+    #[Test]
+    #[DataProvider('invalidDimensionSpacePointParameters')]
+    public function invalidDimensionSpacePointParameterFails(string $json, string $expectedMessagePattern): void
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessageMatches($expectedMessagePattern);
+
+        NodeFixtureGherkin::dimensionSpacePoint($json, 'the default dimension space point');
+    }
+
+    public static function invalidDimensionSpacePointParameters(): iterable
+    {
+        yield 'empty' => ['', '/Empty DimensionSpacePoint.*the default dimension space point/'];
+        yield 'invalid json' => ['{language: de}', '/Invalid JSON.*the default dimension space point/'];
+        yield 'list' => ['["de"]', '/must be a JSON object/'];
+    }
+
+    #[Test]
     public function referenceTargetsAreTrimmed(): void
     {
         $references = NodeFixtureGherkin::referencesFromTable(new TableNode([['NodeAggregateId', 'ReferenceName', 'Targets'], ['a', 'r', 'b ,c,  d']]));

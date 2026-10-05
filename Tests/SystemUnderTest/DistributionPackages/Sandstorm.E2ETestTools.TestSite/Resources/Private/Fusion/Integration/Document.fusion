@@ -1,0 +1,13 @@
+prototype(Sandstorm.E2ETestTools.TestSite:Document.Page) < prototype(Neos.Neos:Page) {
+    // the plain page title - Neos.Seo's title tag would add the site name
+    head.titleTag = Neos.Fusion:Tag {
+        tagName = 'title'
+        content = ${q(node).property('title')}
+    }
+
+    body.main = Neos.Neos:ContentCollection {
+        nodePath = 'main'
+    }
+}
+
+prototype(Sandstorm.E2ETestTools.TestSite:Document.StartPage) < prototype(Sandstorm.E2ETestTools.TestSite:Document.Page)

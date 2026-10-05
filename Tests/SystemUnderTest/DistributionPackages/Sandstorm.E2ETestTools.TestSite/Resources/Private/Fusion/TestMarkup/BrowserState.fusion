@@ -1,0 +1,27 @@
+// BrowserStateTrait: shows cookies and storage, and changes them like a consent banner or a settings page would
+prototype(Sandstorm.E2ETestTools.TestSite:TestMarkup.BrowserState) < prototype(Neos.Fusion:Component) {
+    renderer = afx`
+        <p data-testid="consent-banner">We use cookies</p>
+        <button type="button" id="accept">Accept cookies</button>
+        <button type="button" id="remember">Remember settings</button>
+        <p data-testid="theme"></p>
+        <script>{props.script}</script>
+    `
+    script = '
+        const banner = document.querySelector("[data-testid=consent-banner]");
+        const showState = () => {
+            banner.hidden = document.cookie.split("; ").some((cookie) => cookie.startsWith("consent="));
+            document.querySelector("[data-testid=theme]").textContent = "Theme: " + (localStorage.getItem("theme") || "light");
+        };
+        document.getElementById("accept").addEventListener("click", () => {
+            document.cookie = "consent=" + encodeURIComponent(JSON.stringify({analytics: true})) + "; path=/";
+            showState();
+        });
+        document.getElementById("remember").addEventListener("click", () => {
+            localStorage.setItem("theme", "dark");
+            sessionStorage.setItem("tab", "details");
+            showState();
+        });
+        showState();
+    '
+}

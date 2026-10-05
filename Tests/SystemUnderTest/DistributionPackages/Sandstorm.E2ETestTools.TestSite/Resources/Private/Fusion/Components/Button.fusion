@@ -1,0 +1,17 @@
+prototype(Sandstorm.E2ETestTools.TestSite:Component.Button) < prototype(Neos.Fusion:Component) {
+    title = ''
+    type = 'primary'
+    // without href it's a <button>, with href a link
+    href = null
+
+    renderer = Neos.Fusion:Case {
+        link {
+            condition = ${props.href}
+            renderer = afx`<a href={props.href} class={'button button--' + props.type}><span>{props.title}</span></a>`
+        }
+        button {
+            condition = true
+            renderer = afx`<button type="button" class={'button button--' + props.type}><span>{props.title}</span></button>`
+        }
+    }
+}

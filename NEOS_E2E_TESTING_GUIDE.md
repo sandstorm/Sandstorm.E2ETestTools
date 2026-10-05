@@ -292,8 +292,8 @@ project adds on top.
   applies, and in one where it doesn't; for the language switcher, its links on a translated and on an untranslated
   page.
 - **Where:** in the browser.
-- **Test data:** set `DimensionSpacePoint` on every row, and create exactly the variants the rule depends on - a missing
-  variant is often the case under test.
+- **Test data:** set the default dimension space point and write `DimensionSpacePoint` only on the rows of the variant
+  the rule is about; create exactly the variants the rule depends on - a missing variant is often the case under test.
 
 ### SEO, GEO and meta tags
 

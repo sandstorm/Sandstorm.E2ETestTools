@@ -8,7 +8,7 @@ use Neos\ContentRepository\Core\SharedModel\ContentRepository\ContentRepositoryI
 use Neos\Fusion\Core\FusionConfiguration;
 use Neos\Fusion\Core\FusionSourceCodeCollection;
 use Neos\Neos\Domain\Service\FusionService;
-use Sandstorm\E2ETestTools\Tests\Behavior\Bootstrap\FusionRenderingTrait;
+use Sandstorm\E2ETestTools\Behat\FusionRenderingTrait;
 
 /**
  * Implementation detail of {@see FusionRenderingTrait}

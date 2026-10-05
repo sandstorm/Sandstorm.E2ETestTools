@@ -1,0 +1,9 @@
+{
+    "devDependencies": {
+        "playwright": "^1.51.1"
+    },
+    "dependencies": {
+        "@hapi/hapi": "^21.4.0",
+        "@playwright/test": "^1.51.1"
+    }
+}

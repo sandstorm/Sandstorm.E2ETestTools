@@ -37,4 +37,12 @@ final readonly class NodeFixtureRow
     {
         return new self($this->nodeAggregateId, $this->parent, $this->nodeType, $properties, $this->dimensionSpacePoint, $this->hidden);
     }
+
+    /**
+     * @param array<string,string> $dimensionSpacePoint
+     */
+    public function withDimensionSpacePoint(array $dimensionSpacePoint): self
+    {
+        return new self($this->nodeAggregateId, $this->parent, $this->nodeType, $this->properties, $dimensionSpacePoint, $this->hidden);
+    }
 }

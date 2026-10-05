@@ -22,8 +22,7 @@
     "autoload": {
         "psr-4": {
             "Sandstorm\\E2ETestTools\\": "Classes/",
-            "Sandstorm\\E2ETestTools\\Tests\\": "Tests/",
-            "Sandstorm\\E2ETestTools\\Tests\\Behavior\\Bootstrap\\": "Tests/Behavior/Bootstrap/"
+            "Sandstorm\\E2ETestTools\\Tests\\": "Tests/"
         }
     },
     "extra": {

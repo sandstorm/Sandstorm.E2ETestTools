@@ -1,0 +1,52 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  tests:
+    name: Tests (${{ matrix.sut }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # one entry per distribution in Tests/SystemUnderTest/
+        sut: [neos9]
+    env:
+      SUT: ${{ matrix.sut }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: jdx/mise-action@v2
+
+      - name: Build the distribution
+        run: mise run build
+
+      - name: Start the distribution
+        run: mise run start
+
+      - name: Unit tests
+        run: mise run tests:unit
+
+      - name: Functional tests
+        if: ${{ !cancelled() }}
+        run: mise run tests:functional
+
+      - name: E2E tests
+        if: ${{ !cancelled() }}
+        run: mise run tests:e2e
+
+      - name: Collect the Flow logs
+        if: ${{ failure() }}
+        run: docker compose -f Tests/SystemUnderTest/${SUT}/docker-compose.yml cp neos:/app/Data/Logs Tests/SystemUnderTest/e2e-results/flow-logs
+
+      - name: Upload screenshots, traces and logs
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-results-${{ matrix.sut }}
+          path: Tests/SystemUnderTest/e2e-results/
+          retention-days: 7

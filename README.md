@@ -56,6 +56,7 @@ Requires Neos 9 / Flow 9. For Neos 8, use the 8.x releases (latest: 8.3.2). For 
 - [Writing Behat Tests](#writing-behat-tests)
   - [Tags](#tags)
   - [Fixtures](#fixtures)
+    - [Default dimension space point](#default-dimension-space-point)
   - [Fixtures from existing content](#fixtures-from-existing-content)
     - [Fixtures for AI agents](#fixtures-for-ai-agents)
   - [Steps](#steps)
@@ -66,6 +67,8 @@ Requires Neos 9 / Flow 9. For Neos 8, use the 8.x releases (latest: 8.3.2). For 
 - [Migrating tests from Neos 8](#migrating-tests-from-neos-8)
 - [Troubleshooting](#troubleshooting)
 - [Developing this package](#developing-this-package)
+  - [Folder structure](#folder-structure)
+  - [Development distribution](#development-distribution)
   - [Unit and functional tests](#unit-and-functional-tests)
   - [Architecture](#architecture)
     - [Fixture tooling](#fixture-tooling)
@@ -166,16 +169,15 @@ skeleton with the trait wiring already correct, so copy it rather than assemblin
 yourself:
 
 ```bash
-cp Packages/Application/Sandstorm.E2ETestTools/Tests/Behavior/Bootstrap/FeatureContext.php.default \
+cp Packages/Application/Sandstorm.E2ETestTools/Templates/FeatureContext.php.default \
    DistributionPackages/Your.SitePackageKey/Tests/Behavior/Features/Bootstrap/FeatureContext.php
 ```
 
-The `require_once` paths at the top are relative to **your copy's own location**, not the
-package's — 6 `../` to reach `Packages/Application/Sandstorm.E2ETestTools/...` assumes your file
-sits at `DistributionPackages/Your.SitePackageKey/Tests/Behavior/Features/Bootstrap/FeatureContext.php` (where
-`behat.yml.dist` from step 3 autoloads it). A different depth needs a different number of `../`. Then replace the site
-package key passed to `setupFusionRendering(...)` - the template ships with a placeholder that fails loudly if left
-unedited.
+The traits live in `Classes/Behat/` (namespace `Sandstorm\E2ETestTools\Behat`) and are autoloaded by Composer - no
+`require_once` needed. Replace the site package key passed to `setupFusionRendering(...)` - the template ships with a
+placeholder that fails loudly if left unedited. With content dimensions, set the default dimension space point there
+too (`setDefaultDimensionSpacePoint(...)`, see [Fixtures](#default-dimension-space-point)), so fixture tables can leave
+out the `DimensionSpacePoint` column.
 
 ## 5. Playwright (playwright-bridge)
 
@@ -183,7 +185,7 @@ The Playwright↔Behat bridge (`index.js`) is deliberately **not** composer/npm-
 meant to be copied and adjusted per project:
 
 ```bash
-cp -r Packages/Application/Sandstorm.E2ETestTools/Resources/Private/playwright-bridge-template ./playwright-bridge
+cp -r Packages/Application/Sandstorm.E2ETestTools/Templates/playwright-bridge ./playwright-bridge
 cd playwright-bridge && npm install && npx playwright install && cd ..
 ```
 
@@ -288,7 +290,7 @@ themselves also start with; there's no separate place to configure them.
 
 Feature files live in your site package (`Tests/Behavior/Features/`), step definitions come from the traits wired up
 in your `FeatureContext` (see [Setup](#4-featurecontextphp)). **Working, commented Neos 9 examples for everything
-below are in [`Tests/Behavior/Examples/`](Tests/Behavior/Examples/README.md)** — copy one and adapt it.
+below are in [`Tests/E2E/Features/`](Tests/E2E/README.md)** — the package's own E2E suite; copy one and adapt it.
 
 What to test in a Neos project, where to test it, and the pitfalls specific to Neos, Flow and this package:
 **[Neos E2E Testing Guide](NEOS_E2E_TESTING_GUIDE.md)**.
@@ -321,7 +323,9 @@ And I have the following nodes in site "site":
 - `Parent` empty: the site node itself (created with the node name given in `in site "..."`).
 - `Parent` `homepage/main`: the tethered child node `main` of `homepage`; deeper paths like `homepage/main/foo` work
   too. `Parent` `section`: a plain child of a node created earlier, by its `NodeAggregateId`.
-- `DimensionSpacePoint` must match your content dimensions — with a `language` dimension, every row needs it.
+- `DimensionSpacePoint` must match your content dimensions — with a `language` dimension, every row needs one.
+  There's no fallback: an empty cell is `{}`, which the content repository rejects. Set a default instead of repeating
+  it (see [Default dimension space point](#default-dimension-space-point)).
 - `Properties` is a JSON object; invalid JSON, unknown NodeTypes and properties the NodeType doesn't declare fail the
   step. Gherkin unescapes `\\` to `\` in table cells, so a JSON-escaped backslash (e.g. in a PHP class name) is
   written as `\\\\`.
@@ -334,10 +338,10 @@ And I have the following nodes in site "site":
 - References: `And the following node references:` with columns `NodeAggregateId | ReferenceName | Targets |
   DimensionSpacePoint` (Targets comma-separated), optional `Properties` (JSON, set for every target of the row, typed
   by the reference's property declaration in the NodeType) — see
-  [References.feature](Tests/Behavior/Examples/Fixtures/References.feature).
+  [References.feature](Tests/E2E/Features/Fixtures/References.feature).
 - YAML: `I have the following nodes from file "homepage.yaml" in site "site"` (optionally `... with overwrites:`),
   path relative to the feature file, format see
-  [homepage.yaml](Tests/Behavior/Examples/Fixtures/homepage.yaml) — same fields as the table (`hidden: true` for the
+  [homepage.yaml](Tests/E2E/Features/Fixtures/homepage.yaml) — same fields as the table (`hidden: true` for the
   optional hidden flag), plus an optional `references:` list (`nodeAggregateId`, `referenceName`, `targets`,
   `dimensionSpacePoint`, optional `properties`). Invalid entries fail with their position in the file; nodes keyed by
   identifier (the old Neos 8 export) are rejected.
@@ -345,8 +349,37 @@ And I have the following nodes in site "site":
   `"42"`, `[...]`, `{...}`) and used as text otherwise; an overwrite for a node that isn't in the file fails.
 - Assets: `I have a textual persistent resource ...` and `I have the following images:` create file/image assets
   that node properties can reference — see
-  [Download.feature](Tests/Behavior/Examples/PersistentResources/Download.feature). They're published right away;
+  [Download.feature](Tests/E2E/Features/PersistentResources/Download.feature). They're published right away;
   the Behat context must share the persistent resource storage/target with the SUT (Setup step 2).
+
+### Default dimension space point
+
+Set it once and leave out the `DimensionSpacePoint` column - for all scenarios in the `FeatureContext` constructor, or
+per scenario with a step (until the end of the scenario; before each scenario the constructor's value is back):
+
+```php
+$this->setDefaultDimensionSpacePoint(['language' => 'de']);
+```
+
+```gherkin
+Given the default dimension space point is '{"language":"de"}'
+```
+
+Rows without a dimension space point get the default - in node and reference tables and YAML files - and so does
+`I get the node "..."` without `in dimension`. Rows with their own keep it, so only the rows of another variant need
+the column ("mixed mode"):
+
+```gherkin
+Given the default dimension space point is '{"language":"de"}'
+And I have the following nodes in site "site":
+  | NodeAggregateId | Parent        | NodeType                               | Properties                                  | DimensionSpacePoint |
+  | homepage        |               | Your.SitePackageKey:Document.StartPage | {"uriPathSegment":"site","title":"Home"}    |                     |
+  | section         | homepage/main | Your.SitePackageKey:Content.Section    | {}                                          |                     |
+  | swiss-teaser    | section       | Your.SitePackageKey:Content.Teaser     | {"title":"Nur in der Schweiz"}              | {"language":"ch"}   |
+```
+
+A row of another dimension needs a parent that's visible there (e.g. `ch` specializing `de`) - the fixtures create
+no variants. See [DefaultDimension.feature](Tests/E2E/Features/Fixtures/DefaultDimension.feature).
 
 ## Fixtures from existing content
 
@@ -360,7 +393,8 @@ All three ways produce the format above and export the same tree: the node's clo
 and descendants, plus references between them, including the hidden state of explicitly hidden nodes and reference
 properties. Tethered nodes and nodes of unknown NodeTypes are left out, as are properties the NodeType doesn't declare
 (anymore). **Assets are not exported** — asset properties keep the asset id; create those assets in the scenario
-(`I have the following images:` …).
+(`I have the following images:` …). Every row keeps its dimension space point, even with a default set: an export works
+in any scenario, with or without one.
 
 - **Export Node button** (inspector, tab with the gear icon, group "Export"): downloads the YAML for the selected
   node, from the current workspace and dimension. **Administrators only** (`Configuration/Policy.yaml`): other
@@ -418,7 +452,7 @@ Run the command in the Flow context with the content you export (e.g. inside you
 
 | Trait | Steps |
 |---|---|
-| `FusionRenderingTrait` | `I have a site for Site Node :siteNodeName [with name :siteName]` · `I have/create the following nodes in site :siteName:` · `the following node references:` · `I get the node :nodeAggregateId [in dimension :dimensionSpacePoint]` · `I render the Fusion object :fusionPath:` · `I render the Fusion object :fusionPath with the current context node:` · `I render the page` · `the Fusion output should equal to :expected` · `in the fusion output, the inner HTML of CSS selector :selector matches :expected` · `in the fusion output, the attributes of CSS selector :selector are:` |
+| `FusionRenderingTrait` | `I have a site for Site Node :siteNodeName [with name :siteName]` · `I have/create the following nodes in site :siteName:` · `the following node references:` · `the default dimension space point is :dimensionSpacePoint` · `I get the node :nodeAggregateId [in dimension :dimensionSpacePoint]` · `I render the Fusion object :fusionPath:` · `I render the Fusion object :fusionPath with the current context node:` · `I render the page` · `the Fusion output should equal to :expected` · `in the fusion output, the inner HTML of CSS selector :selector matches :expected` · `in the fusion output, the attributes of CSS selector :selector are:` |
 | `NodeImportTrait` | `I have/create the following nodes from file :fileName in site :siteName [with overwrites:]` |
 | `PersistentResourceTrait` (via `FusionRenderingTrait`) | `I have a textual persistent resource :uuid named :filename with the following content:` · `I have the following images:` |
 | `PlaywrightTrait` | `I do a screenshot :filename` · `I debug the playwright script` (prints the generated Playwright JS) |
@@ -445,16 +479,16 @@ Notes on the steps:
 Examples by level (when to use which: [testing guide](NEOS_E2E_TESTING_GUIDE.md#where-to-test)):
 
 - **Component** (a Fusion prototype, like a pure function): `I render the Fusion object` without nodes —
-  [FusionComponent/Button.feature](Tests/Behavior/Examples/FusionComponent/Button.feature).
+  [FusionComponent/Button.feature](Tests/E2E/Features/FusionComponent/Button.feature).
 - **Integration** (node → Fusion wiring): create nodes, `I get the node`, `... with the current context node` —
-  [FusionIntegration/Button.feature](Tests/Behavior/Examples/FusionIntegration/Button.feature).
+  [FusionIntegration/Button.feature](Tests/E2E/Features/FusionIntegration/Button.feature).
 - **Page in the browser**: `I access the URI path` + assertions/screenshot —
-  [PageRendering/Homepage.feature](Tests/Behavior/Examples/PageRendering/Homepage.feature).
+  [PageRendering/Homepage.feature](Tests/E2E/Features/PageRendering/Homepage.feature).
 - **Page via Fusion** (no request, no browser): `I render the page` —
-  [PageRendering/FusionPage.feature](Tests/Behavior/Examples/PageRendering/FusionPage.feature).
+  [PageRendering/FusionPage.feature](Tests/E2E/Features/PageRendering/FusionPage.feature).
 
 Project-specific steps go into your `FeatureContext` or a trait of your project; the shipped traits in
-`Tests/Behavior/Bootstrap/` (e.g. `DebuggingTrait`) show how to drive the browser with
+`Classes/Behat/` (e.g. `DebuggingTrait`) show how to drive the browser with
 `$this->playwrightConnector->execute()`.
 
 ## Dynamic SUT URL
@@ -568,8 +602,10 @@ project's tasks, see [Project tasks](#6-project-tasks-recommended)).
 
 # Migrating tests from Neos 8
 
-Start your `FeatureContext` from [`FeatureContext.php.default`](Tests/Behavior/Bootstrap/FeatureContext.php.default)
-(Neos 9 Behat traits, content repository reset) instead of patching the old one. In the feature files:
+Start your `FeatureContext` from [`FeatureContext.php.default`](Templates/FeatureContext.php.default)
+(Neos 9 Behat traits, content repository reset) instead of patching the old one. The traits moved from
+`Sandstorm\E2ETestTools\Tests\Behavior\Bootstrap\` to `Sandstorm\E2ETestTools\Behat\` (`Classes/Behat/`); drop the
+`require_once` lines - Composer autoloads them. In the feature files:
 
 | Neos 8 | Neos 9 |
 |---|---|
@@ -653,7 +689,7 @@ Details: [Fixtures](#fixtures).
 3. **`FeatureContext.php` fatals with a missing class on boot, inherited from an older setup.**
 
    Cause: a `FeatureContext.php` written against an older version of this package references classes/traits that no
-   longer exist. Compare against the *current* `Tests/Behavior/Bootstrap/FeatureContext.php.default` in this package
+   longer exist. Compare against the *current* `Templates/FeatureContext.php.default` in this package
    and rewrite against that, rather than patching the old one forward.
 
 4. **Content changes don't show up on the SUT after resetting the content repository.**
@@ -680,20 +716,83 @@ Details: [Fixtures](#fixtures).
 
 For contributors: how the package is tested and how it works inside.
 
+## Folder structure
+
+The rule: **whatever a project uses is shipped from `Classes/`, `Configuration/`, `Resources/` or `Templates/`;
+`Tests/` holds only the package's own tests** - deleting `Tests/` mustn't break any project.
+
+```
+Sandstorm.E2ETestTools/
+├── Classes/                  # shipped PHP, autoloaded
+│   ├── Behat/                # the step traits + PlaywrightConnector - the package's main product
+│   └── Fixture/ StepGenerator/ WireMock/ Playwright/ Debugging/ ...
+├── Configuration/            # shipped Flow configuration
+├── Resources/                # shipped Flow resources (Fusion, the export button of the Neos UI)
+├── Templates/                # copied into projects once, then owned by the project
+│   ├── FeatureContext.php.default
+│   └── playwright-bridge/
+├── Tests/                    # the package's own tests - not shipped (export-ignore)
+│   ├── Unit/  Functional/    # PHPUnit
+│   ├── E2E/                  # Behat suite, doubles as examples
+│   └── SystemUnderTest/      # development distribution the tests run in
+├── mise.toml                 # tasks for the development distribution
+└── .github/workflows/        # CI
+```
+
+Why there:
+
+- **Step traits in `Classes/Behat/`:** projects use them in their own `FeatureContext`, so they're API, not the
+  package's tests - the same move Neos.Behat made for Neos 9 (`Classes/FlowBootstrapTrait` replaces the deprecated
+  `Tests/Behat/FlowContextTrait`). A project package keeps steps for *its own* features in `Tests/Behavior/`, as this
+  package does for its suite (`Tests/E2E/Features/Bootstrap/`).
+- **Templates in `Templates/`, not `Resources/`:** `Resources/` is what Flow serves and reads at runtime
+  (`resource://`, publishing). The templates are never used at runtime; they're copied into a project once and changed
+  there.
+- **Development distribution in `Tests/SystemUnderTest/`:** it exists only to run the tests. "System under test" is the
+  term the package uses everywhere (Flow context `Production/E2E-SUT`, `SYSTEM_UNDER_TEST_URL_FOR_PLAYWRIGHT`).
+- **`Tests/` stays out of Flow:** composer.json autoloads it (the tests run from the installed package), but
+  `Neos.Flow.object.includeClasses` keeps Flow from reflecting it.
+
+## Development distribution
+
+The package brings its own Dockerised Neos distribution in `Tests/SystemUnderTest/`, so all its tests run without a
+project:
+
+- `Tests/SystemUnderTest/<version>/` — one distribution per supported Neos version (`neos9`), built from the shared
+  `Dockerfile` and `docker-compose.base.yml`;
+- `Tests/SystemUnderTest/neos-root/` — copied into the image: Caddy config, PHP ini and the Flow contexts
+  `Production/E2E-SUT` (system under test, port 9090 in the container, `127.0.0.1:19090` on the host), `Testing/Behat`
+  (Behat) and `Testing` (functional tests);
+- `Tests/SystemUnderTest/DistributionPackages/Sandstorm.E2ETestTools.TestSite/` — the minimal site the E2E suite runs
+  against;
+- services: neos (SUT + Behat), maria-db, redis-cache, playwright-bridge (built from
+  `Templates/playwright-bridge`), wiremock.
+
+The package code is mounted into the container, so changes need no rebuild - only a changed `composer.json` or
+`Dockerfile` does (`mise run build`).
+
+```bash
+mise trust              # once
+mise run build          # build the images
+mise run start          # start and wait until the system under test answers
+mise run tests          # unit, functional and E2E tests
+mise run tests:e2e --tags @playwright   # only some scenarios
+mise run down           # remove containers and volumes
+```
+
+`SUT=<version>` selects another distribution. Screenshots, traces and the logs of failed scenarios land in
+`Tests/SystemUnderTest/e2e-results/`. To watch the browser, start the bridge on the host (`HEADLESS=false node index.js` in
+`Templates/playwright-bridge`) and start the distribution with
+`PLAYWRIGHT_API_URL=http://host.docker.internal:3000 mise run start`.
+
+GitHub Actions (`.github/workflows/tests.yml`) runs the same tasks for every distribution.
+
 ## Unit and functional tests
 
 The classes in `Classes/` are covered by PHPUnit tests in `Tests/Unit` and `Tests/Functional`: the fixture tooling
 (YAML format, export/import contract, Gherkin escaping, node tree collection, URI path lookup, export endpoint
-security), the WireMock admin client, script escaping (`JsValue`) and the log copying (`LogDirectory`). They run in
-the Flow distribution the package is installed in, e.g.:
-
-```bash
-FLOW_CONTEXT=Testing ./bin/phpunit -c Build/BuildEssentials/PhpUnit/UnitTests.xml Packages/Application/Sandstorm.E2ETestTools/Tests/Unit
-FLOW_CONTEXT=Testing ./bin/phpunit -c Build/BuildEssentials/PhpUnit/FunctionalTests.xml Packages/Application/Sandstorm.E2ETestTools/Tests/Functional
-```
-
-The Behat traits themselves aren't tested inside the package (that would need a distribution of its own) — the
-[examples](Tests/Behavior/Examples/README.md) are verified in a consuming project instead.
+security), the WireMock admin client, script escaping (`JsValue`), the log copying (`LogDirectory`) and the guard of the
+pause step. The Behat traits are covered by the E2E suite in [`Tests/E2E/Features/`](Tests/E2E/README.md).
 
 ## Architecture
 

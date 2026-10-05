@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Sandstorm\E2ETestTools;
 
 use Neos\Eel\ProtectedContextAwareInterface;
-use Sandstorm\E2ETestTools\Tests\Behavior\Bootstrap\FusionRenderingTrait;
+use Sandstorm\E2ETestTools\Behat\FusionRenderingTrait;
 
 /**
  * Implementation detail of {@see FusionRenderingTrait} collecting the result

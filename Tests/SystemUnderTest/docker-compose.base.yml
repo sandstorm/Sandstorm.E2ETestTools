@@ -1,0 +1,81 @@
+# Shared by all distributions - each <version>/docker-compose.yml includes this file plus its versions.yml.
+#
+# Public ports (chosen so they don't collide with a project running next to it):
+#  - 19090 -> system under test (Production/E2E-SUT)
+
+services:
+  neos:
+    build:
+      context: ../../
+      dockerfile: Tests/SystemUnderTest/Dockerfile
+    environment:
+      FLOW_CONTEXT: 'Production/E2E-SUT'
+      # DB connection
+      DB_NEOS_HOST: 'maria-db'
+      DB_NEOS_PORT: 3306
+      DB_NEOS_USER: 'neos'
+      DB_NEOS_PASSWORD: 'neos'
+      DB_NEOS_DATABASE: 'neos'
+      # Redis: caches shared between the system under test and Behat (see neos-root/app/Configuration)
+      REDIS_HOST: 'redis-cache'
+      REDIS_PORT: 6379
+      # Behat runs in this container; the browser in the playwright-bridge container.
+      # Headed: start the bridge on the host with HEADLESS=false and set PLAYWRIGHT_API_URL=http://host.docker.internal:3000
+      PLAYWRIGHT_API_URL: '${PLAYWRIGHT_API_URL:-http://playwright-bridge:3000}'
+      SYSTEM_UNDER_TEST_URL_FOR_PLAYWRIGHT: 'http://neos:9090'
+      WIREMOCK_ADMIN_URL: 'http://wiremock:8080'
+      # third-party API of the test site, answered by WireMock (see Tests/E2E/Features/WireMock/)
+      WEATHER_API_URL: 'http://wiremock:8080/weather-api'
+      PAUSE_FOR_DEBUGGING: '${PAUSE_FOR_DEBUGGING:-false}'
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ../../Classes:/app/DistributionPackages/Sandstorm.E2ETestTools/Classes:cached
+      - ../../Configuration:/app/DistributionPackages/Sandstorm.E2ETestTools/Configuration:cached
+      - ../../Resources:/app/DistributionPackages/Sandstorm.E2ETestTools/Resources:cached
+      - ../../Tests:/app/DistributionPackages/Sandstorm.E2ETestTools/Tests:cached
+      - ../../composer.json:/app/DistributionPackages/Sandstorm.E2ETestTools/composer.json:cached
+      - ./DistributionPackages/Sandstorm.E2ETestTools.TestSite:/app/DistributionPackages/Sandstorm.E2ETestTools.TestSite:cached
+      # screenshots, traces and logs of failed scenarios
+      - ./e2e-results:/app/e2e-results
+    networks:
+      - e2e
+    ports:
+      - 19090:9090
+    depends_on:
+      - maria-db
+      - redis-cache
+      - playwright-bridge
+      - wiremock
+
+  maria-db:
+    networks:
+      - e2e
+    environment:
+      MARIADB_ROOT_PASSWORD: 'neos'
+      MARIADB_DATABASE: 'neos'
+      MARIADB_USER: 'neos'
+      MARIADB_PASSWORD: 'neos'
+      MARIADB_AUTO_UPGRADE: 1
+    volumes:
+      - db-data:/var/lib/mysql
+      - ./maria-db/createTestingDB.sh:/docker-entrypoint-initdb.d/createTestingDB.sh:ro
+    command: ['mariadbd', '--character-set-server=utf8mb4', '--collation-server=utf8mb4_unicode_ci']
+
+  redis-cache:
+    image: redis:7
+    networks:
+      - e2e
+
+  playwright-bridge:
+    build:
+      context: ../../Templates/playwright-bridge
+    environment:
+      HEADLESS: 'true'
+    networks:
+      - e2e
+
+  wiremock:
+    image: wiremock/wiremock:3.13.1
+    networks:
+      - e2e

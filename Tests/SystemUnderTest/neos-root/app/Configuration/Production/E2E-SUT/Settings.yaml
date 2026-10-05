@@ -1,0 +1,18 @@
+# System under test - served by FrankenPHP on :9090. Same database as Testing/Behat, where the fixtures are created.
+Neos:
+  Flow:
+    persistence:
+      backendOptions:
+        driver: 'pdo_mysql'
+        charset: 'utf8mb4'
+        host: '%env:DB_NEOS_HOST%'
+        port: '%env:DB_NEOS_PORT%'
+        password: '%env:DB_NEOS_PASSWORD%'
+        user: '%env:DB_NEOS_USER%'
+        dbname: '%env:DB_NEOS_DATABASE%'
+    cache:
+      # all Flow contexts share the caches configured in Caches.yaml - Behat can flush what the SUT rendered
+      applicationIdentifier: 'app'
+
+  Imagine:
+    driver: Gd

@@ -29,6 +29,14 @@ final readonly class ReferenceFixtureRow
     }
 
     /**
+     * @param array<string,string> $dimensionSpacePoint
+     */
+    public function withDimensionSpacePoint(array $dimensionSpacePoint): self
+    {
+        return new self($this->nodeAggregateId, $this->referenceName, $this->targets, $dimensionSpacePoint, $this->properties);
+    }
+
+    /**
      * @param list<string> $nodeAggregateIds
      * @return self|null null if no target is left
      */

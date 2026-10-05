@@ -118,6 +118,40 @@ class NodeFixtureTest extends UnitTestCase
     /**
      * @param array<string,mixed> $properties
      */
+    // ---------------------------------------------------------------- default dimension space point
+
+    #[Test]
+    public function rowsWithoutDimensionGetTheDefault(): void
+    {
+        $fixture = (new NodeFixture(
+            [$this->node('a'), $this->node('b')],
+            [new ReferenceFixtureRow('a', 'r', ['b'], [])]
+        ))->withDefaultDimensionSpacePoint(['language' => 'de']);
+
+        self::assertSame([['language' => 'de'], ['language' => 'de']], array_map(fn (NodeFixtureRow $node) => $node->dimensionSpacePoint, $fixture->nodes));
+        self::assertSame(['language' => 'de'], $fixture->references[0]->dimensionSpacePoint);
+    }
+
+    #[Test]
+    public function rowsWithTheirOwnDimensionKeepIt(): void
+    {
+        $fixture = (new NodeFixture(
+            [$this->node('a'), $this->node('b')->withDimensionSpacePoint(['language' => 'ch'])],
+            [new ReferenceFixtureRow('a', 'r', ['b'], []), new ReferenceFixtureRow('b', 'r', ['a'], ['language' => 'ch'])]
+        ))->withDefaultDimensionSpacePoint(['language' => 'de']);
+
+        self::assertSame([['language' => 'de'], ['language' => 'ch']], array_map(fn (NodeFixtureRow $node) => $node->dimensionSpacePoint, $fixture->nodes));
+        self::assertSame([['language' => 'de'], ['language' => 'ch']], array_map(fn (ReferenceFixtureRow $reference) => $reference->dimensionSpacePoint, $fixture->references));
+    }
+
+    #[Test]
+    public function withoutDefaultTheFixtureStaysAsItIs(): void
+    {
+        $fixture = new NodeFixture([$this->node('a')], [new ReferenceFixtureRow('a', 'r', ['a'], [])]);
+
+        self::assertSame($fixture, $fixture->withDefaultDimensionSpacePoint([]));
+    }
+
     private function node(string $nodeAggregateId, array $properties = []): NodeFixtureRow
     {
         return new NodeFixtureRow($nodeAggregateId, '', 'Vendor.Site:Content.Text', $properties, []);

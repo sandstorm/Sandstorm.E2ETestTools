@@ -29,7 +29,8 @@ class E2eFixtureCommandController extends CommandController
      *
      * Same as the "Export Node" button in the Neos inspector: exports the node's closest document with all its
      * ancestors and descendants, plus references between them. Asset properties are exported as asset ids - create
-     * those assets in your scenario separately (e.g. "I have the following images:").
+     * those assets in your scenario separately (e.g. "I have the following images:"). Every row keeps its dimension space
+     * point, so the export works in any scenario, with or without a default dimension space point.
      *
      * Select the node by NodeAggregateId or by the URI path of its page (one of both):
      *   ./flow e2efixture:export 5cb3a5f7-b501-40b2-b5a8-9de169ef1105 --dimension '{"language":"de"}' > homepage.yaml

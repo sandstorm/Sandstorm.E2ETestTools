@@ -1,0 +1,82 @@
+# Development distribution of Sandstorm.E2ETestTools (see Tests/SystemUnderTest/ and Tests/E2E/README.md).
+#
+# mise trust            # once
+# mise run build        # build the images (again after changing a composer.json or the Dockerfile)
+# mise run start        # start the distribution and wait until the system under test answers
+# mise run tests        # unit, functional and E2E tests
+#
+# SUT selects the distribution in Tests/SystemUnderTest/<SUT>/ (default: neos9), e.g. `SUT=neos10 mise run start`.
+# Extra arguments are appended to the last command, e.g. `mise run tests:e2e --tags @playwright` or `--name "editor can log in"`.
+
+[vars]
+compose = "docker compose -f {{config_root}}/Tests/SystemUnderTest/{{ get_env(name='SUT', default='neos9') }}/docker-compose.yml"
+package = "/app/DistributionPackages/Sandstorm.E2ETestTools"
+
+######################## Docker Management ########################
+
+[tasks.build]
+description = "Build the images of the distribution"
+run = "{{vars.compose}} build --pull"
+
+[tasks.start]
+description = "Start the distribution and wait until the system under test answers"
+run = '''
+mkdir -p "{{config_root}}/Tests/SystemUnderTest/e2e-results"
+{{vars.compose}} up -d
+echo "Waiting for the system under test (first start: migrations, cr:setup)..."
+for i in $(seq 1 120); do
+  if {{vars.compose}} exec -T neos curl --silent --fail --output /dev/null http://localhost:9090/neos/login; then
+    echo "System under test is up: http://127.0.0.1:19090"
+    exit 0
+  fi
+  sleep 2
+done
+echo "System under test did not come up - see: mise run logs"
+exit 1
+'''
+
+[tasks.stop]
+description = "Stop the containers"
+run = "{{vars.compose}} stop"
+
+[tasks.down]
+description = "Remove the containers, networks and volumes of the distribution"
+run = "{{vars.compose}} down --volumes --remove-orphans"
+
+[tasks.logs]
+description = "Follow the container logs (optionally pass service names)"
+run = "{{vars.compose}} logs -f"
+
+[tasks.enter]
+description = "Open a shell in the neos container"
+run = "{{vars.compose}} exec neos bash"
+
+[tasks."open:site-e2e"]
+description = "Open the system under test"
+run = '''
+open http://127.0.0.1:19090
+open http://127.0.0.1:19090/neos
+'''
+
+######################## Testing ########################
+
+[tasks."tests:unit"]
+description = "Run the package's unit tests"
+run = "{{vars.compose}} exec -T neos bash -c 'FLOW_CONTEXT=Testing ./bin/phpunit -c Build/BuildEssentials/PhpUnit/UnitTests.xml {{vars.package}}/Tests/Unit'"
+
+[tasks."tests:functional"]
+description = "Run the package's functional tests"
+run = "{{vars.compose}} exec -T neos bash -c 'FLOW_CONTEXT=Testing ./bin/phpunit -c Build/BuildEssentials/PhpUnit/FunctionalTests.xml {{vars.package}}/Tests/Functional'"
+
+[tasks."tests:e2e"]
+description = "Run the package's E2E suite (optionally pass --tags or --name)"
+run = '''
+# the system under test runs in a Production context, which doesn't notice code changes - start from fresh caches
+{{vars.compose}} exec -T neos ./flow flow:cache:flush
+{{vars.compose}} exec -T neos ./flow flow:cache:warmup
+{{vars.compose}} exec -T -e FLOW_CONTEXT=Testing/Behat neos ./bin/behat --strict -c {{vars.package}}/Tests/E2E/behat.yml.dist
+'''
+
+[tasks.tests]
+description = "Run unit, functional and E2E tests"
+run = ["mise run tests:unit", "mise run tests:functional", "mise run tests:e2e"]

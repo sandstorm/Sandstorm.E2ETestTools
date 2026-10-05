@@ -1,0 +1,13 @@
+# homepage.yaml without dimensionSpacePoint - the rows get the default dimension space point of the scenario
+nodes:
+  - nodeAggregateId: homepage
+    parent: ''
+    nodeType: 'Sandstorm.E2ETestTools.TestSite:Document.StartPage'
+    properties: { uriPathSegment: site, title: Homepage }
+  - nodeAggregateId: section
+    parent: homepage/main
+    nodeType: 'Sandstorm.E2ETestTools.TestSite:Content.Section'
+  - nodeAggregateId: headline
+    parent: section
+    nodeType: 'Sandstorm.E2ETestTools.TestSite:Content.Headline'
+    properties: { title: '<h1>From YAML without dimension</h1>' }

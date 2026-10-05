@@ -1,0 +1,3 @@
+include: Components/*.fusion
+include: Integration/*.fusion
+include: TestMarkup/*.fusion

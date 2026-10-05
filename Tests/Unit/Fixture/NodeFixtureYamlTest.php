@@ -61,6 +61,19 @@ class NodeFixtureYamlTest extends UnitTestCase
     }
 
     #[Test]
+    public function dimensionSpacePointIsAlwaysDumped(): void
+    {
+        // the export stays verbose: an exported fixture must not depend on a default dimension space point
+        $yaml = Yaml::parse(NodeFixtureYaml::dump(new NodeFixture(
+            [new NodeFixtureRow('a', '', 'Vendor.Site:Content.Text', [], [])],
+            [new ReferenceFixtureRow('a', 'r', ['a'], [])]
+        )));
+
+        self::assertArrayHasKey('dimensionSpacePoint', $yaml['nodes'][0]);
+        self::assertArrayHasKey('dimensionSpacePoint', $yaml['references'][0]);
+    }
+
+    #[Test]
     public function referencesAreOmittedWhenThereAreNone(): void
     {
         self::assertArrayNotHasKey('references', Yaml::parse(NodeFixtureYaml::dump(new NodeFixture([new NodeFixtureRow('home', '', 'Vendor.Site:Document.Page', [], [])]))));

@@ -122,6 +122,19 @@ final class NodeFixtureGherkin
     }
 
     /**
+     * A dimension space point as JSON object, e.g. {"language":"de"} - for steps that take one as parameter.
+     *
+     * @return array<string,string>
+     */
+    public static function dimensionSpacePoint(string $json, string $position): array
+    {
+        if ($json === '') {
+            throw new \RuntimeException(sprintf('Empty DimensionSpacePoint in %s - use a JSON object like {"language":"de"}.', $position), 1728140001);
+        }
+        return self::jsonMapCell(['DimensionSpacePoint' => $json], 'DimensionSpacePoint', $position);
+    }
+
+    /**
      * @param array<string,string> $dimensionSpacePoint
      */
     private static function dimensionSpacePointCell(array $dimensionSpacePoint): string

@@ -1,0 +1,20 @@
+# Behat configuration of the package's own E2E suite - runs in the development distribution (`mise run tests:e2e`).
+default:
+  autoload:
+    '': "%paths.base%/Features/Bootstrap"
+  suites:
+    behat:
+      paths:
+        - "%paths.base%/Features"
+      contexts:
+        - FeatureContext
+      filters:
+        tags: "~@defaultDimensionSetter"
+    # the same steps, with setDefaultDimensionSpacePoint() called in the FeatureContext constructor
+    defaultDimensionSetter:
+      paths:
+        - "%paths.base%/Features"
+      contexts:
+        - DefaultDimensionFeatureContext
+      filters:
+        tags: "@defaultDimensionSetter"

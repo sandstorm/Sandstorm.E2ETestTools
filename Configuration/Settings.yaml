@@ -19,9 +19,9 @@ Neos:
   Flow:
     object:
       includeClasses:
-        # composer.json autoloads all of Tests/ (the Behat traits live there) - keep the PHPUnit tests out of Flow's
-        # reflection, their base classes only exist when running PHPUnit
-        'Sandstorm.E2ETestTools': ['Sandstorm\\E2ETestTools\\(?!Tests\\(Unit|Functional)\\).*']
+        # composer.json autoloads Tests/ for the package's own tests (run from its development distribution) - keep
+        # them out of Flow's reflection: their base classes only exist when PHPUnit/Behat runs
+        'Sandstorm.E2ETestTools': ['Sandstorm\\E2ETestTools\\(?!Tests\\).*']
     security:
       authentication:
         providers:

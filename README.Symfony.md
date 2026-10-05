@@ -138,7 +138,7 @@ APP_ENV=test vendor/bin/behat
 
 ## Setting up Playwright
 
-We suggest copying `Resources/Private/playwright-bridge-template` of this package to the root of the Git Repository and
+We suggest copying `Templates/playwright-bridge` of this package to the root of the Git Repository and
 name the folder `playwright-bridge` (in our projects, usually one level ABOVE the application root directory).
 
 Additionally, you'll need the following `.gitlab-ci.yml` for *BUILDING*
@@ -207,7 +207,7 @@ declare(strict_types=1);
 namespace App\Tests\Behat;
 
 use Behat\Behat\Context\Context;
-use Sandstorm\E2ETestTools\Tests\Behavior\Bootstrap\PlaywrightTrait;
+use Sandstorm\E2ETestTools\Behat\PlaywrightTrait;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\KernelInterface;
 

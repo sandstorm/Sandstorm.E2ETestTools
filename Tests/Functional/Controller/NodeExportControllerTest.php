@@ -11,8 +11,12 @@ use Neos\Utility\ObjectAccess;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use Sandstorm\E2ETestTools\Controller\NodeExportController;
+use Sandstorm\E2ETestTools\Fixture\NodeFixture;
+use Sandstorm\E2ETestTools\Fixture\NodeFixtureRow;
+use Sandstorm\E2ETestTools\Fixture\ReferenceFixtureRow;
 use Sandstorm\E2ETestTools\Service\NodeExportService;
 use Sandstorm\E2ETestTools\Service\NodeNotFoundException;
+use Symfony\Component\Yaml\Yaml;
 
 /**
  * The export endpoint can read content of any workspace - only administrators (i.e. the developers writing tests)
@@ -133,6 +137,32 @@ class NodeExportControllerTest extends FunctionalTestCase
 
         self::assertSame(404, $response->getStatusCode(), (string)$response->getBody());
         self::assertStringContainsString('does-not-exist', (string)$response->getBody());
+    }
+
+    #[Test]
+    public function exportedYamlCarriesTheDimensionOfEveryRow(): void
+    {
+        // the export stays verbose - it must work in a scenario without a default dimension space point
+        $this->authenticateRoles(['Neos.Neos:Administrator']);
+        $nodeExportService = $this->createMock(NodeExportService::class);
+        $nodeExportService->method('exportNodeTree')->willReturn(new NodeFixture(
+            [
+                new NodeFixtureRow('homepage', '', 'Vendor.Site:Document.Page', [], ['language' => 'de']),
+                new NodeFixtureRow('teaser', 'homepage', 'Vendor.Site:Content.Teaser', [], ['language' => 'de']),
+            ],
+            [new ReferenceFixtureRow('teaser', 'target', ['homepage'], ['language' => 'de'])]
+        ));
+        $this->objectManager->setInstance(NodeExportService::class, $nodeExportService);
+        $controller = $this->objectManager->get(NodeExportController::class);
+        ObjectAccess::setProperty($controller, 'nodeExportService', $nodeExportService, true);
+
+        $response = $this->browser->request($this->exportUri(self::UNKNOWN_NODE_ADDRESS));
+
+        self::assertSame(200, $response->getStatusCode(), (string)$response->getBody());
+        $yaml = Yaml::parse((string)$response->getBody());
+        foreach ([...$yaml['nodes'], ...$yaml['references']] as $row) {
+            self::assertSame(['language' => 'de'], $row['dimensionSpacePoint']);
+        }
     }
 
     private function exportUri(string $nodeAddress): string

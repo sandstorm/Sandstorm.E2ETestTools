@@ -1,0 +1,12 @@
+# Functional tests of the package (`mise run tests:functional`)
+Neos:
+  Flow:
+    persistence:
+      backendOptions:
+        driver: 'pdo_mysql'
+        charset: 'utf8mb4'
+        host: '%env:DB_NEOS_HOST%'
+        port: '%env:DB_NEOS_PORT%'
+        password: '%env:DB_NEOS_PASSWORD%'
+        user: '%env:DB_NEOS_USER%'
+        dbname: 'flow_functional_testing'

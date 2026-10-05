@@ -75,7 +75,8 @@ trait InMemorySubgraphTrait
             $this->propertyCollection($properties),
             $name !== null ? NodeName::fromString($name) : null,
             NodeTags::create($tags ?? SubtreeTags::createEmpty(), $inheritedTags ?? SubtreeTags::createEmpty()),
-            Timestamps::create(new \DateTimeImmutable(), new \DateTimeImmutable(), null, null),
+            // the CR rejects timestamps that aren't UTC
+            Timestamps::create(new \DateTimeImmutable('now', new \DateTimeZone('UTC')), new \DateTimeImmutable('now', new \DateTimeZone('UTC')), null, null),
             VisibilityConstraints::createEmpty(),
         );
         if ($parentId !== null) {

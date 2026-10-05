@@ -39,6 +39,23 @@ final readonly class NodeFixture
     }
 
     /**
+     * Rows without a dimension space point get the default; rows with one keep theirs - so a scenario sets the default
+     * once and writes the dimension only on the rows of another variant.
+     *
+     * @param array<string,string> $dimensionSpacePoint [] keeps the fixture as it is
+     */
+    public function withDefaultDimensionSpacePoint(array $dimensionSpacePoint): self
+    {
+        if ($dimensionSpacePoint === []) {
+            return $this;
+        }
+        return new self(
+            array_map(fn (NodeFixtureRow $node) => $node->dimensionSpacePoint === [] ? $node->withDimensionSpacePoint($dimensionSpacePoint) : $node, $this->nodes),
+            array_map(fn (ReferenceFixtureRow $reference) => $reference->dimensionSpacePoint === [] ? $reference->withDimensionSpacePoint($dimensionSpacePoint) : $reference, $this->references),
+        );
+    }
+
+    /**
      * @param array<string,array<string,string>> $overwrites ['<nodeAggregateId>' => ['<property>' => '<value>']] from
      *     the overwrite table - values that are valid JSON are decoded (true, 42, null, "42", [...], {...}), so non-string
      *     properties can be overwritten too; everything else is used as text

@@ -1,0 +1,14 @@
+// WireMockTrait: the system under test calls a third-party API on the server side
+prototype(Sandstorm.E2ETestTools.TestSite:TestMarkup.Weather) < prototype(Neos.Fusion:Component) {
+    renderer = afx`<p data-testid="forecast">Forecast: {Sandstorm.E2ETestTools.TestSite.Weather.forecast()}</p>`
+
+    // the answer changes per scenario (WireMock stubs) - a cached page would show the previous scenario's forecast
+    @cache {
+        mode = 'uncached'
+        context {
+            1 = 'node'
+            2 = 'documentNode'
+            3 = 'site'
+        }
+    }
+}

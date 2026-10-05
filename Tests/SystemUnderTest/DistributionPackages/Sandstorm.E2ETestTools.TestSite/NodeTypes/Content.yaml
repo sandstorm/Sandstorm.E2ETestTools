@@ -1,0 +1,84 @@
+'Sandstorm.E2ETestTools.TestSite:Content.Section':
+  superTypes:
+    'Neos.Neos:Content': true
+    'Neos.Neos:ContentCollection': true
+  ui:
+    label: 'Section'
+    icon: icon-square
+
+'Sandstorm.E2ETestTools.TestSite:Content.Headline':
+  superTypes:
+    'Neos.Neos:Content': true
+  ui:
+    label: 'Headline'
+    icon: icon-header
+  properties:
+    title:
+      type: string
+      defaultValue: '<h2>Headline</h2>'
+      ui:
+        inlineEditable: true
+
+'Sandstorm.E2ETestTools.TestSite:Content.Button':
+  superTypes:
+    'Neos.Neos:Content': true
+  ui:
+    label: 'Button'
+    icon: icon-box
+  properties:
+    title:
+      type: string
+      ui:
+        inlineEditable: true
+    type:
+      type: string
+      defaultValue: primary
+    link:
+      type: string
+      ui:
+        label: 'Link'
+        inspector:
+          group: document
+          editor: Neos.Neos/Inspector/Editors/LinkEditor
+
+'Sandstorm.E2ETestTools.TestSite:Content.Download':
+  superTypes:
+    'Neos.Neos:Content': true
+  ui:
+    label: 'Download'
+    icon: icon-download
+  properties:
+    description:
+      type: string
+      ui:
+        inlineEditable: true
+    file:
+      type: Neos\Media\Domain\Model\Asset
+      ui:
+        label: 'File'
+        inspector:
+          group: document
+
+'Sandstorm.E2ETestTools.TestSite:Content.Image':
+  superTypes:
+    'Neos.Neos:Content': true
+  ui:
+    label: 'Image'
+    icon: icon-image
+  properties:
+    image:
+      type: Neos\Media\Domain\Model\ImageInterface
+    alternativeText:
+      type: string
+
+# Renders one of the Fusion fixtures in Resources/Private/Fusion/TestMarkup/ - a test page for the browser steps without
+# a NodeType per page: {"markup":"Form"} renders Sandstorm.E2ETestTools.TestSite:TestMarkup.Form
+'Sandstorm.E2ETestTools.TestSite:Content.TestMarkup':
+  superTypes:
+    'Neos.Neos:Content': true
+  ui:
+    label: 'Test markup'
+    icon: icon-code
+  properties:
+    markup:
+      type: string
