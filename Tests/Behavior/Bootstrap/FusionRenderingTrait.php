@@ -4,13 +4,10 @@ declare(strict_types=1);
 
 namespace Sandstorm\E2ETestTools\Tests\Behavior\Bootstrap;
 
-use Behat\Behat\Hook\Scope\BeforeScenarioScope;
 use Behat\Gherkin\Node\PyStringNode;
 use Behat\Gherkin\Node\TableNode;
 use Behat\Step\Given;
 use Behat\Step\When;
-use Behat\Testwork\Hook\Scope\AfterSuiteScope;
-use Behat\Testwork\Hook\Scope\BeforeSuiteScope;
 use GuzzleHttp\Psr7\ServerRequest;
 use Neos\ContentRepository\Core\ContentRepository;
 use Neos\ContentRepository\Core\DimensionSpace\DimensionSpacePoint;
@@ -46,7 +43,6 @@ use Neos\Neos\Domain\Repository\WorkspaceMetadataAndRoleRepository;
 use Neos\Neos\Domain\Service\WorkspaceService;
 use Neos\Neos\Domain\SubtreeTagging\NeosVisibilityConstraints;
 use Neos\Neos\FrontendRouting\SiteDetection\SiteDetectionResult;
-use Neos\Utility\Files;
 use PHPUnit\Framework\Assert;
 use Sandstorm\E2ETestTools\Fixture\NodeFixture;
 use Sandstorm\E2ETestTools\Fixture\NodeFixtureGherkin;
@@ -269,7 +265,6 @@ trait FusionRenderingTrait
         $result = $this->internalRender('root', $additionalFusion, $this->currentNodeFusionContext());
 
         $fusionRenderingResult->setAndReturnRenderedElement($result);
-        $fusionRenderingResult->setAndReturnRenderedPage($result);
 
         $this->lastFusionRenderingResult = $fusionRenderingResult;
     }
@@ -336,100 +331,6 @@ trait FusionRenderingTrait
     public function theFusionOutputShouldEqualTo($expected)
     {
         Assert::assertEquals($expected, $this->lastFusionRenderingResult->getRenderedElement());
-    }
-
-    /**
-     * @BeforeSuite
-     */
-    public static function removeStyleguideOnBoot(BeforeSuiteScope $scope)
-    {
-        // we need to instanciate the constructor here, in order to have the autoloader
-        // of Flow start up (so that we can load the Files class)
-        new static();
-        if (is_dir(FLOW_PATH_WEB . 'styleguide')) {
-            Files::removeDirectoryRecursively(FLOW_PATH_WEB . 'styleguide');
-        }
-    }
-
-    private BeforeScenarioScope $fusionRendering_currentStep;
-
-    /**
-     * @BeforeScenario
-     */
-    public function fusionRenderingBeforeScenario(BeforeScenarioScope $event): void
-    {
-        $this->fusionRendering_currentStep = $event;
-    }
-
-    /**
-     * @Then I store the Fusion output in the styleguide as :name
-     */
-    public function iStoreTheFusionOutputInTheStyleguideAs(string $name)
-    {
-        $this->storeFusionOutputInStyleguideInternal($name, '');
-    }
-
-
-    /**
-     * @Then I store the Fusion output in the styleguide as :name using viewport width :viewportWidth
-     */
-    public function iStoreTheFusionOutputInTheStyleguideAsUsingViewportWidth(string $name, string $viewportWidth)
-    {
-        $this->storeFusionOutputInStyleguideInternal($name, sprintf('page.setViewportSize({width: %s, height: 720});', $viewportWidth));
-    }
-
-    private function storeFusionOutputInStyleguideInternal(string $name, string $extraScript)
-    {
-        Files::createDirectoryRecursively(FLOW_PATH_WEB . 'styleguide');
-
-        file_put_contents(FLOW_PATH_WEB . 'styleguide/' . $name . '.html', $this->lastFusionRenderingResult->getRenderedPage());
-
-        if (!property_exists($this, 'playwrightConnector')) {
-            throw new \RuntimeException('You need to run setupPlaywright() from PlaywrightTrait before calling this method.');
-        }
-
-        if ($this->playwrightContext === null) {
-            throw new \RuntimeException('You need to annotate your Feature with @playwright if you want to use the styleguide feature');
-        }
-
-        $base64Image = $this->playwrightConnector->execute($this->playwrightContext, sprintf('
-                const page = await context.newPage();
-                %s
-                await page.goto("BASEURL/styleguide/%s.html");
-                const contentHandle = await page.$(".sandstorm_e2etesttools_fullwrapper");
-                if (contentHandle) {
-                    const buffer = await contentHandle.screenshot();
-                    return buffer.toString("base64");
-                } else {
-                    const buffer = await page.screenshot({fullPage: true});
-                    return buffer.toString("base64");
-                }
-            ', $extraScript, $name));
-        $image = base64_decode($base64Image);
-
-        file_put_contents(FLOW_PATH_WEB . 'styleguide/' . $name . '.png', $image);
-
-    }
-
-    /**
-     * @AfterSuite
-     */
-    public static function renderStyleguideIndexFile(AfterSuiteScope $scope)
-    {
-        if (is_dir(FLOW_PATH_WEB . 'styleguide')) {
-            $indexFileContents = '<html><head><title>Styleguide</title></head><body>';
-
-            foreach (glob(FLOW_PATH_WEB . 'styleguide/*.html') as $filename) {
-                $basename = basename($filename, '.html');
-                $indexFileContents .= sprintf('<h2>%s</h2><a href="%s.html"><img src="%s.png" /></a>', $basename, $basename, $basename);
-            }
-            $indexFileContents .= '</body></html>';
-            file_put_contents(FLOW_PATH_WEB . 'styleguide/index.html', $indexFileContents);
-
-            // same base URL Playwright uses to screenshot the styleguide pages (see PlaywrightTrait)
-            $baseUrl = getenv('SYSTEM_UNDER_TEST_URL_FOR_PLAYWRIGHT') ?: '';
-            echo 'The STYLEGUIDE can be found at ' . rtrim($baseUrl, '/') . '/styleguide/';
-        }
     }
 
     /**

@@ -40,7 +40,7 @@ class FeatureContext implements Context
     // Browser Automation
     use PlaywrightTrait;
 
-    // Render Fusion code and Styleguide; create nodes via Neos 9 CR API (part of Sandstorm.E2ETestTools)
+    // Render Fusion code; create nodes via Neos 9 CR API (part of Sandstorm.E2ETestTools)
     use FusionRenderingTrait;
 
     // Backend login/navigation, page visits and assertions (part of Sandstorm.E2ETestTools)

@@ -35,8 +35,6 @@ Feature: Headline integration
   the Neos 9 content repository API.
 - **Fixture export** - export existing pages (backend button or CLI) into that format: realistic test data without
   writing node tables by hand.
-- **Style guide** - store renderings as HTML snapshots plus screenshots (with configurable viewport widths) on one
-  overview page.
 - **Mocked third-party APIs** - WireMock stubs per scenario, and checks of the calls your site made.
 - **Debugging and CI** - screenshots of failing steps, Playwright traces and server logs of failing scenarios, a
   pause step, a GitLab CI example running the tests inside the deployed image.
@@ -61,7 +59,6 @@ Requires Neos 9 / Flow 9. For Neos 8, use the 8.x releases (latest: 8.3.2). For 
   - [Fixtures from existing content](#fixtures-from-existing-content)
     - [Fixtures for AI agents](#fixtures-for-ai-agents)
   - [Steps](#steps)
-  - [Style Guide](#style-guide)
   - [Dynamic SUT URL](#dynamic-sut-url)
   - [Mocked third-party APIs (WireMock)](#mocked-third-party-apis-wiremock)
 - [Running Behat Tests](#running-behat-tests)
@@ -301,8 +298,8 @@ What to test in a Neos project, where to test it, and the pitfalls specific to N
 - `@flowEntities` — resets the content repository before the scenario (prunes it, creates the live workspace and the
   `/sites` root) via your `FeatureContext`'s `@BeforeScenario @flowEntities` hook. Needed for every scenario that
   creates nodes.
-- `@playwright` — starts a browser context in the playwright-bridge. Needed for page visits, backend steps,
-  screenshots and the style guide.
+- `@playwright` — starts a browser context in the playwright-bridge. Needed for page visits, backend steps and
+  screenshots.
 - `@wireMock` — resets WireMock to its base stubs before the scenario (`WireMockTrait`, see
   [Mocked third-party APIs](#mocked-third-party-apis-wiremock)).
 
@@ -421,7 +418,7 @@ Run the command in the Flow context with the content you export (e.g. inside you
 
 | Trait | Steps |
 |---|---|
-| `FusionRenderingTrait` | `I have a site for Site Node :siteNodeName [with name :siteName]` · `I have/create the following nodes in site :siteName:` · `the following node references:` · `I get the node :nodeAggregateId [in dimension :dimensionSpacePoint]` · `I render the Fusion object :fusionPath:` · `I render the Fusion object :fusionPath with the current context node:` · `I render the page` · `the Fusion output should equal to :expected` · `in the fusion output, the inner HTML of CSS selector :selector matches :expected` · `in the fusion output, the attributes of CSS selector :selector are:` · `I store the Fusion output in the styleguide as :name [using viewport width :viewportWidth]` |
+| `FusionRenderingTrait` | `I have a site for Site Node :siteNodeName [with name :siteName]` · `I have/create the following nodes in site :siteName:` · `the following node references:` · `I get the node :nodeAggregateId [in dimension :dimensionSpacePoint]` · `I render the Fusion object :fusionPath:` · `I render the Fusion object :fusionPath with the current context node:` · `I render the page` · `the Fusion output should equal to :expected` · `in the fusion output, the inner HTML of CSS selector :selector matches :expected` · `in the fusion output, the attributes of CSS selector :selector are:` |
 | `NodeImportTrait` | `I have/create the following nodes from file :fileName in site :siteName [with overwrites:]` |
 | `PersistentResourceTrait` (via `FusionRenderingTrait`) | `I have a textual persistent resource :uuid named :filename with the following content:` · `I have the following images:` |
 | `PlaywrightTrait` | `I do a screenshot :filename` · `I debug the playwright script` (prints the generated Playwright JS) |
@@ -443,7 +440,7 @@ Notes on the steps:
 - `... the inner HTML of CSS selector ... matches ...` compares for equality, not as a regular expression.
 - Escaped quotes (`\"`) inside a `"..."` step parameter don't match the step - put values that contain double quotes
   in single quotes (`'{"all":true}'`).
-- Screenshots and the style guide document a result, they don't check it.
+- Screenshots document a result, they don't check it.
 
 Examples by level (when to use which: [testing guide](NEOS_E2E_TESTING_GUIDE.md#where-to-test)):
 
@@ -453,43 +450,12 @@ Examples by level (when to use which: [testing guide](NEOS_E2E_TESTING_GUIDE.md#
   [FusionIntegration/Button.feature](Tests/Behavior/Examples/FusionIntegration/Button.feature).
 - **Page in the browser**: `I access the URI path` + assertions/screenshot —
   [PageRendering/Homepage.feature](Tests/Behavior/Examples/PageRendering/Homepage.feature).
-- **Page snapshot** (responsive, reproducible screenshots): `I render the page` + style guide —
-  [PageRendering/FusionPageSnapshot.feature](Tests/Behavior/Examples/PageRendering/FusionPageSnapshot.feature).
+- **Page via Fusion** (no request, no browser): `I render the page` —
+  [PageRendering/FusionPage.feature](Tests/Behavior/Examples/PageRendering/FusionPage.feature).
 
 Project-specific steps go into your `FeatureContext` or a trait of your project; the shipped traits in
 `Tests/Behavior/Bootstrap/` (e.g. `DebuggingTrait`) show how to drive the browser with
 `$this->playwrightConnector->execute()`.
-
-## Style Guide
-
-Every rendering can additionally be stored in a **style guide**: a static HTML page listing a screenshot of each stored
-rendering, each linking to its HTML snapshot.
-
-```gherkin
-Then I store the Fusion output in the styleguide as "Button_Component_Primary"
-Then I store the Fusion output in the styleguide as "Button_Component_Primary_Mobile" using viewport width "320"
-```
-
-- The feature must be annotated with `@playwright`, and the playwright-bridge must be running — it screenshots the
-  stored HTML through the system under test (`SYSTEM_UNDER_TEST_URL_FOR_PLAYWRIGHT`).
-- Output goes to `Web/styleguide/` (`<name>.html`, `<name>.png`, `index.html`). It's wiped at the start of each Behat
-  run, and `index.html` is regenerated at the end; Behat prints the URL (e.g.
-  [127.0.0.1:9090/styleguide/](http://127.0.0.1:9090/styleguide/)).
-- The rendering is wrapped in `Sandstorm.E2ETestTools:StyleguidePage` (see `Resources/Private/Fusion/Root.fusion`),
-  which ships **without CSS/JS**. Add your project's assets so screenshots look like the real site:
-
-  ```neosfusion
-  prototype(Sandstorm.E2ETestTools:StyleguideStylesheets) {
-      main = Neos.Fusion:Tag {
-          tagName = 'link'
-          attributes.rel = 'stylesheet'
-          attributes.href = Neos.Fusion:ResourceUri {
-              path = 'resource://Your.SitePackageKey/Public/main.css'
-          }
-      }
-  }
-  ```
-- In CI, `Web/styleguide` can be kept as a job artifact (see the `.gitlab-ci.yml` in this package).
 
 ## Dynamic SUT URL
 

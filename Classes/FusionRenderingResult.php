@@ -15,8 +15,6 @@ class FusionRenderingResult implements ProtectedContextAwareInterface
 {
     private $renderedElement;
 
-    private $renderedPage;
-
     /**
      * @return mixed
      */
@@ -33,24 +31,6 @@ class FusionRenderingResult implements ProtectedContextAwareInterface
         $this->renderedElement = $renderedElement;
         return $renderedElement;
     }
-
-    /**
-     * @return mixed
-     */
-    public function getRenderedPage()
-    {
-        return $this->renderedPage;
-    }
-
-    /**
-     * @param mixed $renderedPage
-     */
-    public function setAndReturnRenderedPage($renderedPage)
-    {
-        $this->renderedPage = $renderedPage;
-        return $renderedPage;
-    }
-
 
     public function allowsCallOfMethod($methodName)
     {

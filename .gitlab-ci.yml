@@ -92,11 +92,9 @@ e2e_test:
     # ADJUST: use your pacakge key here
     - cd /app && rm -Rf e2e-results && mkdir e2e-results && bin/behat     --format junit --out e2e-results       --format pretty --out std       -c Packages/Application/PACKAGEKEY/Tests/Behavior/behat.yml.dist
     - cp -R /app/e2e-results $CI_PROJECT_DIR/e2e-results
-    - cp -R /app/Web/styleguide $CI_PROJECT_DIR/styleguide
   artifacts:
     expire_in: 4 weeks
     paths:
       - e2e-results
-      - styleguide
     reports:
       junit: e2e-results/behat.xml

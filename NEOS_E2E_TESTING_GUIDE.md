@@ -534,8 +534,8 @@ changes. The package's `WireMockTrait` (see the [README](README.md#mocked-third-
   after the step has already failed or returned, it's an unhandled rejection in the bridge, the bridge process exits,
   and every following scenario fails. If there is nothing visible to wait for, the user gets no feedback either - add
   a loading state to the page.
-- **Know the steps' quirks** - exact matching, escaping in step parameters, what the style guide does and doesn't
-  check: see the notes below the steps table in the [README](README.md#steps).
+- **Know the steps' quirks** - exact matching, escaping in step parameters: see the notes below the steps table in
+  the [README](README.md#steps).
 
 ## Keeping the suite fast
 
@@ -603,7 +603,7 @@ Scenario: registration validates every step and sends the welcome mail
   mails - and whether a mail is sent at all. Manual testing covers the happy path; these break unnoticed.
 - **Content features editors use a lot:** their rendering states, mostly with direct Fusion rendering, plus one
   browser scenario each.
-- **Cosmetic or rarely changed:** the style guide and a visual review, no assertions.
+- **Cosmetic or rarely changed:** a visual review, no assertions.
 
 Backend tests and long journeys cost the most to keep green - spend them on the first group. Which tests run on every
 merge request and which only on the main branch or nightly is a speed decision per project.
