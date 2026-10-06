@@ -392,7 +392,7 @@ editors actually built removes that barrier and makes feature files meaningful: 
 the edge cases real content has. And since the export only writes what the current NodeTypes declare, the fixture fits
 your code as it is today. Use the button when you're in the backend anyway, the CLI for scripts and coding agents.
 
-All three ways produce the format above and export the same tree: the node's closest document with all its ancestors
+Both produce the format above and export the same tree: the node's closest document with all its ancestors
 and descendants, plus references between them, including the hidden state of explicitly hidden nodes and reference
 properties. Tethered nodes and nodes of unknown NodeTypes are left out, as are properties the NodeType doesn't declare
 (anymore). **Assets are not exported** — asset properties keep the asset id; create those assets in the scenario
@@ -408,29 +408,6 @@ in any scenario, with or without one.
   the id, `--uri-path about/team` selects the page by its URI path (without dimension prefix and suffix, `/` is the
   homepage; `--source-site <siteNodeName>` only with several sites). `--format gherkin --site-name site` prints the
   inline steps instead; `--workspace` defaults to `live`, `--content-repository` to `default`.
-- **StepGenerator** — for your own command controllers, when you want a different selection of nodes, or image
-  fixture files (written to `withFixturesBaseDirectory()` and printed as `I have the following images:`):
-
-  ```php
-  public function homepageCommand(): void
-  {
-      $subgraph = $this->contentRepositoryRegistry->get(ContentRepositoryId::fromString('default'))
-          ->getContentGraph(WorkspaceName::forLive())
-          ->getSubgraph(DimensionSpacePoint::fromArray(['language' => 'de']), NeosVisibilityConstraints::excludeRemoved());
-      $homepage = $subgraph->findNodeById(NodeAggregateId::fromString('...'));
-
-      $nodeTable = $this->nodeTableBuilderService->nodeTable() // Sandstorm\E2ETestTools\StepGenerator\NodeTableBuilderService
-          ->withFixturesBaseDirectory('Your.SitePackageKey', 'Tests/Behavior/Features/Homepage/Resources/')
-          ->build($subgraph);
-      $nodeTable->addParents($homepage);
-      $nodeTable->addNode($homepage);
-      $nodeTable->addChildNodesRecursively($homepage, '!Neos.Neos:Document'); // the homepage's content
-      $nodeTable->addChildNodesRecursively($homepage, 'Neos.Neos:Document');  // other documents, so menus render
-      $nodeTable->print('site'); // site node name for "... in site"
-  }
-  ```
-
-  References are only printed for targets that are part of the table.
 
 ### Fixtures for AI agents
 
