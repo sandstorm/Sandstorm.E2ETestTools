@@ -783,7 +783,8 @@ mise run down           # remove containers and volumes
 GitHub Actions (`.github/workflows/tests.yml`) runs the same tasks for every distribution. Its image layers come from
 the GitHub Actions cache (`Tests/SystemUnderTest/docker-compose.ci-cache.yml`), so the image is only rebuilt when the
 `Dockerfile` or a `composer.json` changes - a newer Neos patch release arrives with such a change, or after deleting the
-cache (repository → Actions → Caches).
+cache (repository → Actions → Caches). Whether the cache works shows in the log of "Build the distribution": the Dockerfile steps say
+`CACHED`, and "exporting to GitHub Actions Cache" ends without an error.
 
 ## Unit and functional tests
 
