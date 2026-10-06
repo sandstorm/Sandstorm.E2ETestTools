@@ -1,7 +1,7 @@
 # E2E suite
 
 The package's own Behat suite. It runs against the test site of the development distribution
-(`Distribution/DistributionPackages/Sandstorm.E2ETestTools.TestSite`) and doubles as the examples for the steps this
+(`Tests/SystemUnderTest/DistributionPackages/Sandstorm.E2ETestTools.TestSite`) and doubles as the examples for the steps this
 package provides: copy a feature into your site package's `Tests/Behavior/Features/`, replace
 `Sandstorm.E2ETestTools.TestSite` with your site package key and adapt NodeTypes, properties and texts.
 

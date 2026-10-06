@@ -453,7 +453,9 @@ Scenario: a new news article shows up in the news list on the homepage
   same treatment - ideally by a script, so a new snapshot is anonymised the same way.
 - **Tethered nodes and constraints:** content inside a tethered collection gets `<owner>/main` as `Parent`, and its
   NodeType must be allowed there. Test data that fails on a constraint is a finding, not noise.
-- **Set `DimensionSpacePoint` on every row.** In a project with dimensions, creating a node without it fails.
+- **Every row needs a dimension space point** in a project with dimensions - set a default in the Background
+  (`Given the default dimension space point is '{"language":"de"}'`) and write the `DimensionSpacePoint` column only
+  for rows of another variant ([README](README.md#default-dimension-space-point)).
 - **Create assets with steps** and fixed ids - node properties refer to them by id.
 - **Data that isn't content** (products, prices from another system): one domain step imports a named, dated snapshot
   (`Given I imported the shop "demo-2026-02"`). When the data changes, add a new snapshot instead of editing the old

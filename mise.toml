@@ -1,12 +1,12 @@
-# Development distribution of Sandstorm.E2ETestTools (see Tests/SystemUnderTest/ and Tests/E2E/README.md).
+# Development distribution of Sandstorm.E2ETestTools (see "Development distribution" in README.md).
 #
 # mise trust            # once
 # mise run build        # build the images (again after changing a composer.json or the Dockerfile)
 # mise run start        # start the distribution and wait until the system under test answers
 # mise run tests        # unit, functional and E2E tests
 #
-# SUT selects the distribution in Tests/SystemUnderTest/<SUT>/ (default: neos9), e.g. `SUT=neos10 mise run start`.
-# Extra arguments are appended to the last command, e.g. `mise run tests:e2e --tags @playwright` or `--name "editor can log in"`.
+# SUT selects the distribution in Tests/SystemUnderTest/<SUT>/ (default: neos9), e.g. `SUT=neos9 mise run start`.
+# Extra arguments are appended to the last command, e.g. `mise run tests:e2e --tags @playwright` or `--name "navigates the backend"`.
 
 [vars]
 compose = "docker compose -f {{config_root}}/Tests/SystemUnderTest/{{ get_env(name='SUT', default='neos9') }}/docker-compose.yml"

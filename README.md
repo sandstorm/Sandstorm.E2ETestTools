@@ -121,7 +121,15 @@ FLOW_CONTEXT=Production/E2E-SUT ./flow doctrine:migrate
 
 Caches the test runner must invalidate between scenarios (e.g. the Fusion content cache) need the same storage in both
 contexts (e.g. the same Redis database), so a flush in the Behat process reaches the SUT — see
-[Troubleshooting](#troubleshooting) item 4.
+[Troubleshooting](#troubleshooting) item 4. Flow's default cache prefix contains the context name, so give both contexts
+the same one:
+
+```yaml
+Neos:
+  Flow:
+    cache:
+      applicationIdentifier: 'app'
+```
 
 If you use asset fixtures (`I have a textual persistent resource ...`, `I have the following images:`), the Behat
 context also needs the SUT's persistent resource storage and target — Flow's `Testing` defaults use separate ones
@@ -183,7 +191,7 @@ meant to be copied and adjusted per project:
 
 ```bash
 cp -r Packages/Application/Sandstorm.E2ETestTools/Templates/playwright-bridge ./playwright-bridge
-cd playwright-bridge && npm install && npx playwright install && cd ..
+cd playwright-bridge && npm ci && npx playwright install chromium && cd ..
 ```
 
 We suggest naming the folder `playwright-bridge` at the root of your Git repository (in our projects, usually one level
@@ -211,7 +219,7 @@ remember them. For example, the Neos-on-Docker kickstart ships `mise run tests:e
 ```bash
 docker compose exec maria-db /createTestingDB.sh
 docker compose exec neos bash -c "FLOW_CONTEXT=Production/E2E-SUT ./flow doctrine:migrate"
-docker compose exec neos bin/behat -c Packages/Sites/Your.SitePackageKey/Tests/Behavior/behat.yml.dist $1
+docker compose exec neos bin/behat -c DistributionPackages/Your.SitePackageKey/Tests/Behavior/behat.yml.dist $1
 ```
 
 ## 7. CI Pipeline (optional)
@@ -265,7 +273,7 @@ e2e_test:
     - your-web-server-start-command &
     - export PLAYWRIGHT_API_URL=http://playwright-bridge:3000
     - export SYSTEM_UNDER_TEST_URL_FOR_PLAYWRIGHT=http://$(hostname -i):9090
-    - ./bin/behat --format junit --out e2e-results -c Packages/Sites/Your.SitePackageKey/Tests/Behavior/behat.yml.dist
+    - ./bin/behat --format junit --out e2e-results -c DistributionPackages/Your.SitePackageKey/Tests/Behavior/behat.yml.dist
   artifacts:
     reports:
       junit: e2e-results/*.xml
@@ -398,7 +406,7 @@ in any scenario, with or without one.
 - **CLI**: `./flow e2efixture:export <nodeAggregateId> --dimension '{"language":"de"}'` prints the YAML. Instead of
   the id, `--uri-path about/team` selects the page by its URI path (without dimension prefix and suffix, `/` is the
   homepage; `--source-site <siteNodeName>` only with several sites). `--format gherkin --site-name site` prints the
-  inline steps instead; `--workspace` defaults to `live`.
+  inline steps instead; `--workspace` defaults to `live`, `--content-repository` to `default`.
 - **StepGenerator** — for your own command controllers, when you want a different selection of nodes, or image
   fixture files (written to `withFixturesBaseDirectory()` and printed as `I have the following images:`):
 
@@ -457,8 +465,9 @@ Run the command in the Flow context with the content you export (e.g. inside you
 | `DebuggingTrait` | `I pause for debugging` (see [Debugging](#debugging)) |
 | `WireMockTrait` | see [Mocked third-party APIs](#mocked-third-party-apis-wiremock) |
 
-The traits in the last five rows are opt-in: `FeatureContext.php.default` uses all but `WireMockTrait`. Remove project
-steps with the same wording before using them, otherwise Behat reports the steps as ambiguous. Buttons and links are
+The traits in the last five rows don't depend on each other - use the ones you need; `FeatureContext.php.default` uses
+all but `WireMockTrait` (it needs a WireMock service). Remove project steps with the same wording before using them,
+otherwise Behat reports the steps as ambiguous. Buttons and links are
 found by their accessible name, fields by their label, elements by `data-testid`.
 
 Notes on the steps:
@@ -489,7 +498,7 @@ Project-specific steps go into your `FeatureContext` or a trait of your project;
 
 The SUT base URL comes from `SYSTEM_UNDER_TEST_URL_FOR_PLAYWRIGHT`. When it has to change per scenario (e.g. content
 dimensions resolved by host/subdomain, multi-site setups), call `setSystemUnderTestUrlModifier()` (from
-`PlaywrightTrait`) in a custom step; the modifier is reset after each scenario:
+`PlaywrightTrait`) in a custom step; the modifier is reset before the next scenario:
 
 ```php
 /**
@@ -542,22 +551,25 @@ active stubs.
 1. Start the Playwright bridge on your machine and keep it running (e.g. all day):
 
    ```bash
-   cd playwright-bridge && node index.js   # listens on localhost:3000; HEADLESS=false node index.js shows the browser
+   cd playwright-bridge && node index.js   # port 3000; HEADLESS=false node index.js shows the browser
    ```
+
+   The bridge runs every script it receives and listens on all interfaces (so containers reach it) - keep it in a
+   trusted network and don't publish port 3000 elsewhere.
 
 2. Make sure your application runs and the E2E database exists and is migrated (see
    [Two Flow Contexts, Two Ports](#2-two-flow-contexts-two-ports)).
 3. Run Behat where your application runs (e.g. `docker compose exec neos ...`, `kubectl exec ...`, or locally):
 
    ```bash
-   bin/behat -c Packages/Sites/Your.SitePackageKey/Tests/Behavior/behat.yml.dist
+   bin/behat -c DistributionPackages/Your.SitePackageKey/Tests/Behavior/behat.yml.dist
    ```
 
    Add a folder, a feature file or a `file:line` after the config to run only those scenarios:
 
    ```bash
-   bin/behat -c Packages/Sites/Your.SitePackageKey/Tests/Behavior/behat.yml.dist Packages/Sites/Your.SitePackageKey/Tests/Behavior/Features/Fusion/
-   bin/behat -c Packages/Sites/Your.SitePackageKey/Tests/Behavior/behat.yml.dist Packages/Sites/Your.SitePackageKey/Tests/Behavior/Features/WebsiteRendering.feature:27
+   bin/behat -c DistributionPackages/Your.SitePackageKey/Tests/Behavior/behat.yml.dist DistributionPackages/Your.SitePackageKey/Tests/Behavior/Features/Fusion/
+   bin/behat -c DistributionPackages/Your.SitePackageKey/Tests/Behavior/behat.yml.dist DistributionPackages/Your.SitePackageKey/Tests/Behavior/Features/WebsiteRendering.feature:27
    ```
 
 IDE "run" buttons for Behat usually don't work when Behat runs inside a Docker container — use the CLI (or your
@@ -574,7 +586,8 @@ project's tasks, see [Project tasks](#6-project-tasks-recommended)).
 - **Traces**: for failed `@playwright` scenarios, a Playwright trace `report_<feature>_<scenario>.zip` is written to the
   results directory. Open it with
   `npx playwright show-trace path/to/report_....zip` (e.g. after `npm install -g playwright`). To keep traces of passing
-  scenarios too (or none), call `setPlaywrightTracingMode()` in your `FeatureContext`.
+  scenarios too (or none), call `$this->setPlaywrightTracingMode(self::PLAYWRIGHT_TRACING_MODE_ALWAYS)` (or
+  `..._OFF`; default `..._ON_ERROR`) in your `FeatureContext` constructor.
 - **Server logs**: an exception in the site under test shows up in the browser only as an error page - the stack
   trace is in the logs. The Flow logs (`Data/Logs`) are cleared before every scenario, and a failed scenario gets its
   log files and exception files copied into `logs_<feature>_<line>_<scenario>/` in the results directory. When the
@@ -599,7 +612,15 @@ project's tasks, see [Project tasks](#6-project-tasks-recommended)).
 Start your `FeatureContext` from [`FeatureContext.php.default`](Templates/FeatureContext.php.default)
 (Neos 9 Behat traits, content repository reset) instead of patching the old one. The traits moved from
 `Sandstorm\E2ETestTools\Tests\Behavior\Bootstrap\` to `Sandstorm\E2ETestTools\Behat\` (`Classes/Behat/`); drop the
-`require_once` lines - Composer autoloads them. In the feature files:
+`require_once` lines - Composer autoloads them. Also new:
+
+- The templates moved to `Templates/` (`FeatureContext.php.default`, `playwright-bridge/`) - compare your copy of the
+  bridge with the new one.
+- `Testing/Behat` needs the SUT's cache storage and `applicationIdentifier` and its persistent resource storage/target
+  ([Setup step 2](#2-two-flow-contexts-two-ports)).
+- Symfony projects are no longer supported - stay on 8.x there.
+
+In the feature files:
 
 | Neos 8 | Neos 9 |
 |---|---|
@@ -656,7 +677,7 @@ Details: [Fixtures](#fixtures).
    value always wins, silently, regardless of what your web server sets per-vhost.
 
    Verify by checking which context's cache/temp directory actually got populated for the request that hit the wrong
-   content (e.g. `Data/Temporary/<Context>/<SubContext>/Cache/...` for a Flow-default setup) — if it's not the
+   content (e.g. `Data/Temporary/Production/SubContextE2E-SUT/Cache/...` for a Flow-default setup) — if it's not the
    context you configured for that vhost, this is it.
 
    Fix: bridge `$_SERVER` → real env inside a PHP file that runs before every request (e.g. via `auto_prepend_file`
@@ -688,9 +709,10 @@ Details: [Fixtures](#fixtures).
 
 4. **Content changes don't show up on the SUT after resetting the content repository.**
 
-   Cause: a cache of the SUT (e.g. a full-page/HTTP response cache) isn't flushed between scenarios -
-   `setupContentRepository()` flushes no caches - or it isn't on storage shared between the runner's context and the
-   SUT's context, so a flush in the runner doesn't reach it.
+   Cause: a cache of the SUT isn't flushed between scenarios - `setupContentRepository()` flushes only the routing caches
+   and the Fusion content cache, not e.g. a full-page/HTTP response cache or caches of your project - or it isn't on
+   storage shared between the runner's context and the SUT's context (same backend and `applicationIdentifier`, see
+   [Setup step 2](#2-two-flow-contexts-two-ports)), so a flush in the runner doesn't reach it.
 
    Fix: give the cache the same storage in both contexts' `Caches.yaml` (e.g. the same Redis database; for a file
    backend, `backendOptions.cacheDirectory` in `Testing/Behat` pointing to the SUT's cache directory), and flush it in
