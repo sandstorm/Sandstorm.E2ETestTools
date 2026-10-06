@@ -7,6 +7,7 @@ namespace Sandstorm\E2ETestTools\Behat;
 use Closure;
 use GuzzleHttp\Psr7\Message;
 use Neos\Utility\Files;
+use Sandstorm\E2ETestTools\Playwright\JsValue;
 
 /**
  * This is the connector between the {@see PlaywrightTrait} and the Playwright server (located in playwright-bridge/index.js).
@@ -71,7 +72,7 @@ class PlaywrightConnector
     public function getCurrentJsCode(string $contextName)
     {
         $successResponse = $this->executeInternal($contextName, '');
-        return $successResponse['js'];
+        return $successResponse['js'] ?? '';
     }
 
     public function setStepForDebugging(string $contextName, string $stepText)
@@ -111,40 +112,37 @@ class PlaywrightConnector
         bool $keepTrace
     ) {
         $traceReportZipFileName = 'report_' . preg_replace(
-                '/[^a-zA-Z_]/',
+                '/[^a-zA-Z0-9_]/',
                 '',
                 basename($featureFile) . '_' . $scenarioName
             ) . '.zip';
+        $header = sprintf(
+            "// Finish tracing after scenario\n//   - Feature: %s (line: %d)\n//   - Scenario: %s\n",
+            $featureFile,
+            $featureFileLine,
+            $scenarioName
+        );
+        if (!$keepTrace) {
+            $this->execute($contextName, $header . 'await context.tracing.stop();');
+            return;
+        }
         $traceReportZipBase64 = $this->execute(
             $contextName,
-            sprintf(
+            $header . sprintf(
             // language=JavaScript
                 '
-            // Finish tracing after scenario
-            //   - Feature: %s (line: %d)
-            //   - Scenario: %s
-            if ("%s" === "false") {
-                await context.tracing.stop();
-                return "";
-            } else {
-                // Playwright can only save a trace to a file (unlike screenshots, which can be returned as a
-                // buffer). So write a temporary file in the bridge, hand its content back to PHP (which writes
-                // it to $resultsDir), and delete it again - otherwise a stray second copy stays in playwright-bridge/.
-                await context.tracing.stop({ path: `%s` });
-                const fs = require("fs");
-                const traceBase64 = fs.readFileSync(`%s`, `base64`);
-                fs.unlinkSync(`%s`);
-                return traceBase64;
-            }
+            // Playwright can only save a trace to a file (unlike screenshots, which can be returned as a
+            // buffer). So write a temporary file in the bridge, hand its content back to PHP (which writes
+            // it to $resultsDir), and delete it again - otherwise a stray second copy stays in playwright-bridge/.
+            const traceFile = %s;
+            await context.tracing.stop({ path: traceFile });
+            const fs = require("fs");
+            const traceBase64 = fs.readFileSync(traceFile, "base64");
+            fs.unlinkSync(traceFile);
+            return traceBase64;
             '// language=PHP
                 ,
-                $featureFile,
-                $featureFileLine,
-                $scenarioName,
-                $keepTrace ? 'true' : 'false',
-                $traceReportZipFileName,
-                $traceReportZipFileName,
-                $traceReportZipFileName
+                JsValue::of($traceReportZipFileName)
             )
         );
         if (is_string($traceReportZipBase64) && $traceReportZipBase64 !== '') {
@@ -237,13 +235,7 @@ class PlaywrightConnector
         // If we don't set this, cURL will set "Expect: 100-continue" for requests larger than 1024 bytes.
         curl_setopt($curlHandle, CURLOPT_HTTPHEADER, ['Expect:']);
 
-        if ($method === 'GET') {
-            if ($content !== '') {
-                // workaround because else the request would implicitly fall into POST:
-                curl_setopt($curlHandle, CURLOPT_CUSTOMREQUEST, 'GET');
-                curl_setopt($curlHandle, CURLOPT_POSTFIELDS, $content);
-            }
-        } elseif ($method === 'POST') {
+        if ($method === 'POST') {
             curl_setopt($curlHandle, CURLOPT_POST, true);
             curl_setopt($curlHandle, CURLOPT_POSTFIELDS, $content);
         } else {
@@ -252,12 +244,15 @@ class PlaywrightConnector
 
         $curlResult = curl_exec($curlHandle);
         if ($curlResult === false) {
+            $errorCode = curl_errno($curlHandle);
+            $error = curl_error($curlHandle);
+            curl_close($curlHandle);
             throw new \RuntimeException(
                 sprintf(
                     'cURL reported error code %s with message "%s". Last requested URL was "%s" (%s).',
-                    curl_errno($curlHandle),
-                    curl_error($curlHandle),
-                    curl_getinfo($curlHandle, CURLINFO_EFFECTIVE_URL),
+                    $errorCode,
+                    $error,
+                    $requestUri,
                     $method
                 ), 1338906040
             );
@@ -265,7 +260,7 @@ class PlaywrightConnector
 
         curl_close($curlHandle);
 
-        $response = \GuzzleHttp\Psr7\Message::parseResponse($curlResult);
+        $response = Message::parseResponse($curlResult);
 
         try {
             $responseBody = $response->getBody()->getContents();
@@ -273,7 +268,8 @@ class PlaywrightConnector
                 $response = Message::parseResponse($responseBody);
                 $responseBody = $response->getBody()->getContents();
             }
-        } catch (\InvalidArgumentException $e) {
+        } catch (\InvalidArgumentException) {
+            // the body is no further HTTP message - $response is the final one
         } finally {
             $response->getBody()->rewind();
         }

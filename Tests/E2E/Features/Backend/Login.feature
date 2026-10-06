@@ -13,8 +13,9 @@ Feature: Backend login
       | NodeAggregateId | Parent   | NodeType                                           | Properties                                   |
       | homepage        |          | Sandstorm.E2ETestTools.TestSite:Document.StartPage | {"uriPathSegment":"site","title":"Homepage"} |
       | nested          | homepage | Sandstorm.E2ETestTools.TestSite:Document.Page      | {"uriPathSegment":"nested","title":"Nested"} |
-    And I have a Neos backend user "editor" with password "password-for-e2e" and role "Neos.Neos:Editor"
-    When I log into the backend using credentials "editor" "password-for-e2e"
+    # the quote, backtick and ${ check that step values are escaped in the Playwright script
+    And I have a Neos backend user "editor" with password 'pass"word`${e2e}' and role "Neos.Neos:Editor"
+    When I log into the backend using credentials "editor" 'pass"word`${e2e}'
     Then the URI path should be "/neos/content"
     When I click the document tree entry "Nested"
     And I click the main menu item "Management"

@@ -6,6 +6,7 @@ namespace Sandstorm\E2ETestTools\Behat;
 
 use Behat\Behat\Hook\Scope\BeforeScenarioScope;
 use Behat\Gherkin\Node\TableNode;
+use Behat\Hook\BeforeScenario;
 use Behat\Step\Given;
 use Sandstorm\E2ETestTools\Fixture\NodeFixture;
 use Sandstorm\E2ETestTools\Fixture\NodeFixtureYaml;
@@ -23,9 +24,7 @@ trait NodeImportTrait
      */
     private string $nodeImport_currentFeatureFile = '';
 
-    /**
-     * @BeforeScenario
-     */
+    #[BeforeScenario]
     public function nodeImportBeforeScenario(BeforeScenarioScope $scope): void
     {
         $this->nodeImport_currentFeatureFile = $scope->getFeature()->getFile() ?? '';

@@ -4,6 +4,15 @@ declare(strict_types=1);
 
 namespace Sandstorm\E2ETestTools\Behat;
 
+use Behat\Behat\Hook\Scope\AfterScenarioScope;
+use Behat\Behat\Hook\Scope\AfterStepScope;
+use Behat\Behat\Hook\Scope\BeforeScenarioScope;
+use Behat\Behat\Hook\Scope\BeforeStepScope;
+use Behat\Hook\AfterScenario;
+use Behat\Hook\AfterStep;
+use Behat\Hook\BeforeScenario;
+use Behat\Hook\BeforeStep;
+use Behat\Step\Then;
 use Behat\Testwork\Tester\Result\TestResult;
 use Closure;
 use Neos\Utility\Files;
@@ -28,52 +37,62 @@ use Sandstorm\E2ETestTools\Debugging\LogDirectory;
  *
  * USAGE:
  *
- * You can use $this->playwrightConnector->execute($this->playwrightContext, 'your-playwright-script-here')
- * in your custom scenarios.
+ * You can use $this->playwrightConnector->execute($this->requirePlaywrightContext(), 'your-playwright-script-here')
+ * in your custom steps. Pass step parameters into the script with JsValue::of() (escaped JS literal).
  *
  *
  * EXAMPLE:
  *
- * $this->playwrightConnector->execute($this->playwrightContext, "
+ * $this->playwrightConnector->execute($this->requirePlaywrightContext(), "
  *     vars.page = await context.newPage();
  *     await vars.page.goto('BASEURL');
  * ");
  *
  *
- * $actualHeadlineContent = $this->playwrightConnector->execute($this->playwrightContext, "
+ * $actualHeadlineContent = $this->playwrightConnector->execute($this->requirePlaywrightContext(), "
  *     return await vars.page.textContent('h2');
  * ");
  * Assert::assertEquals($headlineName, $actualHeadlineContent, 'Headlines do not match');
  */
 trait PlaywrightTrait
 {
-
     /**
      * Never write traces.
      */
-    protected static $PLAYWRIGHT_TRACING_MODE_OFF = 0;
+    final public const PLAYWRIGHT_TRACING_MODE_OFF = 0;
 
     /**
      * Always write traces after a scenario.
      */
-    protected static $PLAYWRIGHT_TRACING_MODE_ALWAYS = 1;
+    final public const PLAYWRIGHT_TRACING_MODE_ALWAYS = 1;
 
     /**
-     * Only write error traces when the scenario failed.
+     * Only write traces when the scenario failed (default).
      */
-    protected static $PLAYWRIGHT_TRACING_MODE_ON_ERROR = 2;
+    final public const PLAYWRIGHT_TRACING_MODE_ON_ERROR = 2;
 
     /**
-     * @var PlaywrightConnector
+     * @deprecated use the constant self::PLAYWRIGHT_TRACING_MODE_OFF
      */
-    protected $playwrightConnector;
+    protected static $PLAYWRIGHT_TRACING_MODE_OFF = self::PLAYWRIGHT_TRACING_MODE_OFF;
+
+    /**
+     * @deprecated use the constant self::PLAYWRIGHT_TRACING_MODE_ALWAYS
+     */
+    protected static $PLAYWRIGHT_TRACING_MODE_ALWAYS = self::PLAYWRIGHT_TRACING_MODE_ALWAYS;
+
+    /**
+     * @deprecated use the constant self::PLAYWRIGHT_TRACING_MODE_ON_ERROR
+     */
+    protected static $PLAYWRIGHT_TRACING_MODE_ON_ERROR = self::PLAYWRIGHT_TRACING_MODE_ON_ERROR;
+
+    protected PlaywrightConnector $playwrightConnector;
 
     protected ?string $playwrightContext = null;
 
     protected string $resultsDir = 'e2e-results';
 
-    // on_error per default
-    private int $playwrightTracingMode = 2;
+    private int $playwrightTracingMode = self::PLAYWRIGHT_TRACING_MODE_ON_ERROR;
 
     /**
      * Data/Logs by default; null in projects without Flow.
@@ -94,10 +113,9 @@ trait PlaywrightTrait
     }
 
     /**
-     * This is the programmatic API, env var 'PLAYWRIGHT_TRACE_MODE' TODO !!!
-     * @param int $mode
+     * When traces are written: self::PLAYWRIGHT_TRACING_MODE_ON_ERROR (default), _ALWAYS or _OFF.
      */
-    protected final function setPlaywrightTracingMode(int $mode)
+    protected final function setPlaywrightTracingMode(int $mode): void
     {
         $this->playwrightTracingMode = $mode;
     }
@@ -107,7 +125,7 @@ trait PlaywrightTrait
      *   Defaults to "e2e-results". To drive it from your configuration (e.g. Settings.yaml), resolve it before
      *   calling setupPlaywright() and pass it in here.
      */
-    public function setupPlaywright(?string $resultsDir = null)
+    public function setupPlaywright(?string $resultsDir = null): void
     {
         PhpUnitAssertions::enableFailureMessages();
         if ($resultsDir !== null) {
@@ -133,8 +151,8 @@ trait PlaywrightTrait
 
             This is the System under Test URL, as seen from the perspective of Playwright.
 
-            For running the tests locally, this should be "http://127.0.0.1:8081" (as playwright is running on the host, and this port is where
-            the application is exposed');
+            For running the tests locally, this should be e.g. "http://127.0.0.1:9090" (as playwright is running on the host, and this port is where
+            the system under test is exposed)');
         }
 
 
@@ -145,21 +163,20 @@ trait PlaywrightTrait
     }
 
     /**
-     * @param ?Closure $urlModifier
+     * Changes the SUT base URL (BASEURL in scripts) for the current scenario - it's reset before the next one.
      */
-    public function setSystemUnderTestUrlModifier(?Closure $urlModifier): void {
+    public function setSystemUnderTestUrlModifier(?Closure $urlModifier): void
+    {
         $this->playwrightConnector->setSystemUnderTestUrlModifier($urlModifier);
     }
 
-    /**
-     * @BeforeScenario @playwright
-     */
-    public function playwrightBeforeScenario(\Behat\Behat\Hook\Scope\BeforeScenarioScope $event): void
+    #[BeforeScenario('@playwright')]
+    public function playwrightBeforeScenario(BeforeScenarioScope $event): void
     {
-        $this->playwrightContext = (string)preg_replace('/[^a-zA-Z_]/', '', basename($event->getFeature()->getFile()) . '_' . $event->getScenario()->getTitle());
+        $this->playwrightContext = (string)preg_replace('/[^a-zA-Z0-9_]/', '', basename($event->getFeature()->getFile()) . '_' . $event->getScenario()->getTitle());
         $this->playwrightConnector->stopContext($this->playwrightContext);
         $this->playwrightConnector->setSystemUnderTestUrlModifier(null);
-        if ($this->playwrightTracingMode !== self::$PLAYWRIGHT_TRACING_MODE_OFF) {
+        if ($this->playwrightTracingMode !== self::PLAYWRIGHT_TRACING_MODE_OFF) {
             $this->playwrightConnector->startTracing(
                 $this->playwrightContext,
                 $event->getFeature()->getFile(),
@@ -168,14 +185,12 @@ trait PlaywrightTrait
         }
     }
 
-    /**
-     * @AfterScenario @playwright
-     */
-    public function playwrightAfterScenario(\Behat\Behat\Hook\Scope\AfterScenarioScope $event): void
+    #[AfterScenario('@playwright')]
+    public function playwrightAfterScenario(AfterScenarioScope $event): void
     {
-        if ($this->playwrightContext && $this->playwrightTracingMode !== self::$PLAYWRIGHT_TRACING_MODE_OFF) {
-            $keepTrace = ($this->playwrightTracingMode === self::$PLAYWRIGHT_TRACING_MODE_ON_ERROR && $event->getTestResult()->getResultCode() === TestResult::FAILED)
-                || $this->playwrightTracingMode === self::$PLAYWRIGHT_TRACING_MODE_ALWAYS;
+        if ($this->playwrightContext && $this->playwrightTracingMode !== self::PLAYWRIGHT_TRACING_MODE_OFF) {
+            $keepTrace = ($this->playwrightTracingMode === self::PLAYWRIGHT_TRACING_MODE_ON_ERROR && $event->getTestResult()->getResultCode() === TestResult::FAILED)
+                || $this->playwrightTracingMode === self::PLAYWRIGHT_TRACING_MODE_ALWAYS;
             $this->playwrightConnector->finishTracing(
                 $this->playwrightContext,
                 $event->getFeature()->getFile(),
@@ -186,9 +201,7 @@ trait PlaywrightTrait
         }
     }
 
-    /**
-     * @BeforeScenario
-     */
+    #[BeforeScenario]
     public function clearFlowLogsBeforeScenario(): void
     {
         if ($this->flowLogsDirectory !== null) {
@@ -199,10 +212,9 @@ trait PlaywrightTrait
     /**
      * An exception in the site under test only shows up as an error page in the browser - the stack trace is in the
      * logs, so they're put next to the error screenshot.
-     *
-     * @AfterScenario
      */
-    public function copyFlowLogsOfFailedScenario(\Behat\Behat\Hook\Scope\AfterScenarioScope $event): void
+    #[AfterScenario]
+    public function copyFlowLogsOfFailedScenario(AfterScenarioScope $event): void
     {
         if ($this->flowLogsDirectory === null || $event->getTestResult()->getResultCode() !== TestResult::FAILED) {
             return;
@@ -217,25 +229,20 @@ trait PlaywrightTrait
         }
     }
 
-    /**
-     * @BeforeStep
-     */
-    public function playwrightBeforeStep(\Behat\Behat\Hook\Scope\BeforeStepScope $event): void
+    #[BeforeStep]
+    public function playwrightBeforeStep(BeforeStepScope $event): void
     {
         if ($this->playwrightContext) {
             $this->playwrightConnector->setStepForDebugging($this->playwrightContext, $event->getStep()->getText());
         }
     }
 
-    /**
-     * @AfterStep
-     */
-    public function playwrightAfterStep(\Behat\Behat\Hook\Scope\AfterStepScope $event): void
+    #[AfterStep]
+    public function playwrightAfterStep(AfterStepScope $event): void
     {
         if ($this->playwrightContext && $event->getTestResult()->getResultCode() === TestResult::FAILED) {
-            $errorScreenshotFileName = (string)preg_replace('/[^a-zA-Z_]/', '', basename($event->getFeature()->getFile()) . '_' . $event->getStep()->getText());
+            $errorScreenshotFileName = (string)preg_replace('/[^a-zA-Z0-9_]/', '', basename($event->getFeature()->getFile()) . '_' . $event->getStep()->getText());
 
-            // TODO: make "page" a specific API
             // NOTE: intentionally no "path" option here - the resulting buffer is returned to PHP
             // and written to $resultsDir below. Passing "path" would make Playwright *also* write
             // the file itself, relative to the bridge (Node) process's own CWD - i.e. a second,
@@ -247,7 +254,7 @@ trait PlaywrightTrait
                 }
                 return "";
             ');
-            if (strlen($base64Image)) {
+            if (is_string($base64Image) && $base64Image !== '') {
                 $image = base64_decode($base64Image);
                 Files::createDirectoryRecursively($this->resultsDir);
                 file_put_contents(sprintf('%s/error_%s.png', $this->resultsDir, $errorScreenshotFileName), $image);
@@ -265,9 +272,10 @@ trait PlaywrightTrait
     }
 
     /**
-     * @AfterScenario @playwright
+     * Closes the scenario's browser context (after the trace was written).
      */
-    public function ensurePlaywrightIsRunning($event): void
+    #[AfterScenario('@playwright')]
+    public function ensurePlaywrightIsRunning(): void
     {
         if ($this->playwrightContext !== null) {
             $this->playwrightConnector->stopContext($this->playwrightContext);
@@ -276,30 +284,33 @@ trait PlaywrightTrait
     }
 
     /**
-     * @Then I debug the playwright script
+     * Prints the Playwright script of the scenario so far.
      */
-    public function iDebugThePlaywrightScript()
+    #[Then('I debug the playwright script')]
+    public function iDebugThePlaywrightScript(): void
     {
         $js = $this->playwrightConnector->getCurrentJsCode($this->requirePlaywrightContext());
         echo $js;
 
         // we flush the output here so that we do not have it wrapped in another block; but it's directly copy/pastable
-        ob_flush();
+        if (ob_get_level() > 0) {
+            ob_flush();
+        }
     }
 
     /**
-     * @Then I do a screenshot :filename
+     * The file name is relative to the results directory.
      */
-    public function iDoAScreenshot($filename)
+    #[Then('I do a screenshot :filename')]
+    public function iDoAScreenshot(string $filename): void
     {
-        // TODO: make "page" a specific API
         // NOTE: intentionally no "path" option here - see the comment in playwrightAfterStep().
         $base64Image = $this->playwrightConnector->execute($this->requirePlaywrightContext(), '
                 const buffer = await vars.page.screenshot({fullPage: true});
                 return buffer.toString("base64");
             ');
-        $image = base64_decode($base64Image);
-        Files::createDirectoryRecursively($this->resultsDir);
+        $image = base64_decode((string)$base64Image);
+        Files::createDirectoryRecursively(dirname($this->resultsDir . '/' . $filename));
         file_put_contents($this->resultsDir . '/' . $filename, $image);
     }
 }

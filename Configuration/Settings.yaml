@@ -37,12 +37,10 @@ Neos:
       routes:
         'Sandstorm.E2ETestTools':
           position: 'before Neos.Neos'
-          variables:
-            pageSeparator: '~p'
-            defaultUriSuffix: '.html'
     reflection:
-      # specify more tags to be ignored during reflection
+      # Behat tags in docblocks reflected by Flow (e.g. "@BeforeScenario @playwright" in a project trait) - unknown
+      # annotations fail the reflection
       ignoredTags:
-        'BeforeSuite': true
-        'AfterSuite': true
         'playwright': true
+        'flowEntities': true
+        'wireMock': true

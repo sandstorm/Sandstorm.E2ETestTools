@@ -16,8 +16,6 @@ use Sandstorm\E2ETestTools\Service\NodeNotFoundException;
 /**
  * Backend of the "Export Node" inspector button: downloads the node tree as YAML node fixture.
  * Administrators only, see Configuration/Policy.yaml.
- *
- * @Flow\Scope("singleton")
  */
 class NodeExportController extends ActionController
 {

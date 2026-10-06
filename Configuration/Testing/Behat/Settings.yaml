@@ -6,11 +6,7 @@ Neos:
   ContentRepositoryRegistry:
     presets:
       default:
-        clock:
-          factoryObjectName: Neos\ContentRepositoryRegistry\Factory\Clock\SystemClockFactory
-        nodeTypeManager:
-          factoryObjectName: Neos\ContentRepositoryRegistry\Factory\NodeTypeManager\DefaultNodeTypeManagerFactory
-        contentDimensionSource:
-          factoryObjectName: Neos\ContentRepositoryRegistry\Factory\ContentDimensionSource\ConfigurationBasedContentDimensionSourceFactory
+        # the fixture steps run as CLI process without a logged-in user - grant them every node and workspace
+        # permission (the system under test still applies yours)
         authProvider:
           factoryObjectName: Neos\ContentRepositoryRegistry\Factory\AuthProvider\StaticAuthProviderFactory

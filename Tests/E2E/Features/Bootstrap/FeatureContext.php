@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Behat\Behat\Context\Context;
+use Behat\Hook\BeforeScenario;
 use Neos\Behat\FlowBootstrapTrait;
 use Neos\Behat\FlowEntitiesTrait;
 use Neos\Flow\ObjectManagement\ObjectManagerInterface;
@@ -53,9 +54,7 @@ class FeatureContext implements Context
         return self::$bootstrap->getObjectManager();
     }
 
-    /**
-     * @BeforeScenario @flowEntities
-     */
+    #[BeforeScenario('@flowEntities')]
     public function beforeFixturesScenario(): void
     {
         $this->setupContentRepository();

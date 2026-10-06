@@ -8,6 +8,7 @@ use Behat\Gherkin\Node\PyStringNode;
 use Behat\Hook\BeforeScenario;
 use Behat\Gherkin\Node\TableNode;
 use Behat\Step\Given;
+use Behat\Step\Then;
 use Behat\Step\When;
 use GuzzleHttp\Psr7\ServerRequest;
 use Neos\ContentRepository\Core\ContentRepository;
@@ -78,7 +79,7 @@ trait FusionRenderingTrait
 
     private NodeFixtureImporter $nodeFixtureImporter;
 
-    public function setupFusionRendering(string $sitePackageKey)
+    public function setupFusionRendering(string $sitePackageKey): void
     {
         PhpUnitAssertions::enableFailureMessages();
         $this->sitePackageKey = $sitePackageKey;
@@ -108,18 +109,14 @@ trait FusionRenderingTrait
         $this->defaultDimensionSpacePoint = NodeFixtureGherkin::dimensionSpacePoint($dimensionSpacePoint, 'the default dimension space point');
     }
 
-    /**
-     * @Given I have a site for Site Node :siteNodeName
-     */
-    public function iHaveASite($siteNodeName)
+    #[Given('I have a site for Site Node :siteNodeName')]
+    public function iHaveASite(string $siteNodeName): void
     {
         $this->createAndPersistSite($siteNodeName);
     }
 
-    /**
-     * @Given I have a site for Site Node :siteNodeName with name :siteName
-     */
-    public function iHaveASiteWithName($siteNodeName, $siteName)
+    #[Given('I have a site for Site Node :siteNodeName with name :siteName')]
+    public function iHaveASiteWithName(string $siteNodeName, string $siteName): void
     {
         /** @var SiteRepository $siteRepository */
         $siteRepository = $this->getObjectManager()->get(SiteRepository::class);
@@ -217,15 +214,10 @@ trait FusionRenderingTrait
         }
     }
 
-    /**
-     * @var FusionRenderingResult
-     */
-    protected $lastFusionRenderingResult;
+    protected ?FusionRenderingResult $lastFusionRenderingResult = null;
 
-    /**
-     * @When I render the Fusion object :fusionPath:
-     */
-    public function iRenderTheFusionObject($fusionPath, PyStringNode $additionalFusion)
+    #[When('I render the Fusion object :fusionPath:')]
+    public function iRenderTheFusionObject(string $fusionPath, PyStringNode $additionalFusion): void
     {
         $fusionRenderingResult = new FusionRenderingResult();
         $this->internalRender('e2eTestRoot', $additionalFusion->getRaw(), [
@@ -251,6 +243,7 @@ trait FusionRenderingTrait
     {
         // without "in dimension": the default dimension space point
         $dimensionSpacePoint ??= json_encode((object)$this->defaultDimensionSpacePoint, JSON_THROW_ON_ERROR);
+        $this->requireContentRepository();
         $node = $this->contentRepository
             ->getContentGraph(WorkspaceName::forLive())
             ->getSubgraph(
@@ -264,10 +257,8 @@ trait FusionRenderingTrait
         $this->currentNode = $node;
     }
 
-    /**
-     * @When I render the Fusion object :fusionPath with the current context node:
-     */
-    public function iRenderTheFusionObjectWithNode($fusionPath, PyStringNode $additionalFusion)
+    #[When('I render the Fusion object :fusionPath with the current context node:')]
+    public function iRenderTheFusionObjectWithNode(string $fusionPath, PyStringNode $additionalFusion): void
     {
         $fusionRenderingResult = new FusionRenderingResult();
         $this->internalRender('e2eTestRoot', $additionalFusion->getRaw(), [
@@ -284,7 +275,7 @@ trait FusionRenderingTrait
      * Renders the whole page (Fusion path "root") of the current context node, which must be a document.
      */
     #[When("I render the page")]
-    public function iRenderThePage()
+    public function iRenderThePage(): void
     {
         $fusionRenderingResult = new FusionRenderingResult();
         $additionalFusion = "
@@ -357,41 +348,59 @@ trait FusionRenderingTrait
 
 
     /**
-     * @Then the Fusion output should equal to :expected
+     * Compares the whole HTML - prefer the CSS selector steps.
      */
-    public function theFusionOutputShouldEqualTo($expected)
+    #[Then('the Fusion output should equal to :expected')]
+    public function theFusionOutputShouldEqualTo(string $expected): void
     {
-        Assert::assertEquals($expected, $this->lastFusionRenderingResult->getRenderedElement());
+        Assert::assertEquals($expected, $this->lastRenderedHtml());
     }
 
     /**
-     * @Then in the fusion output, the inner HTML of CSS selector :selector matches :expected
+     * Compares the inner HTML of the first match for equality (no regular expression).
      */
-    public function inTheFusionOutputTheInnerHtmlOfCssSelectorMatches($selector, $expected)
+    #[Then('in the fusion output, the inner HTML of CSS selector :selector matches :expected')]
+    public function inTheFusionOutputTheInnerHtmlOfCssSelectorMatches(string $selector, string $expected): void
     {
-        $crawler = new Crawler($this->lastFusionRenderingResult->getRenderedElement());
-        $crawler = $crawler->filter($selector);
-        $actual = $crawler->html();
-        Assert::assertEquals($expected, $actual);
+        $crawler = (new Crawler($this->lastRenderedHtml()))->filter($selector);
+        Assert::assertGreaterThan(0, $crawler->count(), sprintf('No element matches the CSS selector "%s".', $selector));
+        Assert::assertEquals($expected, $crawler->html());
     }
 
     /**
-     * @Then in the fusion output, the attributes of CSS selector :selector are:
+     * Columns: Key, Value - the attributes of the first match.
      */
-    public function inTheFusionOutputTheAttributesOfSelectorAre($selector, TableNode $expected)
+    #[Then('in the fusion output, the attributes of CSS selector :selector are:')]
+    public function inTheFusionOutputTheAttributesOfSelectorAre(string $selector, TableNode $attributes): void
     {
-        $crawler = new Crawler($this->lastFusionRenderingResult->getRenderedElement());
-        $crawler = $crawler->filter($selector);
+        $crawler = (new Crawler($this->lastRenderedHtml()))->filter($selector);
+        Assert::assertGreaterThan(0, $crawler->count(), sprintf('No element matches the CSS selector "%s".', $selector));
 
-        foreach ($expected->getHash() as $row) {
-            assert(isset($row['Key']));
-            assert(isset($row['Value']));
+        foreach ($attributes->getHash() as $row) {
+            Assert::assertArrayHasKey('Key', $row, 'The attribute table needs the columns Key and Value.');
+            Assert::assertArrayHasKey('Value', $row, 'The attribute table needs the columns Key and Value.');
             $key = $row['Key'];
-            $expected = $row['Value'];
+            $actual = $crawler->attr($key);
+            Assert::assertNotNull($actual, sprintf('The attribute "%s" is missing.', $key));
+            Assert::assertEquals($row['Value'], trim($actual), 'The attribute values for ' . $key . ' do not match.');
+        }
+    }
 
-            $actual = trim($crawler->attr($key));
-            Assert::assertEquals($expected, $actual, 'The attribute values for ' . $key . ' do not match.');
+    private function lastRenderedHtml(): string
+    {
+        if ($this->lastFusionRenderingResult === null) {
+            throw new \RuntimeException('Nothing rendered yet - use "When I render the Fusion object ..." or "When I render the page" first.');
+        }
+        return (string)$this->lastFusionRenderingResult->getRenderedElement();
+    }
 
+    /**
+     * The content repository is set up by setupContentRepository(), which the FeatureContext calls before every scenario tagged flowEntities.
+     */
+    private function requireContentRepository(): void
+    {
+        if (!isset($this->contentRepository, $this->nodeFixtureImporter)) {
+            throw new \RuntimeException('The content repository isn\'t set up. Did you forget the @flowEntities tag on this scenario?');
         }
     }
 
@@ -413,6 +422,7 @@ trait FusionRenderingTrait
     #[Given("the following node references:")]
     public function theFollowingNodeReferences(TableNode $table): void
     {
+        $this->requireContentRepository();
         foreach (NodeFixtureGherkin::referencesFromTable($table) as $reference) {
             $this->nodeFixtureImporter->setReferences($reference->dimensionSpacePoint === [] ? $reference->withDimensionSpacePoint($this->defaultDimensionSpacePoint) : $reference);
         }
@@ -423,6 +433,7 @@ trait FusionRenderingTrait
      */
     protected function importNodeFixture(NodeFixture $fixture, string $siteName): void
     {
+        $this->requireContentRepository();
         $this->nodeFixtureImporter->import($fixture->withDefaultDimensionSpacePoint($this->defaultDimensionSpacePoint), $siteName);
     }
 }

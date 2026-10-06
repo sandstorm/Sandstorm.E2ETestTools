@@ -3,8 +3,7 @@
 declare(strict_types=1);
 
 use Behat\Behat\Context\Context;
-use Behat\Behat\Hook\Scope\BeforeScenarioScope;
-use Behat\Testwork\Hook\Scope\BeforeSuiteScope;
+use Behat\Hook\BeforeScenario;
 use Neos\Behat\FlowBootstrapTrait;
 use Neos\Behat\FlowEntitiesTrait;
 use Neos\Flow\ObjectManagement\ObjectManagerInterface;
@@ -63,23 +62,13 @@ class FeatureContext implements Context
         // Testing/Behat must use the same persistent resource storage and target as the SUT context (see README).
     }
 
-    /**
-     * @BeforeSuite
-     */
-    public static function prepareSUT(BeforeSuiteScope $scope): void
-    {
-        exec("./flow flow:doctrine:compileproxies");
-    }
-
     public function getObjectManager(): ObjectManagerInterface
     {
         return self::$bootstrap->getObjectManager();
     }
 
-    /**
-     * @BeforeScenario @flowEntities
-     */
-    public function beforeFixturesScenario(BeforeScenarioScope $scope): void
+    #[BeforeScenario('@flowEntities')]
+    public function beforeFixturesScenario(): void
     {
         $this->setupContentRepository();
     }

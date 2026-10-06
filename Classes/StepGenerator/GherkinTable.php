@@ -36,7 +36,7 @@ class GherkinTable
             $rawValue = (string)($row[$columnTitle] ?? '');
             // Behat's Gherkin parser trims cells and has no escape for line breaks - such values would silently change
             if (preg_match('/[\r\n]|^[\s\x{85}\x{A0}]|[\s\x{85}\x{A0}]$/u', $rawValue) === 1) {
-                throw new \InvalidArgumentException(sprintf('Value of column "%s" can\'t be written to a Gherkin table unchanged (line break or leading/trailing whitespace): %s', $columnTitle, json_encode($rawValue)), 1727700010);
+                throw new \InvalidArgumentException(sprintf('Value of column "%s" can\'t be written to a Gherkin table unchanged (line break or leading/trailing whitespace): %s', $columnTitle, json_encode($rawValue)), 1727700021);
             }
             $value = self::escapeGherkinTableCellValue($rawValue);
             $transformedRow[] = $value;
