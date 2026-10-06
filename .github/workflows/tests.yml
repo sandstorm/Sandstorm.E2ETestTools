@@ -4,11 +4,21 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# a new push replaces the running tests of the same branch
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   tests:
     name: Tests (${{ matrix.sut }})
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -16,14 +26,26 @@ jobs:
         sut: [neos9]
     env:
       SUT: ${{ matrix.sut }}
+      COMPOSE: docker compose -f Tests/SystemUnderTest/${{ matrix.sut }}/docker-compose.yml -f Tests/SystemUnderTest/docker-compose.ci-cache.yml
 
     steps:
       - uses: actions/checkout@v4
 
       - uses: jdx/mise-action@v2
 
+      # the GitHub Actions cache backend (type=gha) needs a buildx builder with the docker-container driver ...
+      - uses: docker/setup-buildx-action@v3
+
+      # ... and the cache token/URL in the environment of docker compose
+      - uses: crazy-max/ghaction-github-runtime@v3
+
+      # image layers come from the GitHub Actions cache (docker-compose.ci-cache.yml) - a full build only after a
+      # change to the Dockerfile or a composer.json; the other images are pulled meanwhile
       - name: Build the distribution
-        run: mise run build
+        run: |
+          $COMPOSE pull --quiet maria-db redis-cache wiremock &
+          $COMPOSE build
+          wait
 
       - name: Start the distribution
         run: mise run start
@@ -41,7 +63,7 @@ jobs:
 
       - name: Collect the Flow logs
         if: ${{ failure() }}
-        run: docker compose -f Tests/SystemUnderTest/${SUT}/docker-compose.yml cp neos:/app/Data/Logs Tests/SystemUnderTest/e2e-results/flow-logs
+        run: $COMPOSE cp neos:/app/Data/Logs Tests/SystemUnderTest/e2e-results/flow-logs
 
       - name: Upload screenshots, traces and logs
         if: ${{ failure() }}

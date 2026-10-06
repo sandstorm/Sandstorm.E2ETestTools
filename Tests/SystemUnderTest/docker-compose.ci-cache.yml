@@ -1,0 +1,11 @@
+# CI only (.github/workflows/tests.yml): image layers from/to the GitHub Actions cache, so the image is only rebuilt
+# when the Dockerfile or a composer.json changes. Needs a buildx builder with the docker-container driver.
+services:
+  neos:
+    build:
+      cache_from: ["type=gha,scope=${SUT:-neos9}-neos"]
+      cache_to: ["type=gha,scope=${SUT:-neos9}-neos,mode=max"]
+  playwright-bridge:
+    build:
+      cache_from: ["type=gha,scope=playwright-bridge"]
+      cache_to: ["type=gha,scope=playwright-bridge,mode=max"]

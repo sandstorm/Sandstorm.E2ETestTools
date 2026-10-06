@@ -780,7 +780,10 @@ mise run down           # remove containers and volumes
 `Templates/playwright-bridge`) and start the distribution with
 `PLAYWRIGHT_API_URL=http://host.docker.internal:3000 mise run start`.
 
-GitHub Actions (`.github/workflows/tests.yml`) runs the same tasks for every distribution.
+GitHub Actions (`.github/workflows/tests.yml`) runs the same tasks for every distribution. Its image layers come from
+the GitHub Actions cache (`Tests/SystemUnderTest/docker-compose.ci-cache.yml`), so the image is only rebuilt when the
+`Dockerfile` or a `composer.json` changes - a newer Neos patch release arrives with such a change, or after deleting the
+cache (repository → Actions → Caches).
 
 ## Unit and functional tests
 
