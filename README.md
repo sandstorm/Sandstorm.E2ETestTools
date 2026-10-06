@@ -360,26 +360,19 @@ properties keep the asset id; create those assets in the scenario.
   from the current workspace and dimension. **Administrators only** - other users see it disabled, and the endpoint
   answers 403. To allow other roles, grant them the privilege target `Sandstorm.E2ETestTools:NodeExport` in your
   `Policy.yaml`.
-- **CLI**: `./flow e2efixture:export <nodeAggregateId> --dimension '{"language":"de"}'` prints the YAML. Instead of the
-  id, `--uri-path about/team` selects the page by its URI path (without dimension prefix and suffix, `/` is the
-  homepage; `--source-site <siteNodeName>` with several sites). `--format gherkin --site-name site` prints the steps
-  instead; `--workspace` defaults to `live`, `--content-repository` to `default`.
+- **CLI**: `./flow e2efixture:export <nodeAggregateId> --dimension '{"language":"de"}'` prints the YAML; run it in the
+  Flow context with the content (e.g. inside your app container). Instead of the id, `--uri-path about/team` selects
+  the page by its URI path (without dimension prefix and suffix, `/` is the homepage; `--source-site <siteNodeName>`
+  with several sites) - a wrong segment fails with the segments that exist at that level.
+  `--format gherkin --site-name site` prints the steps instead; `--workspace` defaults to `live`,
+  `--content-repository` to `default`.
 
-### Fixtures for AI agents
+Prefer the YAML file over inline steps - a page easily has hundreds of nodes - and set only what the scenario asserts
+via `with overwrites:`. The exported ids are UUIDs; rename them only consistently (`nodeAggregateId`, `parent`,
+`targets` and `node://` links in properties) or leave them.
 
-The CLI is the way for coding agents to get fixtures - no backend login, plain stdout, and the import creates exactly
-what was exported. Run it in the Flow context with the content (e.g. inside your app container):
-
-1. Build an example of the feature's content in the backend (a person or the agent) - only existing nodes can be
-   exported.
-2. Export by URL: `./flow e2efixture:export --uri-path <path> --dimension '<json>' > Features/<Feature>/<page>.yaml`.
-   A wrong segment fails with the segments that exist at that level, so the path can be corrected without database
-   access.
-3. Prefer the YAML file over `--format gherkin` - a page easily has hundreds of nodes - and set only what the scenario
-   asserts via `with overwrites:`.
-4. Add `I have the following images:` (or a textual persistent resource) for the asset ids the YAML references.
-5. The exported ids are UUIDs. Rename them only consistently (`nodeAggregateId`, `parent`, `targets` and `node://`
-   links in properties) - or leave them.
+The CLI also suits coding agents: no backend login, plain stdout, and the import creates exactly what was exported -
+build an example page in the backend, export it by URI path into the feature's folder, add the assets it references.
 
 ## Steps
 
