@@ -271,7 +271,7 @@ services - database and mocks are reset per scenario, and runner and SUT share c
 
 Feature files live in your site package (`Tests/Behavior/Features/`). **Working, commented examples for everything
 below are in [`Tests/E2E/Features/`](Tests/E2E/README.md)** - the package's own suite; copy one and adapt it. What to
-test in a Neos project, where, and the pitfalls: **[Neos E2E Testing Guide](NEOS_E2E_TESTING_GUIDE.md)**.
+test in a Neos project, where, and the pitfalls: **[Neos E2E Testing Guide](E2E_TESTING_GUIDE.md)**.
 
 ## Tags
 
@@ -489,7 +489,7 @@ Setup and details: [Mocked third-party APIs](#mocked-third-party-apis-wiremock).
 
 ### Examples by level
 
-When to use which: [testing guide](NEOS_E2E_TESTING_GUIDE.md#where-to-test).
+When to use which: [testing guide](E2E_TESTING_GUIDE.md#where-to-test).
 
 - **Component** (a Fusion prototype, like a pure function): `I render the Fusion object` without nodes -
   [FusionComponent/Button.feature](Tests/E2E/Features/FusionComponent/Button.feature).
