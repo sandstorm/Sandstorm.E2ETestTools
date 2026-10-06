@@ -10,8 +10,6 @@ use Neos\Utility\Files;
 use Sandstorm\E2ETestTools\Debugging\LogDirectory;
 
 /**
- * This trait is useful both for Symfony and for Neos.
- *
  * This trait should be included in your `FeatureContext` for integration with Playwright.
  *
  * For each Scenario, we use an extra playwright BrowserContext, but we reuse the same Playwright instance; so we
@@ -106,9 +104,8 @@ trait PlaywrightTrait
 
     /**
      * @param ?string $resultsDir Where screenshots/error-screenshots/trace zips get written (relative to CWD).
-     *   Defaults to "e2e-results". Framework-agnostic on purpose (this trait is used from both Neos/Flow and
-     *   Symfony projects) - if you want this driven by your own framework's config (e.g. Neos Settings.yaml),
-     *   resolve it yourself before calling setupPlaywright() and pass it in here.
+     *   Defaults to "e2e-results". To drive it from your configuration (e.g. Settings.yaml), resolve it before
+     *   calling setupPlaywright() and pass it in here.
      */
     public function setupPlaywright(?string $resultsDir = null)
     {

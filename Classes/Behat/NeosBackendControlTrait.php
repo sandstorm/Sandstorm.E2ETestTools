@@ -12,7 +12,7 @@ use Sandstorm\E2ETestTools\Playwright\JsValue;
 use function PHPUnit\Framework\assertEquals;
 
 /**
- * This trait is only useful in NEOS applications; not in Symfony projects.
+ * Neos backend: users, login, main menu, dashboard and document tree - plus page visits and their status.
  */
 trait NeosBackendControlTrait
 {

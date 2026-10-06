@@ -1,24 +1,29 @@
 {
-    "description": "",
-    "type": "neos-package",
-    "require": {
-        "symfony/dom-crawler": "^5.2 || ^6.0",
-        "symfony/css-selector": "^5.2 || ^6.0",
-        "guzzlehttp/psr7": "*",
-        "symfony/yaml": "^6.4",
-        "ext-readline": "*",
-        "neos/contentgraph-doctrinedbaladapter": "^9.0",
-        "neos/neos-ui": "^9.0",
-        "neos/flow": "^9.0",
-        "neos/utility-files": "^9.1",
-        "neos/behat": "^9.0"
-    },
-    "license": "MIT",
-    "suggest": {
-        "neos/flow": "*",
-        "neos/behat": "^6.1 || dev-master"
-    },
     "name": "sandstorm/e2etesttools",
+    "description": "Behat steps for testing Neos 9 sites: Fusion rendering, Playwright browser tests, Neos backend, content fixtures and their export, WireMock",
+    "type": "neos-package",
+    "license": "MIT",
+    "require": {
+        "php": "^8.2",
+        "ext-curl": "*",
+        "ext-json": "*",
+        "neos/flow": "^9.1",
+        "neos/neos": "^9.1",
+        "neos/fusion": "^9.1",
+        "neos/media": "^9.1",
+        "neos/neos-ui": "^9.1",
+        "neos/contentrepository-core": "^9.1",
+        "neos/contentrepositoryregistry": "^9.1",
+        "neos/contentgraph-doctrinedbaladapter": "^9.1",
+        "neos/utility-files": "^9.1",
+        "neos/behat": "^9.0",
+        "behat/behat": "^3.16",
+        "phpunit/phpunit": "^10.5 || ^11.0",
+        "guzzlehttp/psr7": "^2.0",
+        "symfony/yaml": "^6.4",
+        "symfony/dom-crawler": "^5.2 || ^6.0",
+        "symfony/css-selector": "^5.2 || ^6.0"
+    },
     "autoload": {
         "psr-4": {
             "Sandstorm\\E2ETestTools\\": "Classes/",

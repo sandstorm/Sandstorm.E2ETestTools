@@ -39,8 +39,7 @@ Feature: Headline integration
 - **Debugging and CI** - screenshots of failing steps, Playwright traces and server logs of failing scenarios, a
   pause step, a GitLab CI example running the tests inside the deployed image.
 
-Requires Neos 9 / Flow 9. For Neos 8, use the 8.x releases (latest: 8.3.2). For Symfony projects, see
-[README.Symfony.md](./README.Symfony.md).
+Requires Neos 9.1+ / Flow 9.1+. For Neos 8, use the 8.x releases (latest: 8.3.2).
 
 <!-- TOC -->
 
