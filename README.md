@@ -430,25 +430,101 @@ Run the command in the Flow context with the content you export (e.g. inside you
 
 ## Steps
 
-| Trait | Steps |
-|---|---|
-| `FusionRenderingTrait` | `I have a site for Site Node :siteNodeName [with name :siteName]` · `I have/create the following nodes in site :siteName:` · `the following node references:` · `the default dimension space point is :dimensionSpacePoint` · `I get the node :nodeAggregateId [in dimension :dimensionSpacePoint]` · `I render the Fusion object :fusionPath:` · `I render the Fusion object :fusionPath with the current context node:` · `I render the page` · `the Fusion output should equal to :expected` · `in the fusion output, the inner HTML of CSS selector :selector matches :expected` · `in the fusion output, the attributes of CSS selector :selector are:` |
-| `NodeImportTrait` | `I have/create the following nodes from file :fileName in site :siteName [with overwrites:]` |
-| `PersistentResourceTrait` (via `FusionRenderingTrait`) | `I have a textual persistent resource :uuid named :filename with the following content:` · `I have the following images:` |
-| `PlaywrightTrait` | `I do a screenshot :filename` · `I debug the playwright script` (prints the generated Playwright JS) |
-| `NeosBackendControlTrait` | `I access the URI path :uriPath` · `the response status code should be :status` · `there should be the text :expected on the page` · `the URI path should be :uriPath` (waits for the navigation) · `I have a Neos backend user :username with password :password and role :role` · `I log into the backend using credentials :username :password [with username placeholder ... and password placeholder ...]` · `I click the main menu item :menuItem` · `I click the overview dashboard tile :tileTitle` · `I click the document tree entry :documentTitle` |
-| `PageAssertionsTrait` | `the page title should be :title` · `there should not be the text :text on the page` · `there should (not) be the text :text in :selector` · `the element with test id :testId should be visible/hidden/focused/enabled/disabled` · `the element with test id :testId should (not) be in the viewport` |
-| `FormInteractionTrait` | `I click the button :caption` · `I click the link :caption` · `I click the element with test id :testId` · `I fill :value into the field :label` · `the field :label should have the value :value` · `I check/uncheck the checkbox :label` · `the checkbox :label should (not) be checked` · `I choose the radio button :label` · `I select :option in the field :label` · `the field :label should have :option selected` · `I upload the file :fileName to the field :label` (relative to the feature file) · `I press the key :key` |
-| `BrowserStateTrait` | `the cookie :name has the value :value` (before the first visit, e.g. consent) · `the local/session storage key :key has the value :value` · `the cookie :name should (not) be set` · `the cookie :name should have the value :value` · `I delete the cookie :name` · `the local/session storage key :key should have the value :value` · `the local/session storage key :key should not be set` · `I remove the local/session storage key :key` |
-| `DebuggingTrait` | `I pause for debugging` (see [Debugging](#debugging)) |
-| `WireMockTrait` | see [Mocked third-party APIs](#mocked-third-party-apis-wiremock) |
+All traits are in `Sandstorm\E2ETestTools\Behat`. `FeatureContext.php.default` uses all but `WireMockTrait` (it needs a
+WireMock service); from `PageAssertionsTrait` on, the traits don't depend on each other - use the ones you need. Remove
+project steps with the same wording before using them, otherwise Behat reports the steps as ambiguous. Buttons and
+links are found by their accessible name, fields by their label, elements by `data-testid`.
 
-The traits in the last five rows don't depend on each other - use the ones you need; `FeatureContext.php.default` uses
-all but `WireMockTrait` (it needs a WireMock service). Remove project steps with the same wording before using them,
-otherwise Behat reports the steps as ambiguous. Buttons and links are
-found by their accessible name, fields by their label, elements by `data-testid`.
+### FusionRenderingTrait
 
-Notes on the steps:
+- `I have a site for Site Node :siteNodeName [with name :siteName]`
+- `I have/create the following nodes in site :siteName:`
+- `the following node references:`
+- `the default dimension space point is :dimensionSpacePoint`
+- `I get the node :nodeAggregateId [in dimension :dimensionSpacePoint]`
+- `I render the Fusion object :fusionPath:`
+- `I render the Fusion object :fusionPath with the current context node:`
+- `I render the page`
+- `the Fusion output should equal to :expected`
+- `in the fusion output, the inner HTML of CSS selector :selector matches :expected`
+- `in the fusion output, the attributes of CSS selector :selector are:`
+
+### NodeImportTrait
+
+- `I have/create the following nodes from file :fileName in site :siteName [with overwrites:]`
+
+### PersistentResourceTrait
+
+Comes with `FusionRenderingTrait`.
+
+- `I have a textual persistent resource :uuid named :filename with the following content:`
+- `I have the following images:`
+
+### PlaywrightTrait
+
+- `I do a screenshot :filename`
+- `I debug the playwright script` - prints the generated Playwright JS
+
+### NeosBackendControlTrait
+
+- `I access the URI path :uriPath`
+- `the response status code should be :status`
+- `there should be the text :expected on the page`
+- `the URI path should be :uriPath` - waits for the navigation
+- `I have a Neos backend user :username with password :password and role :role`
+- `I log into the backend using credentials :username :password [with username placeholder ... and password placeholder ...]`
+- `I click the main menu item :menuItem`
+- `I click the overview dashboard tile :tileTitle`
+- `I click the document tree entry :documentTitle`
+
+### PageAssertionsTrait
+
+- `the page title should be :title`
+- `there should not be the text :text on the page`
+- `there should (not) be the text :text in :selector`
+- `the element with test id :testId should be visible/hidden/focused/enabled/disabled`
+- `the element with test id :testId should (not) be in the viewport`
+
+### FormInteractionTrait
+
+- `I click the button :caption`
+- `I click the link :caption`
+- `I click the element with test id :testId`
+- `I fill :value into the field :label`
+- `the field :label should have the value :value`
+- `I check/uncheck the checkbox :label`
+- `the checkbox :label should (not) be checked`
+- `I choose the radio button :label`
+- `I select :option in the field :label`
+- `the field :label should have :option selected`
+- `I upload the file :fileName to the field :label` - relative to the feature file
+- `I press the key :key`
+
+### BrowserStateTrait
+
+- `the cookie :name has the value :value` - before the first visit, e.g. consent
+- `the local/session storage key :key has the value :value`
+- `the cookie :name should (not) be set`
+- `the cookie :name should have the value :value`
+- `I delete the cookie :name`
+- `the local/session storage key :key should have the value :value`
+- `the local/session storage key :key should not be set`
+- `I remove the local/session storage key :key`
+
+### DebuggingTrait
+
+- `I pause for debugging` - see [Debugging](#debugging)
+
+### WireMockTrait
+
+- `the API :api path :path on :method serves response :file [with status :status]`
+- `I load the stubs :tape of the API :api`
+- `I clear all API stubs`
+- `the API :api should have received :method :path [:count times]`
+
+Setup and details: [Mocked third-party APIs](#mocked-third-party-apis-wiremock).
+
+### Notes on the steps
 
 - `the Fusion output should equal to` compares the whole HTML - it breaks with every changed space or class. Prefer
   the CSS selector steps.
@@ -457,7 +533,9 @@ Notes on the steps:
   in single quotes (`'{"all":true}'`).
 - Screenshots document a result, they don't check it.
 
-Examples by level (when to use which: [testing guide](NEOS_E2E_TESTING_GUIDE.md#where-to-test)):
+### Examples by level
+
+When to use which: [testing guide](NEOS_E2E_TESTING_GUIDE.md#where-to-test).
 
 - **Component** (a Fusion prototype, like a pure function): `I render the Fusion object` without nodes —
   [FusionComponent/Button.feature](Tests/E2E/Features/FusionComponent/Button.feature).
@@ -513,12 +591,12 @@ When the site talks to an external API (shop backend, CRM, newsletter service), 
 Per API, the fixture directory holds `_base/*.json` (WireMock mapping files, loaded before every scenario), response
 bodies for "serves response" and one directory per scenario ("tape") of mapping files:
 
-| Step | |
-|---|---|
-| `the API :api path :path on :method serves response :file [with status :status]` | answers one call with a body file (`.json` may be omitted); wins over base stubs; a path with query string must match exactly |
-| `I load the stubs :tape of the API :api` | imports all mapping files of the tape directory |
-| `I clear all API stubs` | back to the base stubs, e.g. when the API's answer changes after an action |
-| `the API :api should have received :method :path [:count times]` | asserts the outgoing call - when the call is the feature |
+- `the API :api path :path on :method serves response :file [with status :status]` - answers one call with a body file
+  (`.json` may be omitted); wins over base stubs; a path with query string must match exactly
+- `I load the stubs :tape of the API :api` - imports all mapping files of the tape directory
+- `I clear all API stubs` - back to the base stubs, e.g. when the API's answer changes after an action
+- `the API :api should have received :method :path [:count times]` - asserts the outgoing call - when the call is the
+  feature
 
 While writing a test, `'proxyBaseUrl' => 'https://real.api.example.com'` in the API config forwards unmatched requests
 to the real API, so you see which calls happen - never in CI. The WireMock admin API (`/__admin/mappings`) lists the
