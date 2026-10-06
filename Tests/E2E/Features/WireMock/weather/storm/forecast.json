@@ -1,0 +1,5 @@
+{
+    "priority": 1,
+    "request": {"method": "GET", "urlPath": "/weather-api/forecast"},
+    "response": {"status": 200, "jsonBody": {"forecast": "stormy"}, "headers": {"Content-Type": "application/json"}}
+}

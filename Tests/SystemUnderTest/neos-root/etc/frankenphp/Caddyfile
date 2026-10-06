@@ -1,0 +1,36 @@
+# System under test (FLOW_CONTEXT Production/E2E-SUT from the container environment)
+# https://frankenphp.dev/docs/config - https://caddyserver.com/docs/caddyfile
+{
+	skip_install_trust
+}
+
+:9090 {
+	log
+
+	root /app/Web
+	encode zstd br gzip
+
+	request_body {
+		max_size 256MB
+	}
+
+	# neos resources
+	handle /_Resources/* {
+		@exists file
+		handle @exists {
+			file_server
+		}
+		respond "404 - not found" 404
+	}
+
+	# Block direct access to PHP files except index.php
+	@blockPhp {
+		path *.php
+		not path /index.php
+	}
+	handle @blockPhp {
+		respond 404
+	}
+
+	php_server
+}

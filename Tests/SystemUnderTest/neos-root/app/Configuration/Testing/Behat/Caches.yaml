@@ -1,0 +1,51 @@
+# Caches shared between the system under test (Production/E2E-SUT) and Behat (Testing/Behat): both contexts use
+# the same Redis database and applicationIdentifier, so a flush from Behat reaches what the SUT has cached.
+# Keep Production/E2E-SUT/Caches.yaml and Testing/Behat/Caches.yaml identical.
+
+Flow_Mvc_Routing_Route:
+  backend: 'Neos\Cache\Backend\RedisBackend'
+  backendOptions:
+    hostname: '%env:REDIS_HOST%'
+    port: '%env:REDIS_PORT%'
+    database: 2
+    defaultLifetime: 0
+
+Flow_Mvc_Routing_Resolve:
+  backend: 'Neos\Cache\Backend\RedisBackend'
+  backendOptions:
+    hostname: '%env:REDIS_HOST%'
+    port: '%env:REDIS_PORT%'
+    database: 2
+    defaultLifetime: 0
+
+Neos_Fusion_Content:
+  backend: 'Neos\Cache\Backend\RedisBackend'
+  backendOptions:
+    hostname: '%env:REDIS_HOST%'
+    port: '%env:REDIS_PORT%'
+    database: 2
+    defaultLifetime: 0
+
+Flow_Session_MetaData:
+  backend: 'Neos\Cache\Backend\RedisBackend'
+  backendOptions:
+    hostname: '%env:REDIS_HOST%'
+    port: '%env:REDIS_PORT%'
+    database: 2
+    defaultLifetime: 0
+
+Flow_Session_Storage:
+  backend: 'Neos\Cache\Backend\RedisBackend'
+  backendOptions:
+    hostname: '%env:REDIS_HOST%'
+    port: '%env:REDIS_PORT%'
+    database: 2
+    defaultLifetime: 0
+
+Neos_Media_ImageSize:
+  backend: 'Neos\Cache\Backend\RedisBackend'
+  backendOptions:
+    hostname: '%env:REDIS_HOST%'
+    port: '%env:REDIS_PORT%'
+    database: 2
+    defaultLifetime: 0

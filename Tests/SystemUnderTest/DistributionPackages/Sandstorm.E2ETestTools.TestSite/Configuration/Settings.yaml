@@ -1,0 +1,44 @@
+Neos:
+  Neos:
+    fusion:
+      autoInclude:
+        Sandstorm.E2ETestTools.TestSite: true
+    # URIs without .html, like most projects (and the kickstart)
+    sitePresets:
+      default:
+        uriPathSuffix: ''
+    sites:
+      '*':
+        contentDimensions:
+          defaultDimensionSpacePoint:
+            language: de
+          resolver:
+            factoryClassName: Neos\Neos\FrontendRouting\DimensionResolution\Resolver\UriPathResolverFactory
+            options:
+              segments:
+                -
+                  dimensionIdentifier: language
+                  dimensionValueMapping:
+                    de: ''
+                    ch: ch
+                    en: en
+  # a language dimension, like most projects - the features show how fixtures pass the DimensionSpacePoint.
+  # ch specializes de (Swiss German falls back to German): a ch-only node can sit below de pages - the mixed mode of
+  # Features/Fixtures/DefaultDimension.feature
+  ContentRepositoryRegistry:
+    contentRepositories:
+      default:
+        contentDimensions:
+          language:
+            label: Language
+            values:
+              de:
+                label: DE
+                specializations:
+                  ch:
+                    label: CH
+              en:
+                label: EN
+  Fusion:
+    defaultContext:
+      Sandstorm.E2ETestTools.TestSite.Weather: Sandstorm\E2ETestTools\TestSite\Eel\WeatherHelper

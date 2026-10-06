@@ -1,0 +1,15 @@
+// PageAssertionsTrait: texts, element states by test id, viewport
+prototype(Sandstorm.E2ETestTools.TestSite:TestMarkup.Elements) < prototype(Neos.Fusion:Component) {
+    renderer = afx`
+        <p class="intro">Welcome to the elements page</p>
+        <p class="outro">Goodbye</p>
+        <div data-testid="visible-box">Visible box</div>
+        <div data-testid="hidden-box" style="display: none">Secret text</div>
+        <input data-testid="focused-field" aria-label="Focused field" autofocus />
+        <button data-testid="enabled-button" type="button">Enabled</button>
+        <button data-testid="disabled-button" type="button" disabled>Disabled</button>
+        <a data-testid="aria-disabled-link" href="#" aria-disabled="true">Unavailable</a>
+        <div style="height: 3000px"></div>
+        <div data-testid="far-below">Far below</div>
+    `
+}

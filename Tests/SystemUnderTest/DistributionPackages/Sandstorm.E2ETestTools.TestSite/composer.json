@@ -1,0 +1,19 @@
+{
+    "name": "sandstorm/e2etesttools-testsite",
+    "description": "Site the E2E tests of Sandstorm.E2ETestTools run against - part of its development distribution, not shipped",
+    "type": "neos-site",
+    "license": "MIT",
+    "require": {
+        "neos/neos": "^9.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Sandstorm\\E2ETestTools\\TestSite\\": "Classes/"
+        }
+    },
+    "extra": {
+        "neos": {
+            "package-key": "Sandstorm.E2ETestTools.TestSite"
+        }
+    }
+}

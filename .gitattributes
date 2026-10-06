@@ -1,0 +1,8 @@
+# kept out of the composer dist: the package's own tests, CI and development tooling
+/.gitattributes export-ignore
+/.gitignore export-ignore
+/.github export-ignore
+/Tests export-ignore
+/mise.toml export-ignore
+# sources of the Export Node button - the build in Resources/Public/ExportNodeButton is what Neos loads
+/Resources/Private/ExportNodeButton export-ignore

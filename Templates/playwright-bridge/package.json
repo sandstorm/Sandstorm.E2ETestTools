@@ -1,0 +1,7 @@
+{
+    "private": true,
+    "dependencies": {
+        "@hapi/hapi": "^21.4.0",
+        "playwright": "1.51.1"
+    }
+}

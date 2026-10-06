@@ -1,0 +1,7 @@
+# Neos 9 distribution: `mise run start` (SUT=neos9 is the default)
+name: sandstorm-e2etesttools-neos9
+
+include:
+  - path:
+      - ../docker-compose.base.yml
+      - ./versions.yml

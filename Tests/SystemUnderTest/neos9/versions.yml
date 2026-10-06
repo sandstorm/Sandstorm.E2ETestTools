@@ -1,0 +1,18 @@
+services:
+  neos:
+    build:
+      args:
+        PHP_VERSION: '8.4'
+        NEOS_VERSION: '9'
+        ENTRY_POINT_FILE: 'Tests/SystemUnderTest/neos9/entrypoint.sh'
+
+  maria-db:
+    image: mariadb:11.4
+
+volumes:
+  db-data:
+    name: sandstorm-e2etesttools-neos9-db-data
+
+networks:
+  e2e:
+    name: sandstorm-e2etesttools-neos9

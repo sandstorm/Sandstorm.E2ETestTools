@@ -1,9 +1,11 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Sandstorm\E2ETestTools;
 
 use Neos\Eel\ProtectedContextAwareInterface;
-use Sandstorm\E2ETestTools\Tests\Behavior\Bootstrap\FusionRenderingTrait;
+use Sandstorm\E2ETestTools\Behat\FusionRenderingTrait;
 
 /**
  * Implementation detail of {@see FusionRenderingTrait} collecting the result
@@ -12,8 +14,6 @@ use Sandstorm\E2ETestTools\Tests\Behavior\Bootstrap\FusionRenderingTrait;
 class FusionRenderingResult implements ProtectedContextAwareInterface
 {
     private $renderedElement;
-
-    private $renderedPage;
 
     /**
      * @return mixed
@@ -31,24 +31,6 @@ class FusionRenderingResult implements ProtectedContextAwareInterface
         $this->renderedElement = $renderedElement;
         return $renderedElement;
     }
-
-    /**
-     * @return mixed
-     */
-    public function getRenderedPage()
-    {
-        return $this->renderedPage;
-    }
-
-    /**
-     * @param mixed $renderedPage
-     */
-    public function setAndReturnRenderedPage($renderedPage)
-    {
-        $this->renderedPage = $renderedPage;
-        return $renderedPage;
-    }
-
 
     public function allowsCallOfMethod($methodName)
     {

@@ -1,0 +1,4 @@
+{
+    "request": {"method": "GET", "urlPath": "/weather-api/forecast"},
+    "response": {"status": 200, "jsonBody": {"forecast": "sunny"}, "headers": {"Content-Type": "application/json"}}
+}

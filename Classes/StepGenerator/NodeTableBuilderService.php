@@ -1,12 +1,16 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Sandstorm\E2ETestTools\StepGenerator;
 
+use Neos\ContentRepositoryRegistry\ContentRepositoryRegistry;
 use Neos\Flow\Package\PackageManager;
 use Neos\Flow\Annotations as Flow;
 
 /**
- * Public builder API to configure and create a NodeTable to use in your step generator command controller.
+ * Entry point of the StepGenerator for your own command controllers: inject it and start with nodeTable().
+ * (A singleton, so Flow can inject the dependencies the per-use {@see NodeTableBuilder} needs.)
  *
  * @Flow\Scope("singleton")
  */
@@ -18,9 +22,14 @@ class NodeTableBuilderService
      */
     protected PackageManager $packageManager;
 
+    /**
+     * @Flow\Inject
+     */
+    protected ContentRepositoryRegistry $contentRepositoryRegistry;
+
     public function nodeTable(): NodeTableBuilder
     {
-        return new NodeTableBuilder($this->packageManager);
+        return new NodeTableBuilder($this->packageManager, $this->contentRepositoryRegistry);
     }
 
 }

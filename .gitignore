@@ -5,3 +5,4 @@ node_modules/
 Packages/
 .DS_Store
 *.bkp
+Tests/SystemUnderTest/e2e-results/

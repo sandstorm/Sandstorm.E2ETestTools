@@ -1,0 +1,93 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+    # documentation changes can't break anything - a commit with code changes runs anyway
+    paths-ignore: ['**.md', 'LICENSE']
+  pull_request:
+    paths-ignore: ['**.md', 'LICENSE']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# a new push replaces the running tests of the same branch
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: Tests (${{ matrix.sut }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        # one entry per distribution in Tests/SystemUnderTest/
+        sut: [neos9]
+    env:
+      SUT: ${{ matrix.sut }}
+      COMPOSE: docker compose -f Tests/SystemUnderTest/${{ matrix.sut }}/docker-compose.yml -f Tests/SystemUnderTest/docker-compose.ci-cache.yml
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # third-party: pinned to the commit of v5.1.1, so it can't change without a change here
+      - uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
+
+      # the GitHub Actions cache backend (type=gha) needs a buildx builder with the docker-container driver ...
+      - uses: docker/setup-buildx-action@v4
+
+      # ... and the cache token/URL in the environment of docker compose - only actions see them, `run:` steps don't
+      - name: Expose the cache token to docker compose
+        uses: actions/github-script@v9
+        with:
+          script: |
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN)
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL)
+            core.exportVariable('ACTIONS_RESULTS_URL', process.env.ACTIONS_RESULTS_URL)
+            // BuildKit only uses GitHub's current cache API (v2) with this set - the old v1 API is switched off and
+            // answers with an HTML error page ("Our services aren't available right now")
+            core.exportVariable('ACTIONS_CACHE_SERVICE_V2', process.env.ACTIONS_CACHE_SERVICE_V2 || 'True')
+
+      # image layers come from the GitHub Actions cache (docker-compose.ci-cache.yml) - a full build only after a
+      # change to the Dockerfile or a composer.json; the other images are pulled meanwhile
+      - name: Build the distribution
+        run: |
+          $COMPOSE pull --quiet maria-db redis-cache wiremock &
+          $COMPOSE build
+          wait
+
+      - name: Start the distribution
+        id: start
+        run: mise run start
+
+      # each test step runs when the distribution is up - also after another test step failed, so a run reports all
+      # three - but not after a failed build or start
+      - name: Unit tests
+        if: ${{ !cancelled() && steps.start.outcome == 'success' }}
+        run: mise run tests:unit
+
+      - name: Functional tests
+        if: ${{ !cancelled() && steps.start.outcome == 'success' }}
+        run: mise run tests:functional
+
+      - name: E2E tests
+        if: ${{ !cancelled() && steps.start.outcome == 'success' }}
+        run: mise run tests:e2e
+
+      # the neos container exists once the start step ran, even if the system under test didn't come up
+      - name: Collect the Flow logs
+        if: ${{ failure() && steps.start.outcome != 'skipped' }}
+        run: $COMPOSE cp neos:/app/Data/Logs Tests/SystemUnderTest/e2e-results/flow-logs
+
+      - name: Upload screenshots, traces and logs
+        if: ${{ failure() && steps.start.outcome != 'skipped' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-results-${{ matrix.sut }}
+          path: Tests/SystemUnderTest/e2e-results/
+          if-no-files-found: ignore
+          retention-days: 7

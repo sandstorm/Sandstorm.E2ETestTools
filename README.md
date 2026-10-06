@@ -1,646 +1,669 @@
-# End-To-End Test Tools
+# End-To-End Test Tools for Neos
 
-... for Neos and Flow Projects.
+Behat steps and glue code for testing Neos 9 sites at three levels: Fusion rendering in-process, full pages in a real
+browser via Playwright, and the Neos backend. Tests are written in Gherkin and run against a content repository that
+is reset and filled with fixtures for every scenario.
 
-**for SYMFONY projects, see [README.Symfony.md](./README.Symfony.md).**
+```gherkin
+@flowEntities
+Feature: Headline integration
 
-We use [Playwright](https://playwright.dev) as browser orchestrator for tests involving a real browser. We use Behat as
-the test framework for writing all kinds of BDD tests.
+  Scenario: a headline node renders as h1
+    Given I have a site for Site Node "site" with name "My Site"
+    And I have the following nodes in site "site":
+      | NodeAggregateId | Parent        | NodeType                   | Properties                                   | DimensionSpacePoint |
+      | homepage        |               | My.Site:Document.StartPage | {"uriPathSegment":"home","title":"Homepage"} | {"language":"de"}   |
+      | headline        | homepage/main | My.Site:Content.Headline   | {"title":"Hello"}                            | {"language":"de"}   |
+    And I get the node "headline" in dimension '{"language":"de"}'
+    When I render the Fusion object "/testcase" with the current context node:
+      """
+      testcase = My.Site:Content.Headline
+      """
+    Then in the fusion output, the inner HTML of CSS selector "h1" matches "Hello"
+```
 
-- a way to test Fusion code with Behat
+## What you get
 
-- Utilities for integrating the [Playwright](https://playwright.dev) browser orchestrator and the Behat test framework
+- **Fusion rendering in the Behat process** - render a component or a NodeType's integration and assert on the HTML
+  via CSS selectors, without web server or browser.
+- **Browser tests via Playwright** - Behat sends scripts to a small bridge service; the browser hits your application
+  on its own port, Flow context and database.
+- **Neos backend steps** - create users, log in, use the menu, the dashboard and the document tree.
+- **Generic browser steps** - texts, titles, buttons, links, form fields, cookies and web storage (e.g. a preset cookie
+  consent).
+- **Content fixtures** - nodes, references, hidden state and assets as Gherkin tables or YAML files, created through
+  the content repository API.
+- **Fixture export** - turn existing pages into fixtures (backend button or CLI) instead of writing tables by hand.
+- **Mocked third-party APIs** - WireMock stubs per scenario and checks of the calls your site made.
+- **Debugging and CI** - screenshots, traces and server logs of failed scenarios, a pause step and a CI example.
+
+Requires Neos 9.1+ / Flow 9.1+. For Neos 8, use the 8.x releases (latest: 8.3.2). Developing the package itself:
+see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 <!-- TOC -->
 
-- [End-To-End Test Tools](#end-to-end-test-tools)
-- [Installation and Setup Instructions](#installation-and-setup-instructions)
-  - [Setting up Playwright](#setting-up-playwright)
-  - [Creating a FeatureContext](#creating-a-featurecontext)
-  - [Loading CSS and JavaScript for the Styleguide](#loading-css-and-javascript-for-the-styleguide)
-  - [Pipeline Setup](#pipeline-setup) 
-- [Running Behat Tests](#running-behat-tests)
-  - [Style Guide](#style-guide)
+- [Setup](#setup)
+  - [1. Install the package](#1-install-the-package)
+  - [2. Two Flow Contexts, Two Ports](#2-two-flow-contexts-two-ports)
+  - [3. behat.yml.dist](#3-behatymldist)
+  - [4. FeatureContext.php](#4-featurecontextphp)
+  - [5. Playwright (playwright-bridge)](#5-playwright-playwright-bridge)
+  - [6. Project tasks (recommended)](#6-project-tasks-recommended)
+  - [7. CI Pipeline (optional)](#7-ci-pipeline-optional)
 - [Writing Behat Tests](#writing-behat-tests)
-  - [Fusion Component Testcases](#fusion-component-testcases)
-  - [Fusion Integration Testcases](#fusion-integration-testcases)
-  - [Full-Page Snapshot Testcases](#full-page-snapshot-testcases)
-- [Architecture](#architecture)
+  - [Tags](#tags)
+  - [Fixtures](#fixtures)
+    - [Writing fixtures by hand](#writing-fixtures-by-hand)
+    - [Exporting existing content](#exporting-existing-content)
+  - [Steps](#steps)
+  - [Dynamic SUT URL](#dynamic-sut-url)
+  - [Mocked third-party APIs (WireMock)](#mocked-third-party-apis-wiremock)
+- [Running Behat Tests](#running-behat-tests)
+  - [Debugging](#debugging)
+- [Migrating tests from Neos 8](#migrating-tests-from-neos-8)
+- [Troubleshooting](#troubleshooting)
 
 <!-- /TOC -->
 
-# Installation and Setup Instructions
+# Setup
 
-- either copy .mise.toml and update it, then run `mise run e2e:setup`
-- or do the following:
+Setup is done by hand, once per project, in this order - web server, ports, Docker and CI differ too much between
+projects for a setup command. Steps 1–5 are required; without step 2, Behat empties your development database.
 
-```
-composer require sandstorm/e2etesttools @dev
-./flow behat:setup
-./flow behat:kickstart Your.SitePackageKey http://127.0.0.1:8081
-rm bin/selenium-server.jar # we do not need this
-```
-
-- you can delete `behat.yml` and only keep `behat.yml.dist`
-- in `behat.yml.dist`, remove the `Behat\MinkExtension` part completely.
-
-  > Mink is generic a "browser controller API" which in our experience
-  > is a bit brittle to use and adds unnecessary complexity. We recommend
-  > to instead use Playwright directly.
-
-- You should configure the Flow/Neos `Configuration/Testing/Behat/Settings.yaml` and copy the production `Settings.yaml`
-  there; to ensure that Behat is accessing the same Database like the production application.
-
-- You should create a `Configuration/Development/Docker/Behat/Settings.yaml` with the following contents:
-
-```yaml
-  Neos:
-    Flow:
-      persistence:
-        backendOptions:
-          dbname: '%env:DB_NEOS_DATABASE_E2ETEST%'
-```
-
-- You should create a `Configuration/Production/Kubernetes/Behat/Settings.yaml` with the following contents:
-
-```yaml
-  Neos:
-    Flow:
-      persistence:
-        backendOptions:
-          dbname: '%env:DB_NEOS_DATABASE_E2ETEST%'
-```
-
-## Setting up Playwright
-
-We suggest copying `Resources/Private/e2e-testrunner-template` of this package to the root of the Git Repository and
-name the folder `e2e-testrunner` (in our projects, usually one level ABOVE the Neos Root Directory).
-Also, make sure you have installed playwright on your device.
-`npx playwright install`
-
-
-## Creating a FeatureContext
-
-The `FeatureContext` is the PHP class containing the step definitions for the Behat scenarios. We provide base traits
-you should use for various functionality. 
-We provide a working skeleton for you to use under `Tests/Behavior/Bootstrap/FeatureContext.php.default`
-Copy this file as your `FeatureContext.php` to your project `Tests/Behavior/Bootstrap/FeatureContext.php`
-`cp -R ./Packages/Application/Sandstorm.E2ETestTools/Tests/Behavior/Bootstrap/FeatureContext.php.default ./DistributionPackages/<Your.PackageName>/Tests/Behavior/Bootstrap/FeatureContext.php`
-Inside the file, check the paths to the provided Sandstorm traits and update if necessary.
-
-## Loading CSS and JavaScript for the Styleguide
-
-In your Fusion code, add the JavaScript and CSS of your page to the `Sandstorm.E2ETestTools:StyleguideStylesheets`
-and `Sandstorm.E2ETestTools:StyleguideJavascripts` prototypes, e.g. in the following way:
-
-```neosfusion
-prototype(Sandstorm.E2ETestTools:StyleguideStylesheets) {
-  headerAssets = PACKAGEKEY:Resources.HeaderAssets
-}
-```
-
-> Additionally, the base URL needs to be configured correctly. This package sets it to "/" in the `Testing/Behat`
-> context which will work in most cases out of the box.
-
-## Pipeline Setup
-We provide a skeleton to run e2e tests in your gitlab pipeline.
-Add the provided lines from our `.gitlab-ci.yml` to yours and adjust accordingly.
-
-Every related service (like redis, database, ...) needs to be started using a `servives` entry. Ensure the Docker image
-version of the service matches the development and production image from `docker-compose.yml`.
-
-The *environment variables* of the job are passed on to *all services* - so all connected services and the main job
-share the same environment variables. Thus, you need to add the environment variables for BOTH the SUT (which is the
-main job) and all related services to the `variables` section of the test job.
-
-
-# Running Behat Tests
-
-> This is MANDATORY to read for everybody.
-> We suggest that this section is COPIED to the readme of your project.
-
-First, you need to start the **Playwright Server** on your development machine. For that, go to `e2e-testrunner`
-in your Git Repo, and do:
+## 1. Install the package
 
 ```bash
-npm install
-node index.js
-# now, the server is running on localhost:3000.
-# Keep the server running as long as you want to execute Behavioral Tests. You can leave the server
-# running for a very long time (e.g. a day).
+composer require --dev sandstorm/e2etesttools
 ```
 
-Second, **ensure the docker containers are running**; usually by `docker-compose build && docker-compose up -d`. Then,
-enter the `neos` container: `docker-compose exec neos /bin/bash` and run the following commands inside the container:
+## 2. Two Flow Contexts, Two Ports
 
-```bash
-./flow behat:setup
-bin/behat -c Packages/Sites/[SITEPACKAGE_NAME]/Tests/Behavior/behat.yml.dist
-```
-
-Behat also supports running single tests or single files - they need to be specified after the config file, e.g.
-
-```bash
-
-# run all scenarios in a given folder
-bin/behat -c Packages/Sites/[SITEPACKAGE_NAME]/Tests/Behavior/behat.yml.dist Packages/Sites/[SITEPACKAGE_NAME]/Tests/Behavior/Features/Fusion/
-
-# run all scenarios in the single feature file
-bin/behat -c Packages/Sites/[SITEPACKAGE_NAME]/Tests/Behavior/behat.yml.dist Packages/Sites/[SITEPACKAGE_NAME]/Tests/Behavior/Features/WebsiteRendering.feature
-
-# run the scenario starting at line 27
-bin/behat -c Packages/Sites/[SITEPACKAGE_NAME]/Tests/Behavior/behat.yml.dist Packages/Sites/[SITEPACKAGE_NAME]/Tests/Behavior/Features/WebsiteRendering.feature:27
-```
-
-In case of exceptions, it might be helpful to run the tests with `--stop-on-failure`, which stops the test cases at the
-first error. Then, you can inspect the testing database and manually reproduce the bug.
-
-Additionally, `-vvv` is a helpful CLI flag (extra-verbose) - this displays the full exception stack trace in case of
-errors.
-
-**For hints how to write Behat tests, we suggest to
-read [Sandstorm.E2ETestTools README](./Packages/Application/Sandstorm.E2ETestTools/README.md).**
-
-## Style Guide
-
-If you use the Style Guide feature (`Then I store the Fusion output in the styleguide as "Button_Component_Basic"`),
-then your tests need to be annotated with `@playwright` and the playwright dev server needs to be running.
-
-You can then access the style guide using [127.0.0.1:8080/styleguide/](http://127.0.0.1:8080/styleguide/). The style
-guide contains BOTH HTML snapshots; and rendered images of the HTML.
-
-# Writing Behat Tests
-
-Here, we try to give examples for common Behat scenarios; such that you can easily get started.
-
-## Fixture Setup
-
-The Sandstorm.E2ETestTools Package provides inline, delegated and hybrid fixture setups.
-We recommend using a hybrid approach.
-
-### Delegated / Hybrid
-
-In your Neos Backend, select a node you want to test, go to the meta tab and click "export node".
-This will download a yaml file containing all the selected node's parents and all descendants of the 
-nearest document parent (in case of dependencies as such references). Afterwards, move the downloaded yaml file into
-test directory and use them in your .feature file like such:
-```gherkin
-Given I have a site for Site Node "www-my-site" with name "www.my.side"
-And I have the following nodes from file "relative-path-from-test-file-to.yaml"
-```
-
-Also, you can override node properties inline:
-```gherkin
-Given I have the following nodes from file "relative-path-from-test-file-to.yaml" with overwrites
-| identifier                           | property      | value |
-| 5cb3a5f7-b501-40b2-b5a8-9de169ef1105 | title         | Foo   |
-```
-
-### Inline
-```gherkin
-Given I have the following nodes:
-| Identifier                           | Path               | Node Type                | Properties                   | Language |
-| 5cb3a5f7-b501-40b2-b5a8-9de169ef1105 | /sites             | unstructured             | {}                           | de       |
-```
-
-## Fusion Component Testcases
-
-You can use a test case like the following for testing components - analogous to what you usually do with Monocle.
-
-Some hints:
-
-- We need to set up a minimal node tree, as otherwise we cannot render links.
-
-```gherkin
-@fixtures
-@playwright
-Feature: Testcase for Button Component
-
-  Background:
-    Given I have a site for Site Node "site"
-    Given I have the following nodes:
-      | Identifier                           | Path               | Node Type                | Properties                   | Language |
-      | 5cb3a5f7-b501-40b2-b5a8-9de169ef1105 | /sites             | unstructured             | {}                           | de       |
-      | 5e312d5b-9559-4bd2-8251-0182e11b4950 | /sites/site        | PACKAGEKEY:Document.Page | {}                           | de       |
-      | 9cbaa2e2-d779-4936-aa02-0dab324da93e | /sites/site/nested | PACKAGEKEY:Document.Page | {"uriPathSegment": "nested"} | de       |
-
-
-    Given I get a node by path "/sites/site" with the following context:
-      | Workspace | Dimension: language |
-      | live      | de                  |
-
-
-  Scenario: Basic Button (external link)
-    When I render the Fusion object "/testcase" with the current context node:
-    """
-    testcase = PACKAGEKEY:Component.Button {
-      text = "External Link"
-      link = "https://spiegel.de"
-      isExternalLink = true
-    }
-    """
-    Then in the fusion output, the inner HTML of CSS selector "a" matches "External Link"
-    Then in the fusion output, the attributes of CSS selector "a" are:
-      | Key    | Value              |
-      | class  | button             |
-      | href   | https://spiegel.de |
-      | target | _blank             |
-    Then I store the Fusion output in the styleguide as "Button_Component_Basic"
-```
-
-## Fusion Integration Testcases
-
-It is especially valuable to not just test the Fusion component (which is more or less like a pure function), but
-instead test that a given *Node* renders in a certain way - so that the *wiring between Node and Fusion component*
-is set up correctly.
-
-A test case can look like the following one:
-
-```gherkin
-@fixtures
-@playwright
-Feature: Testcase for Button Integration
-
-  Background:
-    Given I have a site for Site Node "site"
-    Given I have the following nodes:
-      | Identifier                           | Path               | Node Type                | Properties                   | Language |
-      | 5cb3a5f7-b501-40b2-b5a8-9de169ef1105 | /sites             | unstructured             | {}                           | de       |
-      | 5e312d5b-9559-4bd2-8251-0182e11b4950 | /sites/site        | PACKAGEKEY:Document.Page | {}                           | de       |
-      | 9cbaa2e2-d779-4936-aa02-0dab324da93e | /sites/site/nested | PACKAGEKEY:Document.Page | {"uriPathSegment": "nested"} | de       |
-
-
-  Scenario: Secondary Button
-    Given I create the following nodes:
-      | Path                      | Node Type                 | Properties                                                                   | Language |
-      | /sites/site/main/testnode | PACKAGEKEY:Content.Button | {"type": "secondary", "link": "node://9cbaa2e2-d779-4936-aa02-0dab324da93e"} | de       |
-    Given I get a node by path "/sites/site/main/testnode" with the following context:
-      | Workspace | Dimension: language |
-      | live      | de                  |
-
-    When I render the Fusion object "/testcase" with the current context node:
-    """
-    testcase = PACKAGEKEY:Content.Button
-    """
-    Then in the fusion output, the attributes of CSS selector "a" are:
-      | Key  | Value      |
-      | href | /de/nested |
-
-    Then I store the Fusion output in the styleguide as "Button_Integration_Secondary"
+E2E tests delete and create content for every scenario, so they need their own database - and with it their own Flow
+context, and a web server port of their own for the browser:
 
 ```
-
-## Full-Page Snapshot Testcases
-
-This tests a complete page rendering, and not just single components. It is meant mostly for visual checking; and most
-likely you'll work less with specific assertions.
-
-In this case, the rendering depends on many more nodes - so setting up the behat fixture with all the relevant nodes can
-be a bit tedious. Luckily, there are helpers in this package to help with the process. We suggest writing a
-CommandController like the following:
-
-```php
-<?php
-
-namespace PACKAGEKEY\Command;
-
-use Neos\ContentRepository\Domain\Model\NodeInterface;
-use Neos\ContentRepository\Domain\Service\ContextFactoryInterface;
-use Neos\Flow\Annotations as Flow;
-use Neos\Flow\Cli\CommandController;
-use Sandstorm\E2ETestTools\StepGenerator\NodeTableBuilderService;
-
-class StepGeneratorCommandController extends CommandController
-{
-    /**
-     * @Flow\Inject
-     */
-    protected ContextFactoryInterface $contextFactory;
-
-    /**
-     * Main API for creating NodeTable instances to print BDD steps.
-     *
-     * @Flow\Inject
-     */
-    protected NodeTableBuilderService $nodeTableBuilderService;
-
-    public function homepageCommand()
-    {
-        $nodeTable = $this->nodeTableBuilderService->nodeTable()
-            ->withDefaultNodeProperties(['Language' => 'de'])
-            ->build();
-        $siteNode = $this->getSiteNode();
-
-        $nodeTable->addParents($siteNode);
-        $nodeTable->addNode($siteNode);
-        $nodeTable->addNodesUnderneathExcludingAutoGeneratedChildNodes($siteNode, '!Neos.Neos:Document'); // we recurse into the content of the homepage
-        $nodeTable->addNodesUnderneathExcludingAutoGeneratedChildNodes($siteNode, 'Neos.Neos:Document'); // we render the remaining document nodes so we can have a menu rendered (but without content)
-
-        $nodeTable->print();
-    }
-
-    /**
-     * @return NodeInterface
-     */
-    public function getSiteNode(): NodeInterface
-    {
-        $context = $this->contextFactory->create([
-            'workspaceName' => 'live',
-            'invisibleContentShown' => true,
-            'dimensions' => [
-                'language' => ['de']
-            ],
-            'targetDimensions' => [
-                'language' => 'de'
-            ]
-        ]);
-        return $context->getCurrentSiteNode();
-    }
-}
-```
-
-Now, when you run `./flow stepGenerator:homepage`, you'll get a table like the following:
-
-```gherkin
-Given I have the following nodes:
-| Path   | Node Type    | Properties | HiddenInIndex | Language |
-| /sites | unstructured | []         | false         | de       |
-    # ... many more nodes here in this table ...
-```
-
-This is ready to be pasted into a test case like the following:
-
-```gherkin
-@fixtures
-@playwright
-Feature: Homepage Rendering
-
-  Scenario: Full Homepage Rendering
-    Given I have a site for Site Node "site"
-    # to regenerate, use: ./flow stepGenerator:homepage
-    Given I have the following nodes:
-      | Path   | Node Type    | Properties | HiddenInIndex | Language |
-      | /sites | unstructured | []         | false         | de       |
-    # ... many more nodes here ...
-
-    Given I get a node by path "/sites/site" with the following context:
-      | Workspace | Dimension: language |
-      | live      | de                  |
-
-    Given I accepted the Cookie Consent
-    When I render the page
-    Then I store the Fusion output in the styleguide as "Page_Homepage"
-    Then I store the Fusion output in the styleguide as "Page_Homepage_Mobile" using viewport width "320"
-```
-
-This enables to generate **responsive, reproducible screenshots** of the different pages, and being able to re-generate
-this when the dummy data changes.
-
-### persistent resources in BDD tests
-
-In case, your node fixtures point to some assets from the Neos.Media module, you can generate fixtures for them as well.
-You need to pass the second parameter ($fixtureBasePath) when creating a NodeTable.
-
-You probably want to store you asset fixtures near your feature files.
-
-# TODO explain how to set fixture base path
-
-```php
-    // ... Step Generator Command Controller 
-
-    public function homepageCommand()
-    {
-        $nodeTable = $this->nodeTableBuilderService->nodeTable()
-            ->withDefaultNodeProperties(['Language' => 'de'])
-            // !!! Here you setup your directory for storing your fixture files.
-            // It will print a path relative to the Flow package directory.
-            //  -> most likely: Sites/Your.PackageKey/Tests/Behavior/Features/Homepage/Resources/someSHA1.png (depending on the type of the composer package)
-            ->withFixtureBasePath('Your.PackageKey', 'Tests/Behavior/Features/Homepage/Resources/')
-            ->build();
-        $siteNode = $this->getSiteNode();
-
-        $nodeTable->addParents($siteNode);
-        $nodeTable->addNode($siteNode);
-        $nodeTable->addNodesUnderneathExcludingAutoGeneratedChildNodes($siteNode, '!Neos.Neos:Document'); // we recurse into the content of the homepage
-        $nodeTable->addNodesUnderneathExcludingAutoGeneratedChildNodes($siteNode, 'Neos.Neos:Document'); // we render the remaining document nodes so we can have a menu rendered (but without content)
-
-        // when the table is printed, it includes other tables containing asset fixtures
-        $nodeTable->print();
-    }
-    
-    // ...
-
-```
-
-Let's say you have three images in your node data fixtures (node property of type `ImageInterface`). Your output could
-look like:
-
-```gherkin
-
-Given I have the following images:
-| Image ID                             | Width | Height | Filename            | Collection | Relative Publication Path | Path                                                                                                        |
-| 3a28c97c-58f1-45c5-b1ad-2f491c904467 |       |        | Map-circle-blue.svg | persistent |                           | Sites/Your.Package/Tests/Behavior/Features/Homepage/Resources/9600acebed149b1e0178b214a7f3a82bc7a829a4.svg  |
-| 846d085f-091b-4d08-82bb-e5f04150c594 | 615   | 418    | cat_caviar.jpeg     | persistent |                           | Sites/Your.Package/Tests/Behavior/Features/Homepage/Resources/ee53c207588c199b4e5359f5e06d241b0d93b78e.jpeg |
-| 3ca6e806-182a-4af2-9a60-50d2ff0bcbdb | 4500  | 4500   | mark-man-stock.png  | persistent |                           | Sites/Your.Package/Tests/Behavior/Features/Homepage/Resources/9784f58d2f6810b773807b3cfd56dcbe2b3a1c65.png  |
-Given I have the following nodes:
-| Path | Node Type | Properties | HiddenInIndex | Language |
-    # ... nodes go here here with reference to Image ID in their serialized properties
-    # a property might look like: { ..., "myImageProperty":{"__flow_object_type":"Neos\\Media\\Domain\\Model\\Image","__identifier":"3a28c97c-58f1-45c5-b1ad-2f491c904467"}, ...
-```
-
-Note, that the `Path` column values are printed and read relative to the Flow package directory. That should keep your
-tests more or less environment independent.
-Usually, the files are stored inside a DistributionPackages/* package which is symlinked into the Flow package
-directory (and thus is readable from your Test and writable from your Command Controller).
-Also, those files should be added to git, since they are part of your test cases.
-
-### dynamic modification of SUT URL via step
-
-By default, the SUT URL is configured statically via environment variable. In some cases, that is not sufficient.
-
-Use cases:
-
-#### custom content dimension resolving based on host info
-
-Let's say, your Neos project has a custom content dimension value resolver, f.e. by host name or subdomain. The SUT base
-URL is configured statically via environment variable. But in the mentioned special case, you need dynamic base URLs
-that are modified via your own custom steps.
-
-#### multi-site setup
-
-When your Neos application has multiple sites, the host name also needs to be defined via custom step.
-
-The `PlaywrightConnector` has an API for that purpose:
-
-public API: `PlaywrightTrait#setSystemUnderTestUrlModifier(\Closure $urlModifier): void`
-delegates to internal: `PlaywrightConnector#setSystemUnderTestUrlModifier(\Closure $urlModifier): void`
-
-Note, that the modifier is reset after each scenario.
-
-You need to call that setter from your custom step, that could look like:
-
-```php
-...
-
-    /**
-     * @Given my base URL is :baseUrl
-     */
-    public function myBaseUrlIs($baseUrl)
-    {
-        $this->setSystemUnderTestUrlModifier(function (string $staticBaseUrl) use ($baseUrl) {
-            return $baseUrl;
-        });
-    }
-
-    /**
-     * @Given my subdomain is :subdomain
-     */
-    public function mySubdomainIs($subdomain)
-    {
-        $this->setSystemUnderTestUrlModifier(function (string $baseUrl) use ($subdomain) {
-            return sprintf("%s://%s.%s.nip.io:%s/%s",
-                parse_url($baseUrl, PHP_URL_SCHEME),
-                $subdomain,
-                parse_url($baseUrl, PHP_URL_HOST),
-                parse_url($baseUrl, PHP_URL_PORT),
-                parse_url($baseUrl, PHP_URL_PATH),
-            );
-        });
-    }
-
-...    
-
-```
-
-and behat call:
-
-```gherkin
-Given my subdomain is "de"
-```
-
-## Usage for Site Packages that use Sandstorm.NeosAcl
-
-add this to your Policy.yaml in the `Testing/Behat` context:
-
-```yaml
-roles:
-  # this is necessary to allow the test runner to create fixtures when neos
-  # acl package is installed
-  'Neos.Flow:Everybody':
-    privileges:
-      - privilegeTarget: 'Sandstorm.NeosAcl:EditAllNodes'
-        permission: GRANT
-      - privilegeTarget: 'Sandstorm.NeosAcl:CreateAllNodes'
-        permission: GRANT
-      - privilegeTarget: 'Sandstorm.NeosAcl:RemoveAllNodes'
-        permission: GRANT
-```
-
-## pause for debugging
-
-If you want to use the pause functionality of playwright, please start the test with
-`PAUSE_FOR_DEBUGGING=true` to prevent curl timeouts when communicating with the e2e-testrunner.
-
-
-# Architecture
-
-> We suggest to skim this part roughly to get an overview of the general architecture.
-> As long as you do not do in-depth modifications, you do not need to read it in detail.
-
-The architecture for running behavioral tests is as follows:
-
-```                                                                                              
    ╔╦══════════════════╦╗   1  ┌────────────────────┐
-   ║│Behat Test Runner ├╬──────▶   E2E-Testrunner   │
+   ║│Behat Test Runner ├╬──────▶ Playwright Bridge  │
    ║└──────────────────┘║      │(Playwright Server -│
    ║ Application Docker ║      │  Chrome Browser)   │
    ║  Container (SUT)   ║◀─────┤                    │
    ╚══════════╦═════════╝   2  └────────────────────┘
-              │                                      
-             3│                                      
-   ┌──────────▼─────────┐                            
-   │other services (DB, │                            
-   │    Redis, ...)     │                            
-   └────────────────────┘                            
+              │
+             3│
+   ┌──────────▼─────────┐
+   │other services (DB, │
+   │    Redis, ...)     │
+   └────────────────────┘
 ```
 
-1) We add the Behat test runner to the Development or Production App Docker Container (SUT - System under Test), so that
-   the Behat test runner can access any code from the application, and has the exact same environment, database, and
-   library versions like the production application.
+Behat runs where the application runs, with the same code, environment and services. (1) It sends Playwright scripts to
+the bridge via HTTP, (2) the browser calls the unmodified application - the **system under test (SUT)** - and (3) the
+application uses its services as usual.
 
-2) The E2E Testrunner wraps Playwright (which is a browser orchestrator) and exposes a HTTP API. It is running as
-   associated service. Behat communicates to the test runner via HTTP (1).
+| Context (example names) | Runs | Database | Reached via |
+|---|---|---|---|
+| your dev context, e.g. `Development/Docker` | your normal dev web server | dev database | e.g. port 8080 |
+| SUT context, e.g. `Production/E2E-SUT` | the web server the browser tests hit | E2E database | e.g. port 9090 (`SYSTEM_UNDER_TEST_URL_FOR_PLAYWRIGHT`) |
+| `Testing/Behat` | `bin/behat`: fixtures, Fusion rendering | E2E database | - (CLI) |
 
-3) Then, the testrunner calls the unmodified application via HTTP (2).
+In CI, only the last two exist. How the SUT context gets its own port depends on your web server - mind
+[Troubleshooting item 1](#troubleshooting). Neos.Behat only runs in `Testing/Behat` (or a sub context like
+`Testing/Behat/Docker`), so `Configuration/Testing/Behat/Settings.yaml` gets the SUT's database, cache and resource
+settings.
 
-4) The application then calls other services like Redis and the database - just as usual.
+Both contexts point to the separate database, e.g. via `DB_NEOS_DATABASE_E2ETEST`:
 
-There is one catch with big implications, though: **The E2E tests need full control over the database** to work
-reliably. As we do not want to clear our development database each time we run our tests, we need to **use two
-databases**: one for Testing, and the other one for Development.
+```yaml
+Neos:
+  Flow:
+    persistence:
+      backendOptions:
+        dbname: '%env:DB_NEOS_DATABASE_E2ETEST%'
+```
 
-Additionally, the E2E tests need to reach the system wired to the *testing environment* through HTTP. This means we
-need **two web server ports** as well: One for development, and one for the testing context.
+Create it once, then migrate it in the SUT context (again after pulling new migrations):
 
-This setup is somewhat complicated; so the following image helps to illustrate how the different contexts interact **
-during development time and during production/CI**:
+```bash
+mysql -e 'CREATE DATABASE IF NOT EXISTS neos_e2etest'   # or your DB's equivalent
+FLOW_CONTEXT=Production/E2E-SUT ./flow doctrine:migrate
+```
 
-```                                                                                                             
-                                                                                                                
-                                                                                                                
-                               Main Development Web                                              Behat CLI      
-                               Server (usually port         Web Server used by                  (bin/behat)     
-                                      8080)                Behat Tests (usually                        │        
-                                                                Port 9090)                             │        
-                                         │                                                             │        
-                                         │                           ┌────────────────┐                │        
-                                         │                           │                │                │        
-                                         │                           ▼                │                ▼        
-                                         │       ╔═════════════════════════╗        ╔══════════════════════════╗
-    ######  ####### #     #              │       ║Development/Docker/Behat ║        ║  Testing/Behat Context   ║
-    #     # #       #     #              │       ║         Context         ║        ║                          ║
-    #     # #       #     #              │       ║                         ║        ║ behat tests executed as  ║
-    #     # #####   #     #              │       ║   only overrides the    ║        ║ this context; so config  ║
-    #     # #        #   #               │       ║      database name      ║        ║       should match       ║
-    #     # #         # #                │       ╚═════════════════════════╝        ║ Development/Docker/Behat ║
-    ######  #######    #                 │                                          ║                          ║
-                                         ▼                                          ║                          ║
-                                        ╔══════════════════════════════════╗        ║                          ║
-                                        ║    Development/Docker Context    ║        ║                          ║
-                                        ║                                  ║        ║                          ║
-                                        ║ contains the main configuration  ║        ║                          ║
-                                        ║             for DEV              ║        ║                          ║
-                                        ╚══════════════════════════════════╝        ╚══════════════════════════╝
-                                                                                                                
-                                                                                                                
-                                                                                                                
-                                                                                                                
-                                                                                                                
-                                                                                                                
-                                                                                                                
-                                                                                                                
-                                                                                                                
-                               Main Production Web                                              Behat CLI      
-                               Server (usually port         Web Server used by                  (bin/behat)     
-                                      8080)                Behat Tests (usually                        │        
-                                                                Port 9090)                             │        
-                                         │                                                             │        
-                                         │                           ┌────────────────┐                │        
-                                         │                           │                │                │        
-          #####  ###                     │                           ▼                │                ▼        
-         #     #  #                      │       ╔═════════════════════════╗        ╔══════════════════════════╗
-         #        #                      │       ║Production/Kubernetes/Beh║        ║  Testing/Behat Context   ║
-         #        #                      │       ║       at Context        ║        ║                          ║
-         #        #                      │       ║                         ║        ║ behat tests executed as  ║
-         #     #  #                      │       ║   only overrides the    ║        ║ this context; so config  ║
-          #####  ###                     │       ║      database name      ║        ║       should match       ║
-                                         │       ╚═════════════════════════╝        ║Development/Kubernetes/Beh║
-                                         │                                          ║            at            ║
-                                         ▼                                          ║                          ║
-                                        ╔══════════════════════════════════╗        ║                          ║
-                                        ║  Development/Kubernetes Context  ║        ║                          ║
-                                        ║                                  ║        ║                          ║
-                                        ║ contains the main configuration  ║        ║                          ║
-                                        ║             for PROD             ║        ║                          ║
-                                        ╚══════════════════════════════════╝        ╚══════════════════════════╝
-```              
+Caches that Behat flushes between scenarios (e.g. the Fusion content cache) need the same storage in both contexts
+(e.g. the same Redis database) and the same cache prefix - Flow's default contains the context name:
+
+```yaml
+Neos:
+  Flow:
+    cache:
+      applicationIdentifier: 'app'
+```
+
+Asset fixtures (`I have a textual persistent resource ...`, `I have the following images:`) need the SUT's persistent
+resource storage and target - Flow's `Testing` defaults use separate ones, and the SUT would answer 404. In
+`Configuration/Testing/Behat/Settings.yaml` (values as in your SUT context):
+
+```yaml
+Neos:
+  Flow:
+    resource:
+      storages:
+        defaultPersistentResourcesStorage:
+          storageOptions:
+            path: '%FLOW_PATH_DATA%Persistent/Resources/'
+      targets:
+        localWebDirectoryPersistentResourcesTarget:
+          targetOptions:
+            path: '%FLOW_PATH_WEB%_Resources/Persistent/'
+            baseUri: '_Resources/Persistent/'
+            subdivideHashPathSegment: true
+```
+
+## 3. behat.yml.dist
+
+Create `DistributionPackages/Your.SitePackageKey/Tests/Behavior/behat.yml.dist`:
+
+```yaml
+default:
+  autoload:
+    '': "%paths.base%/Features/Bootstrap"
+  suites:
+    behat:
+      paths:
+        - "%paths.base%/Features"
+      contexts:
+        - FeatureContext
+```
+
+## 4. FeatureContext.php
+
+`FeatureContext` is the class Behat calls for every step. Copy the template, which wires up the traits:
+
+```bash
+cp Packages/Application/Sandstorm.E2ETestTools/Templates/FeatureContext.php.default \
+   DistributionPackages/Your.SitePackageKey/Tests/Behavior/Features/Bootstrap/FeatureContext.php
+```
+
+Then replace the placeholder passed to `setupFusionRendering(...)` with your site package key - it fails loudly
+otherwise. The traits (`Sandstorm\E2ETestTools\Behat`) are autoloaded by Composer.
+
+## 5. Playwright (playwright-bridge)
+
+The bridge between Behat and Playwright is a small Node service you copy into your project and adjust there - we put
+it at the root of the Git repository, next to the Neos root directory:
+
+```bash
+cp -r Packages/Application/Sandstorm.E2ETestTools/Templates/playwright-bridge ./playwright-bridge
+cd playwright-bridge && npm ci && npx playwright install chromium && cd ..
+```
+
+It runs on your host (it drives a real browser), Behat usually in your app container. `setupPlaywright()` reads two
+environment variables, e.g. from your `docker-compose.yml`:
+
+```yaml
+environment:
+  # where Behat reaches the bridge (from inside a container: the host)
+  PLAYWRIGHT_API_URL: 'http://host.docker.internal:3000'
+  # where the browser (on the host) reaches the SUT port from step 2
+  SYSTEM_UNDER_TEST_URL_FOR_PLAYWRIGHT: 'http://127.0.0.1:9090'
+```
+
+## 6. Project tasks (recommended)
+
+Wrap the recurring commands in your task runner (mise, make, npm scripts, ...). The Neos-on-Docker kickstart, for
+example, has `mise run tests:e2e:start-bridge` and `mise run tests:e2e [path]`, which roughly does:
+
+```bash
+docker compose exec maria-db /createTestingDB.sh
+docker compose exec neos bash -c "FLOW_CONTEXT=Production/E2E-SUT ./flow doctrine:migrate"
+docker compose exec -e FLOW_CONTEXT=Testing/Behat neos bin/behat -c DistributionPackages/Your.SitePackageKey/Tests/Behavior/behat.yml.dist $1
+```
+
+## 7. CI Pipeline (optional)
+
+Run the E2E job **inside the image you deploy** (build once, test that artifact), with a database, Redis and the
+Playwright bridge as services (build the bridge's image from its `Dockerfile`). A CI job only serves the SUT context,
+so set `FLOW_CONTEXT` to it as job variable - the routing problem of [Troubleshooting item 1](#troubleshooting) doesn't
+occur. Production images are usually lean, so the job may have to:
+
+- install the dev dependencies (`composer install --dev`) when the image is built with `--no-dev`;
+- copy in the web server config of the SUT port when only a local-dev image layer has it.
+
+Then migrate and warm up the SUT, start the web server in the background, point the two Playwright variables to your
+CI's hostnames and run Behat in `Testing/Behat`. A JUnit report (`--format junit --out <dir>`) shows results per
+scenario. With GitLab CI:
+
+```yaml
+e2e_test:
+  stage: test
+  image:
+    name: $CI_REGISTRY_IMAGE/neos:$CI_COMMIT_REF_SLUG   # the image you already build for deployment
+    entrypoint: [ "" ]                                   # skip its normal startup sequence
+  variables:
+    FLOW_CONTEXT: Production/E2E-SUT
+    DB_NEOS_DATABASE_E2ETEST: ci_test
+    REDIS_HOST: redis
+    REDIS_PORT: 6379
+  services:
+    - name: mariadb:11.8
+    - name: redis:7
+    - name: $CI_REGISTRY_IMAGE/playwright-bridge:$CI_COMMIT_REF_SLUG
+      alias: playwright-bridge
+  script:
+    - composer install --dev
+    - FLOW_CONTEXT=Production/E2E-SUT ./flow doctrine:migrate
+    - FLOW_CONTEXT=Production/E2E-SUT ./flow cache:warmup
+    - your-web-server-start-command &
+    - export PLAYWRIGHT_API_URL=http://playwright-bridge:3000
+    - export SYSTEM_UNDER_TEST_URL_FOR_PLAYWRIGHT=http://$(hostname -i):9090
+    - FLOW_CONTEXT=Testing/Behat ./bin/behat --format junit --out e2e-results -c DistributionPackages/Your.SitePackageKey/Tests/Behavior/behat.yml.dist
+  artifacts:
+    reports:
+      junit: e2e-results/*.xml
+```
+
+GitLab passes the job's variables to all its services too - the DB and Redis services start with the same credentials.
+Point the results directory ([Debugging](#debugging)) to the JUnit `--out` folder to keep one artifact folder.
+
+**Parallelising**: split the feature files across several jobs (GitLab `parallel:`), ideally balanced by the durations
+of the last JUnit report, each with its **own** services. Never run several Behat processes against one set of
+services - database and mocks are reset per scenario, and runner and SUT share caches on purpose.
+
+# Writing Behat Tests
+
+Feature files live in your site package (`Tests/Behavior/Features/`). **Working, commented examples for everything
+below are in [`Tests/E2E/Features/`](Tests/E2E/README.md)** - the package's own suite; copy one and adapt it. What to
+test in a Neos project, where, and the pitfalls: **[Neos E2E Testing Guide](E2E_TESTING_GUIDE.md)**.
+
+## Tags
+
+- `@flowEntities` - resets the content repository before the scenario (prunes it, creates the live workspace and the
+  `/sites` root) via your `FeatureContext`'s hook. Needed for every scenario that creates nodes.
+- `@playwright` - starts a browser context in the bridge. Needed for page visits, backend steps and screenshots.
+- `@wireMock` - resets WireMock to its base stubs ([Mocked third-party APIs](#mocked-third-party-apis-wiremock)).
+
+Other tags in the guide, like `@mailpit`, are project tags with a hook of your own.
+
+## Fixtures
+
+Every scenario creates its content: write the nodes as Gherkin table or YAML file, or export existing pages into the
+same format.
+
+### Writing fixtures by hand
+
+Create the site, then its nodes - as table, or from a YAML file with the same rows:
+
+```gherkin
+Given I have a site for Site Node "site" with name "YourSiteName"
+And I have the following nodes in site "site":
+  | NodeAggregateId | Parent        | NodeType                               | Properties                                   | DimensionSpacePoint |
+  | homepage        |               | Your.SitePackageKey:Document.StartPage | {"uriPathSegment":"site","title":"Homepage"} | {"language":"de"}   |
+  | section         | homepage/main | Your.SitePackageKey:Content.Section    | {}                                           | {"language":"de"}   |
+  | headline        | section       | Your.SitePackageKey:Content.Headline   | {"title":"<h1>It works<\/h1>"}               | {"language":"de"}   |
+```
+
+- `Parent`: empty is the site node (named as in `in site "..."`); `homepage/main` is the tethered child `main` of
+  `homepage` (deeper paths work too); otherwise the `NodeAggregateId` of a node created earlier.
+- `DimensionSpacePoint` must match your content dimensions - with a `language` dimension, every row needs one, either
+  in the column or as [default](#default-dimension-space-point). An empty cell without default is `{}`, which the
+  content repository rejects.
+- `Properties` is a JSON object; invalid JSON, unknown NodeTypes and undeclared properties fail the step. Gherkin
+  unescapes `\\` to `\` in table cells, so a JSON-escaped backslash (e.g. in a PHP class name) is written as `\\\\`.
+- Optional `Hidden` column: `true` hides the node and its descendants.
+- Mind NodeType `constraints` ([Troubleshooting item 2](#troubleshooting)).
+- Fixture steps bypass node and workspace permissions (`StaticAuthProviderFactory` in `Testing/Behat`); the SUT still
+  applies yours, e.g. when you log in through the backend steps.
+- References: `And the following node references:` with columns `NodeAggregateId | ReferenceName | Targets |
+  DimensionSpacePoint` (Targets comma-separated) and optional `Properties` (JSON, for every target of the row) - see
+  [References.feature](Tests/E2E/Features/Fixtures/References.feature).
+- YAML: `I have the following nodes from file "homepage.yaml" in site "site"`, path relative to the feature file, same
+  fields as the table plus an optional `references:` list - see [homepage.yaml](Tests/E2E/Features/Fixtures/homepage.yaml).
+  Invalid entries fail with their position in the file; the old Neos 8 export format is rejected.
+- `... with overwrites:` (`nodeAggregateId | property | value`) changes single properties of the file. Values that are
+  valid JSON (`true`, `42`, `null`, `"42"`, `[...]`, `{...}`) are decoded, others used as text; an overwrite for a node
+  that isn't in the file fails.
+- Assets: `I have a textual persistent resource ...` and `I have the following images:` create file and image assets
+  for node properties - see [Download.feature](Tests/E2E/Features/PersistentResources/Download.feature). They're
+  published right away (resource settings: [Setup step 2](#2-two-flow-contexts-two-ports)).
+
+#### Default dimension space point
+
+Set it in the Background and leave out the `DimensionSpacePoint` column - every feature then shows which dimension its
+fixtures are in:
+
+```gherkin
+Background:
+  Given the default dimension space point is '{"language":"de"}'
+```
+
+It lasts until the end of the scenario and applies to rows without a dimension space point (node and reference tables,
+YAML files) and to `I get the node "..."` without `in dimension`. Rows with their own keep it, so only the rows of
+another variant need the column ("mixed mode"):
+
+```gherkin
+Given the default dimension space point is '{"language":"de"}'
+And I have the following nodes in site "site":
+  | NodeAggregateId | Parent        | NodeType                               | Properties                                  | DimensionSpacePoint |
+  | homepage        |               | Your.SitePackageKey:Document.StartPage | {"uriPathSegment":"site","title":"Home"}    |                     |
+  | section         | homepage/main | Your.SitePackageKey:Content.Section    | {}                                          |                     |
+  | swiss-teaser    | section       | Your.SitePackageKey:Content.Teaser     | {"title":"Nur in der Schweiz"}              | {"language":"ch"}   |
+```
+
+A row of another dimension needs a parent that's visible there (e.g. `ch` specializing `de`) - the fixtures create no
+variants. See [DefaultDimension.feature](Tests/E2E/Features/Fixtures/DefaultDimension.feature).
+
+### Exporting existing content
+
+Writing node tables by hand keeps most people from writing tests: every parent, tethered child, property format and
+constraint has to be right before the first assertion. Exporting a page editors built gives real NodeType
+combinations, texts and edge cases - and fits your current NodeTypes, since only declared properties are exported.
+
+Button and CLI export the same tree in the format above: the node's closest document with all its ancestors and
+descendants, references between them, the hidden state and reference properties. Tethered nodes, unknown NodeTypes and
+undeclared properties are left out, and every row keeps its dimension space point. **Assets are not exported** - asset
+properties keep the asset id; create those assets in the scenario.
+
+- **Export Node button** (inspector, tab with the gear icon, group "Export"): downloads the YAML for the selected node
+  from the current workspace and dimension. **Administrators only** - other users see it disabled, and the endpoint
+  answers 403. To allow other roles, grant them the privilege target `Sandstorm.E2ETestTools:NodeExport` in your
+  `Policy.yaml`.
+- **CLI**: `./flow e2efixture:export <nodeAggregateId> --dimension '{"language":"de"}'` prints the YAML; run it in the
+  Flow context with the content (e.g. inside your app container). Instead of the id, `--uri-path about/team` selects
+  the page by its URI path (without dimension prefix and suffix, `/` is the homepage; `--source-site <siteNodeName>`
+  with several sites) - a wrong segment fails with the segments that exist at that level.
+  `--format gherkin --site-name site` prints the steps instead; `--workspace` defaults to `live`,
+  `--content-repository` to `default`.
+
+Prefer the YAML file over inline steps - a page easily has hundreds of nodes - and set only what the scenario asserts
+via `with overwrites:`. The exported ids are UUIDs; rename them only consistently (`nodeAggregateId`, `parent`,
+`targets` and `node://` links in properties) or leave them.
+
+The CLI also suits coding agents: no backend login, plain stdout, and the import creates exactly what was exported -
+build an example page in the backend, export it by URI path into the feature's folder, add the assets it references.
+
+## Steps
+
+All traits are in `Sandstorm\E2ETestTools\Behat`. `FeatureContext.php.default` uses all but `WireMockTrait` (it needs a
+WireMock service); from `PageAssertionsTrait` on, the traits don't depend on each other - use the ones you need. Remove
+project steps with the same wording before using them, otherwise Behat reports the steps as ambiguous. Buttons and
+links are found by their accessible name, fields by their label, elements by `data-testid`.
+
+### FusionRenderingTrait
+
+- `I have a site for Site Node :siteNodeName [with name :siteName]`
+- `I have/create the following nodes in site :siteName:`
+- `the following node references:`
+- `the default dimension space point is :dimensionSpacePoint`
+- `I get the node :nodeAggregateId [in dimension :dimensionSpacePoint]`
+- `I render the Fusion object :fusionPath:`
+- `I render the Fusion object :fusionPath with the current context node:`
+- `I render the page`
+- `the Fusion output should equal to :expected`
+- `in the fusion output, the inner HTML of CSS selector :selector matches :expected`
+- `in the fusion output, the attributes of CSS selector :selector are:`
+
+### NodeImportTrait
+
+- `I have/create the following nodes from file :fileName in site :siteName [with overwrites:]`
+
+### PersistentResourceTrait
+
+Comes with `FusionRenderingTrait`.
+
+- `I have a textual persistent resource :uuid named :filename with the following content:`
+- `I have the following images:`
+
+### PlaywrightTrait
+
+- `I do a screenshot :filename`
+- `I debug the playwright script` - prints the generated Playwright JS
+
+### NeosBackendControlTrait
+
+- `I access the URI path :uriPath`
+- `the response status code should be :status`
+- `there should be the text :expected on the page`
+- `the URI path should be :uriPath` - waits for the navigation
+- `I have a Neos backend user :username with password :password and role :role`
+- `I log into the backend using credentials :username :password [with username placeholder ... and password placeholder ...]`
+- `I click the main menu item :menuItem`
+- `I click the overview dashboard tile :tileTitle`
+- `I click the document tree entry :documentTitle`
+
+### PageAssertionsTrait
+
+- `the page title should be :title`
+- `there should not be the text :text on the page`
+- `there should (not) be the text :text in :selector`
+- `the element with test id :testId should be visible/hidden/focused/enabled/disabled`
+- `the element with test id :testId should (not) be in the viewport`
+
+### FormInteractionTrait
+
+- `I click the button :caption`
+- `I click the link :caption`
+- `I click the element with test id :testId`
+- `I fill :value into the field :label`
+- `the field :label should have the value :value`
+- `I check/uncheck the checkbox :label`
+- `the checkbox :label should (not) be checked`
+- `I choose the radio button :label`
+- `I select :option in the field :label`
+- `the field :label should have :option selected`
+- `I upload the file :fileName to the field :label` - relative to the feature file
+- `I press the key :key`
+
+### BrowserStateTrait
+
+- `the cookie :name has the value :value` - before the first visit, e.g. consent
+- `the local/session storage key :key has the value :value`
+- `the cookie :name should (not) be set`
+- `the cookie :name should have the value :value`
+- `I delete the cookie :name`
+- `the local/session storage key :key should have the value :value`
+- `the local/session storage key :key should not be set`
+- `I remove the local/session storage key :key`
+
+### DebuggingTrait
+
+- `I pause for debugging` - see [Debugging](#debugging)
+
+### WireMockTrait
+
+- `the API :api path :path on :method serves response :file [with status :status]`
+- `I load the stubs :tape of the API :api`
+- `I clear all API stubs`
+- `the API :api should have received :method :path [:count times]`
+
+Setup and details: [Mocked third-party APIs](#mocked-third-party-apis-wiremock).
+
+### Notes on the steps
+
+- `the Fusion output should equal to` compares the whole HTML and breaks with every changed space or class - prefer
+  the CSS selector steps. `... matches ...` compares for equality, not as regular expression.
+- Escaped quotes (`\"`) inside a `"..."` parameter don't match the step - put values with double quotes in single
+  quotes (`'{"all":true}'`).
+- Screenshots document a result, they don't check it.
+- Project-specific steps go into your `FeatureContext` or a trait of your project; the shipped traits show how to drive
+  the browser with `$this->playwrightConnector->execute()`.
+
+### Examples by level
+
+When to use which: [testing guide](E2E_TESTING_GUIDE.md#where-to-test).
+
+- **Component** (a Fusion prototype, like a pure function): `I render the Fusion object` without nodes -
+  [FusionComponent/Button.feature](Tests/E2E/Features/FusionComponent/Button.feature).
+- **Integration** (node → Fusion wiring): create nodes, `I get the node`, `... with the current context node` -
+  [FusionIntegration/Button.feature](Tests/E2E/Features/FusionIntegration/Button.feature).
+- **Page in the browser**: `I access the URI path` + assertions/screenshot -
+  [PageRendering/Homepage.feature](Tests/E2E/Features/PageRendering/Homepage.feature).
+- **Page via Fusion** (no request, no browser): `I render the page` -
+  [PageRendering/FusionPage.feature](Tests/E2E/Features/PageRendering/FusionPage.feature).
+
+## Dynamic SUT URL
+
+The SUT base URL comes from `SYSTEM_UNDER_TEST_URL_FOR_PLAYWRIGHT`. When it changes per scenario (e.g. dimensions or
+sites resolved by host), call `setSystemUnderTestUrlModifier()` in a step of your own; it's reset before the next
+scenario:
+
+```php
+#[Given('my subdomain is :subdomain')]
+public function mySubdomainIs(string $subdomain): void
+{
+    $this->setSystemUnderTestUrlModifier(fn (string $baseUrl) => sprintf('%s://%s.%s:%s%s',
+        parse_url($baseUrl, PHP_URL_SCHEME),
+        $subdomain,
+        parse_url($baseUrl, PHP_URL_HOST),
+        parse_url($baseUrl, PHP_URL_PORT),
+        parse_url($baseUrl, PHP_URL_PATH),
+    ));
+}
+```
+
+## Mocked third-party APIs (WireMock)
+
+When the site talks to an external API (shop backend, CRM, newsletter service), tests run against
+[WireMock](https://wiremock.org) instead:
+
+1. Run WireMock next to the app, locally and in CI (Docker image `wiremock/wiremock`), and point the SUT context's API
+   base URL to it (e.g. `http://wiremock:8080/shop-api`).
+2. Use `WireMockTrait` and configure the APIs in the constructor of your `FeatureContext`:
+
+   ```php
+   $this->setupWireMock(getenv('WIREMOCK_ADMIN_URL') ?: 'http://wiremock:8080', [
+       'shop' => ['fixtures' => __DIR__ . '/../WireMock/shop', 'pathPrefix' => '/shop-api'],
+   ]);
+   ```
+3. Tag the features with `@wireMock` - WireMock is reset before each of their scenarios.
+
+Per API, the fixture directory holds `_base/*.json` (mapping files loaded before every scenario), response bodies and
+one directory of mapping files per "tape":
+
+- `the API :api path :path on :method serves response :file [with status :status]` - answers one call with a body file
+  (`.json` may be omitted); wins over base stubs; a path with query string must match exactly
+- `I load the stubs :tape of the API :api` - imports all mapping files of the tape directory
+- `I clear all API stubs` - back to the base stubs, e.g. when the API's answer changes after an action
+- `the API :api should have received :method :path [:count times]` - asserts an outgoing call, when the call is the
+  feature
+
+While writing a test, `'proxyBaseUrl' => 'https://real.api.example.com'` in the API config forwards unmatched requests
+to the real API, so you see which calls happen - never in CI. `/__admin/mappings` lists the active stubs.
+
+# Running Behat Tests
+
+1. Start the bridge on your machine and keep it running (e.g. all day). It runs every script it receives and listens
+   on all interfaces, so containers reach it - keep it in a trusted network:
+
+   ```bash
+   cd playwright-bridge && node index.js   # port 3000; HEADLESS=false node index.js shows the browser
+   ```
+
+2. Make sure your application runs and the E2E database is migrated ([Setup step 2](#2-two-flow-contexts-two-ports)).
+3. Run Behat where your application runs. Neos.Behat boots Flow in `FLOW_CONTEXT` and accepts only `Testing/Behat` or a
+   sub context - set it when your container has another one. A folder, feature file or `file:line` after the config
+   runs only those scenarios:
+
+   ```bash
+   FLOW_CONTEXT=Testing/Behat bin/behat -c DistributionPackages/Your.SitePackageKey/Tests/Behavior/behat.yml.dist
+   FLOW_CONTEXT=Testing/Behat bin/behat -c DistributionPackages/Your.SitePackageKey/Tests/Behavior/behat.yml.dist DistributionPackages/Your.SitePackageKey/Tests/Behavior/Features/Fusion/
+   FLOW_CONTEXT=Testing/Behat bin/behat -c DistributionPackages/Your.SitePackageKey/Tests/Behavior/behat.yml.dist DistributionPackages/Your.SitePackageKey/Tests/Behavior/Features/WebsiteRendering.feature:27
+   ```
+
+IDE "run" buttons usually don't work when Behat runs in a container - use the CLI or your
+[project tasks](#6-project-tasks-recommended).
+
+## Debugging
+
+- **Watch the tests**: start the bridge with `HEADLESS=false node index.js` - worth a project task next to the
+  headless one.
+- **Screenshots**: `And I do a screenshot "name.png"` in a `@playwright` scenario; failed steps get an `error_*.png`
+  automatically. Both go to the results directory: `e2e-results/` where Behat runs, or what you pass to
+  `setupPlaywright($resultsDir)`.
+- **Traces**: failed `@playwright` scenarios write `report_<feature>_<scenario>.zip` to the results directory - open it
+  with `npx playwright show-trace <file>`. For traces of every scenario (or none), call
+  `$this->setPlaywrightTracingMode(self::PLAYWRIGHT_TRACING_MODE_ALWAYS)` (or `..._OFF`; default `..._ON_ERROR`) in
+  the `FeatureContext` constructor.
+- **Server logs**: an exception in the SUT only shows up as error page, the stack trace is in the logs. The Flow logs
+  (`Data/Logs`) are cleared before every scenario, and a failed scenario gets its log and exception files copied to
+  `logs_<feature>_<line>_<scenario>/` in the results directory. If the SUT logs elsewhere, call
+  `setFlowLogsDirectory('/path/as/seen/from/behat')`; `setFlowLogsDirectory(null)` switches clearing and copying off
+  (e.g. when your development site shares `Data/Logs`).
+- **Narrow it down**: `--stop-on-failure` stops at the first error, so you can inspect the E2E database; `-vvv` prints
+  full stack traces; tag scenarios (e.g. `@debug`) and run them with `--tags=debug`.
+- **Pause the browser**: `And I pause for debugging` opens the Playwright inspector (`page.pause()`) on the bridge
+  side. It needs a visible browser (`HEADLESS=false`) and Behat run with `PAUSE_FOR_DEBUGGING=true`, otherwise the step
+  fails right away. The SUT and its database keep the scenario's state, so you can click around.
+- **Let an agent analyse failures**: the results directory holds screenshots, traces, server logs and - with
+  `--format junit --out <dir>` - the JUnit report. Tell a coding agent like Claude where it is.
+
+# Migrating tests from Neos 8
+
+Start your `FeatureContext` from [`FeatureContext.php.default`](Templates/FeatureContext.php.default) instead of
+patching the old one - a `FeatureContext` of an older version fails with missing classes. Also new:
+
+- The traits moved from `Sandstorm\E2ETestTools\Tests\Behavior\Bootstrap\` to `Sandstorm\E2ETestTools\Behat\` and are
+  autoloaded - drop the `require_once` lines.
+- The templates are in `Templates/` (`FeatureContext.php.default`, `playwright-bridge/`) - compare your copy of the
+  bridge with the new one.
+- `Testing/Behat` needs the SUT's cache storage and `applicationIdentifier` and its persistent resource storage/target
+  ([Setup step 2](#2-two-flow-contexts-two-ports)).
+- Behat must run with `FLOW_CONTEXT=Testing/Behat` (or a sub context) - Neos.Behat 9.1 refuses other contexts, e.g. a
+  container-wide `Development/...` or the SUT context of a CI job.
+- Symfony projects are no longer supported - stay on 8.x there.
+
+In the feature files ([Fixtures](#fixtures) shows the result):
+
+| Neos 8 | Neos 9 |
+|---|---|
+| tag `@fixtures` | `@flowEntities`: Neos.Behat resets the database on this tag now (`FlowEntitiesTrait`; the old `FlowContextTrait` with `@fixtures` is deprecated) |
+| `I have/create the following nodes:` | `I have/create the following nodes in site "site":` |
+| columns `Identifier \| Path \| Node Type \| Properties \| Language` | `NodeAggregateId \| Parent \| NodeType \| Properties \| DimensionSpacePoint`, optional `Hidden` |
+| `Path` (`/sites/site/main/foo`), a `/sites` row | `Parent`: empty = site node, `homepage/main` = tethered child, otherwise the parent's `NodeAggregateId`; no `/sites` row |
+| `Language`: `de` | `DimensionSpacePoint`: `{"language":"de"}` |
+| `HiddenInIndex` column | `"hiddenInMenu": true` in `Properties` |
+| reference properties with node identifiers in `Properties` | `And the following node references:` |
+| `I get a node by path "/sites/site" with the following context:` + table | `I get the node "homepage" in dimension '{"language":"de"}'` |
+| `I have the following nodes from file "x.yaml" [with overwrites]` | `... from file "x.yaml" in site "site" [with overwrites:]` |
+| overwrite columns `identifier \| property \| value` | `nodeAggregateId \| property \| value` |
+| YAML exported with the Neos 8 button (nodes keyed by identifier, nested `children`) | rejected - export again ([Exporting existing content](#exporting-existing-content)) |
+
+# Troubleshooting
+
+1. **The SUT serves the wrong content or database, although the response status is 200.**
+
+   Your web server sets the SUT's Flow context per vhost, but the container also has a process-wide `FLOW_CONTEXT`
+   (for `./flow`), and Flow checks `getenv()` before `$_SERVER` - so the container-wide value silently wins. This
+   happens with every web server that sets only per-request variables (e.g. Caddy/FrankenPHP's `env` directive). Check
+   which context's cache directory the request filled (e.g. `Data/Temporary/Production/SubContextE2E-SUT/Cache/...`).
+
+   Fix: copy `$_SERVER` to the real environment in a file that runs before every request (e.g. `auto_prepend_file` in
+   php.ini):
+
+   ```php
+   if (isset($_SERVER['FLOW_CONTEXT'])) {
+       putenv('FLOW_CONTEXT=' . $_SERVER['FLOW_CONTEXT']);
+       $_ENV['FLOW_CONTEXT'] = $_SERVER['FLOW_CONTEXT'];
+   }
+   ```
+
+2. **`NodeConstraintException: Node type "..." is not allowed below tethered child nodes "..."` when creating
+   fixtures.**
+
+   The NodeType's `constraints.nodeTypes` allow only a specific wrapper type (often a "section" or "row") directly in
+   that collection - content nodes go inside the wrapper. Check the `constraints` before picking a fixture NodeType.
+
+3. **Content changes don't show up on the SUT after resetting the content repository.**
+
+   `setupContentRepository()` flushes only the routing caches and the Fusion content cache - not e.g. a full-page cache
+   or caches of your project - and a flush only reaches the SUT when both contexts share the cache storage and
+   `applicationIdentifier` ([Setup step 2](#2-two-flow-contexts-two-ports)). Give the cache the same storage in both
+   contexts' `Caches.yaml` (for a file backend: `backendOptions.cacheDirectory` in `Testing/Behat` pointing to the
+   SUT's directory) and flush it in a `@BeforeScenario` hook - in PHP, not with `./flow`:
+
+   ```php
+   $this->getObject(CacheManager::class)->getCache('<YourCacheIdentifier>')->flush();
+   ```
+
+4. **Files and images created by fixture steps return 404 on the SUT.**
+
+   `Testing/Behat` stores and publishes them somewhere else than the SUT looks - use the SUT's resource storage and
+   target there ([Setup step 2](#2-two-flow-contexts-two-ports)).

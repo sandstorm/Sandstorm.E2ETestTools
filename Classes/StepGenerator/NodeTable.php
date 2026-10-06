@@ -1,163 +1,144 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Sandstorm\E2ETestTools\StepGenerator;
 
-use Neos\ContentRepository\Domain\Model\NodeInterface;
-use Neos\ContentRepository\Domain\NodeType\NodeTypeConstraints;
-use Neos\ContentRepository\Domain\Projection\Content\TraversableNodeInterface;
+use Neos\ContentRepository\Core\NodeType\NodeTypeManager;
+use Neos\ContentRepository\Core\Projection\ContentGraph\ContentSubgraphInterface;
+use Neos\ContentRepository\Core\Projection\ContentGraph\Filter\FindChildNodesFilter;
+use Neos\ContentRepository\Core\Projection\ContentGraph\Node;
 use Neos\Media\Domain\Model\ImageInterface;
-use Neos\Media\Domain\Model\ResourceBasedInterface;
 use Neos\Utility\ObjectAccess;
-use Neos\Utility\TypeHandling;
+use Sandstorm\E2ETestTools\Fixture\NodeFixture;
+use Sandstorm\E2ETestTools\Fixture\NodeFixtureCollector;
+use Sandstorm\E2ETestTools\Fixture\NodeFixtureGherkin;
+use Sandstorm\E2ETestTools\Fixture\NodeFixtureRow;
+use Sandstorm\E2ETestTools\Fixture\ReferenceFixtureRow;
 
 /**
+ * Collects nodes of one subgraph and prints them as fixture steps:
+ * "I have the following images:", "I have the following nodes in site ...:" and "the following node references:".
  *
- * @internal
+ * Create it via {@see NodeTableBuilderService}.
  */
 class NodeTable
 {
-    private GherkinTable $nodeTable;
-    private PersistentResourceFixtures $persistentResourceFixtures;
+    private NodeFixtureCollector $collector;
     private ImageTable $imageTable;
+    private PersistentResourceFixtures $persistentResourceFixtures;
 
-    private array $defaultProperties;
+    /**
+     * @var array<string,true> NodeAggregateIds already added
+     */
+    private array $addedNodes = [];
 
+    /**
+     * @var list<NodeFixtureRow>
+     */
+    private array $rows = [];
+
+    /**
+     * @var list<ReferenceFixtureRow>
+     */
+    private array $references = [];
+
+    /**
+     * @param array<string,mixed> $defaultPersistentResourceProperties
+     * @param array<string,mixed> $defaultImageProperties
+     */
     public function __construct(
-        array $defaultProperties = [],
+        private readonly ContentSubgraphInterface $subgraph,
+        NodeTypeManager $nodeTypeManager,
         ?string $fixtureBasePath = null,
         array $defaultPersistentResourceProperties = [],
         array $defaultImageProperties = []
-    )
-    {
-        $this->defaultProperties = $defaultProperties;
-        $this->nodeTable = new GherkinTable(array_merge([
-            'Path',
-            'Node Type',
-            'Properties',
-            'HiddenInIndex'
-        ], array_keys($defaultProperties)));
+    ) {
+        $this->collector = new NodeFixtureCollector($subgraph, $nodeTypeManager);
         $this->persistentResourceFixtures = new PersistentResourceFixtures($fixtureBasePath, $defaultPersistentResourceProperties);
         $this->imageTable = new ImageTable($this->persistentResourceFixtures, $defaultImageProperties);
     }
 
-    public function addNode(NodeInterface $node, bool $includeAutoCreatedNode = false): void
+    /**
+     * Adds the node, its references and the images it uses. The root and tethered nodes are skipped - they are
+     * created automatically on import - unless tethered nodes are explicitly wanted (they can't be created by the
+     * node creation step, though).
+     */
+    public function addNode(Node $node, bool $includeTetheredNode = false): void
     {
-        if ($node->getPath() === '/') {
-            // we never need to add the "/" node
+        $wanted = $this->collector->needsRow($node) || ($includeTetheredNode && $node->classification->isTethered());
+        if (!$wanted || !$this->collector->hasKnownNodeType($node) || array_key_exists($node->aggregateId->value, $this->addedNodes)) {
             return;
         }
-        if (!$includeAutoCreatedNode && $node->isAutoCreated()) {
-            return;
-        }
-        $this->nodeTable->addRow(array_merge($this->defaultProperties, [
-            'Path' => $node->getPath(),
-            'Node Type' => $node->getNodeType()->getName(),
-            'Properties' => $this->serializeNodeProperties($node),
-            'HiddenInIndex' => $node->isHiddenInIndex() ? 'true' : 'false'
-        ]));
-    }
+        $this->addedNodes[$node->aggregateId->value] = true;
 
-    private function serializeNodeProperties(NodeInterface $node): string
-    {
-        $properties = $node->getNodeData()->getProperties();
-        $propertiesSerialized = [];
-        foreach ($properties as $propertyName => $propertyValue) {
-            if ($propertyValue instanceof ResourceBasedInterface) {
-                $objectType = TypeHandling::getTypeForValue($propertyValue);
-                $objectIdentifier = ObjectAccess::getProperty($propertyValue, 'Persistence_Object_Identifier', true);
-                $serializedReference = [
-                    '__flow_object_type' => $objectType,
-                    '__identifier' => $objectIdentifier
-                ];
-                $propertiesSerialized[$propertyName] = $serializedReference;
-                // keep track of external resources that needs to be stored as fixtures later
-                if ($propertyValue instanceof ImageInterface) {
-                    // add image
-                    $this->imageTable->addImage($objectIdentifier, $propertyValue);
-                }
-            } else {
-                $propertiesSerialized[$propertyName] = $propertyValue;
+        $this->rows[] = $this->collector->rowFor($node);
+        array_push($this->references, ...$this->collector->referencesFor($node));
+        foreach ($node->properties as $propertyValue) {
+            if ($propertyValue instanceof ImageInterface) {
+                $this->imageTable->addImage(ObjectAccess::getProperty($propertyValue, 'Persistence_Object_Identifier', true), $propertyValue);
             }
         }
-        return json_encode($propertiesSerialized);
     }
 
     /**
-     * @deprecated use {@link \Sandstorm\E2ETestTools\StepGenerator\NodeTable::addNodesUnderneath} directly
+     * Adds all ancestors of the node (site node first), not the node itself.
      */
-    public function addNodesUnderneathExcludingAutoGeneratedChildNodes(
-        NodeInterface $node,
-        string $nodeTypeFilter,
-        ?int $maxSiblings = null,
-        ?int $maxDepth = null,
-    ): void {
-        $this->addChildNodesRecursively(
-            $node,
-            $nodeTypeFilter,
-            $maxSiblings,
-            $maxDepth,
-            false,
-        );
+    public function addParents(Node $node): void
+    {
+        foreach ($this->collector->ancestors($node) as $ancestor) {
+            $this->addNode($ancestor);
+        }
     }
 
     /**
-     * Auto generated child-nodes are excluded here. But we don't need them anyways, since they
-     * are created automatically during import based on the node type yaml.
+     * Adds all descendants matching the filter (tethered nodes are traversed, but not added by default).
      *
-     * @param NodeInterface $node the top level node
-     * @param $nodeTypeFilter string|null pass in null for no filter
+     * @param string $nodeTypeFilter e.g. "Neos.Neos:Content" or "!Neos.Neos:Document"
+     * @param int|null $maxSiblings max. child nodes per parent
+     * @param int|null $maxDepth max. levels below $node (null: unlimited)
      */
     public function addChildNodesRecursively(
-        NodeInterface $node,
+        Node $node,
         string $nodeTypeFilter,
         ?int $maxSiblings = null,
         ?int $maxDepth = null,
-        ?bool $includeAutoCreatedNodes = false,
-    ): void
-    {
-        $this->_addChildNodesRecursively(
-            $node,
-            $nodeTypeFilter,
-            $maxSiblings,
-            $maxDepth,
-            $includeAutoCreatedNodes,
-            0,
-        );
+        bool $includeTetheredNodes = false,
+    ): void {
+        $this->addChildNodesRecursivelyInternal($node, $nodeTypeFilter, $maxSiblings, $maxDepth, $includeTetheredNodes, 0);
     }
 
-    private function _addChildNodesRecursively(
-        NodeInterface $node,
+    private function addChildNodesRecursivelyInternal(
+        Node $node,
         string $nodeTypeFilter,
         ?int $maxSiblings,
         ?int $maxDepth,
-        ?bool $includeAutoCreatedNodes,
+        bool $includeTetheredNodes,
         int $currentDepth,
-    ): void
-    {
-        foreach ($node->findChildNodes(new NodeTypeConstraints(false, [$nodeTypeFilter]), $maxSiblings) as $childNode) {
-            $this->addNode($childNode, $includeAutoCreatedNodes);
-            if ($maxDepth !== null && $maxDepth < $currentDepth) {
-                break;
+    ): void {
+        if ($maxDepth !== null && $currentDepth >= $maxDepth) {
+            return;
+        }
+        foreach ($this->findChildNodes($node, $nodeTypeFilter, $maxSiblings) as $childNode) {
+            if (!$this->collector->hasKnownNodeType($childNode)) {
+                // can't be created - and neither can its subtree
+                continue;
             }
-            $this->_addChildNodesRecursively(
-                $childNode,
-                $nodeTypeFilter,
-                $maxSiblings,
-                $maxDepth,
-                $includeAutoCreatedNodes,
-                $currentDepth + 1,
-            );
+            $this->addNode($childNode, $includeTetheredNodes);
+            $this->addChildNodesRecursivelyInternal($childNode, $nodeTypeFilter, $maxSiblings, $maxDepth, $includeTetheredNodes, $currentDepth + 1);
         }
     }
 
+    /**
+     * Adds the direct children matching the filter; $childNodeHandler is called for each of them.
+     */
     public function addChildNodes(
-        TraversableNodeInterface $baseNode,
+        Node $baseNode,
         string $nodeTypeFilter,
         ?int $limit = null,
         ?\Closure $childNodeHandler = null
-    ): void
-    {
-        foreach ($baseNode->findChildNodes(new NodeTypeConstraints(false, [$nodeTypeFilter]), $limit) as $childNode) {
+    ): void {
+        foreach ($this->findChildNodes($baseNode, $nodeTypeFilter, $limit) as $childNode) {
             $this->addNode($childNode);
             if ($childNodeHandler !== null) {
                 $childNodeHandler($childNode);
@@ -166,31 +147,27 @@ class NodeTable
     }
 
     /**
-     * @deprecated use {@link \Sandstorm\E2ETestTools\StepGenerator\NodeTable::addChildNodesRecursively} since better naming, this gets removed soon!
+     * Stores image fixture files (see {@see NodeTableBuilder::withFixturesBaseDirectory()}) and prints the steps.
+     *
+     * @param string $siteName the name used in "I have the following nodes in site ...", i.e. the site node name
      */
-    public function addNodesUnderneath(NodeInterface $node, $nodeTypeFilter): void
-    {
-        $this->addChildNodesRecursively($node, $nodeTypeFilter);
-    }
-
-    public function addParents(NodeInterface $node): void
-    {
-        $parentNode = $node->getParent();
-        if ($parentNode !== null) {
-            $this->addParents($parentNode);
-            $this->addNode($parentNode);
-        }
-    }
-
-    public function print(): void
+    public function print(string $siteName): void
     {
         $this->persistentResourceFixtures->storeFixtures();
 
         $this->imageTable->print();
 
-        echo 'Given I have the following nodes:';
-        echo "\n";
-        $this->nodeTable->print();
+        echo NodeFixtureGherkin::steps((new NodeFixture($this->rows, $this->references))->withReferencesLimitedToNodes(), $siteName);
     }
 
+    /**
+     * @return iterable<Node>
+     */
+    private function findChildNodes(Node $node, string $nodeTypeFilter, ?int $limit): iterable
+    {
+        return $this->subgraph->findChildNodes(
+            $node->aggregateId,
+            FindChildNodesFilter::create($nodeTypeFilter, null, null, null, $limit !== null ? ['limit' => $limit] : null)
+        );
+    }
 }

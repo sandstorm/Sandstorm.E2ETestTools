@@ -1,0 +1,10 @@
+# Behat configuration of the package's own E2E suite - runs in the development distribution (`mise run tests:e2e`).
+default:
+  autoload:
+    '': "%paths.base%/Features/Bootstrap"
+  suites:
+    behat:
+      paths:
+        - "%paths.base%/Features"
+      contexts:
+        - FeatureContext

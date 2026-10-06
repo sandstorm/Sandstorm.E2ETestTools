@@ -1,0 +1,33 @@
+'Sandstorm.E2ETestTools.TestSite:Document.StartPage':
+  superTypes:
+    'Neos.Neos:Site': true
+  ui:
+    label: 'Start page'
+    icon: icon-home
+  childNodes:
+    main:
+      type: 'Neos.Neos:ContentCollection'
+  properties:
+    privacyPage:
+      type: reference
+      ui:
+        label: 'Privacy page'
+        inspector:
+          group: document
+
+'Sandstorm.E2ETestTools.TestSite:Document.Page':
+  superTypes:
+    'Neos.Neos:Document': true
+  ui:
+    label: 'Page'
+    icon: icon-file
+  childNodes:
+    main:
+      type: 'Neos.Neos:ContentCollection'
+  properties:
+    relatedPage:
+      type: reference
+      ui:
+        label: 'Related page'
+        inspector:
+          group: document

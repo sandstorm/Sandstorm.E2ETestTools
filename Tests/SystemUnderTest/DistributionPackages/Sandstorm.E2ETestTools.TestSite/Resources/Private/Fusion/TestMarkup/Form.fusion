@@ -1,0 +1,63 @@
+// FormInteractionTrait: fields by label, buttons and links by caption, an element by test id, upload, keys
+prototype(Sandstorm.E2ETestTools.TestSite:TestMarkup.Form) < prototype(Neos.Fusion:Component) {
+    renderer = afx`
+        <form id="contact" onsubmit="return false">
+            <label for="name">Name</label>
+            <input id="name" type="text" />
+
+            <label for="notes">Notes</label>
+            <input id="notes" type="text" value="prefilled" />
+
+            <input id="newsletter" type="checkbox" />
+            <label for="newsletter">Newsletter</label>
+
+            <input id="terms" type="checkbox" checked />
+            <label for="terms">Terms accepted</label>
+
+            <input id="pickup" type="radio" name="shipping" value="pickup" />
+            <label for="pickup">Pickup</label>
+            <input id="delivery" type="radio" name="shipping" value="delivery" />
+            <label for="delivery">Delivery</label>
+
+            <label for="country">Country</label>
+            <select id="country">
+                <option value="de">Germany</option>
+                <option value="at">Austria</option>
+            </select>
+
+            <label for="attachment">Attachment</label>
+            <input id="attachment" type="file" />
+
+            <button type="button" id="send">Send</button>
+            <span data-testid="details-toggle">Show details</span>
+        </form>
+        <p data-testid="form-result"></p>
+        <p data-testid="upload-result"></p>
+        <p data-testid="key-result"></p>
+        <p data-testid="details" hidden>Details are visible</p>
+        <a href="/nested">Next page</a>
+        <script>{props.script}</script>
+    `
+    script = '
+        const result = document.querySelector("[data-testid=form-result]");
+        document.getElementById("send").addEventListener("click", () => {
+            const shipping = document.querySelector("input[name=shipping]:checked");
+            result.textContent = "Sent: " + document.getElementById("name").value
+                + ", newsletter " + (document.getElementById("newsletter").checked ? "yes" : "no")
+                + ", " + (shipping ? shipping.value : "no shipping")
+                + ", " + document.getElementById("country").selectedOptions[0].label;
+        });
+        document.getElementById("attachment").addEventListener("change", async (event) => {
+            const file = event.target.files[0];
+            document.querySelector("[data-testid=upload-result]").textContent = "Uploaded " + file.name + ": " + (await file.text()).trim();
+        });
+        document.getElementById("name").addEventListener("keydown", (event) => {
+            if (event.key === "Enter") {
+                document.querySelector("[data-testid=key-result]").textContent = "Enter pressed";
+            }
+        });
+        document.querySelector("[data-testid=details-toggle]").addEventListener("click", () => {
+            document.querySelector("[data-testid=details]").hidden = false;
+        });
+    '
+}

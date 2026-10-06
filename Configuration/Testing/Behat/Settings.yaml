@@ -3,3 +3,18 @@ Neos:
     http:
       # we want to be able to link to resources or nodes, so we need a base URI
       baseUri: '/'
+  ContentRepositoryRegistry:
+    presets:
+      default:
+        # Neos.ContentRepository.Debug configures the fakes of the CR test suite for Testing/Behat (fake clock,
+        # NodeTypes and dimensions) - the E2E tests need the real ones of the project, like the system under test
+        clock:
+          factoryObjectName: Neos\ContentRepositoryRegistry\Factory\Clock\SystemClockFactory
+        nodeTypeManager:
+          factoryObjectName: Neos\ContentRepositoryRegistry\Factory\NodeTypeManager\DefaultNodeTypeManagerFactory
+        contentDimensionSource:
+          factoryObjectName: Neos\ContentRepositoryRegistry\Factory\ContentDimensionSource\ConfigurationBasedContentDimensionSourceFactory
+        # the fixture steps run as CLI process without a logged-in user - grant them every node and workspace
+        # permission (the system under test still applies yours)
+        authProvider:
+          factoryObjectName: Neos\ContentRepositoryRegistry\Factory\AuthProvider\StaticAuthProviderFactory

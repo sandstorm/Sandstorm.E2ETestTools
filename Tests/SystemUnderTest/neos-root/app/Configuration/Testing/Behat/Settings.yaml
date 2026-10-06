@@ -1,0 +1,32 @@
+# Behat (the test runner) - same database as the system under test (Production/E2E-SUT).
+Neos:
+  Flow:
+    persistence:
+      backendOptions:
+        driver: 'pdo_mysql'
+        charset: 'utf8mb4'
+        host: '%env:DB_NEOS_HOST%'
+        port: '%env:DB_NEOS_PORT%'
+        password: '%env:DB_NEOS_PASSWORD%'
+        user: '%env:DB_NEOS_USER%'
+        dbname: '%env:DB_NEOS_DATABASE%'
+    cache:
+      # all Flow contexts share the caches configured in Caches.yaml - Behat can flush what the SUT rendered
+      applicationIdentifier: 'app'
+    resource:
+      # Flow's Testing defaults store/publish persistent resources under .../Test/ and _Resources/Testing/. Resources
+      # created by fixture steps must end up where the system under test looks for them.
+      storages:
+        defaultPersistentResourcesStorage:
+          storageOptions:
+            path: '%FLOW_PATH_DATA%Persistent/Resources/'
+      targets:
+        localWebDirectoryPersistentResourcesTarget:
+          targetOptions:
+            path: '%FLOW_PATH_WEB%_Resources/Persistent/'
+            baseUri: '_Resources/Persistent/'
+            # Flow's Testing defaults disable this; the SUT's resource URIs include the subdivided path (1/e/4/0/...)
+            subdivideHashPathSegment: true
+
+  Imagine:
+    driver: Gd

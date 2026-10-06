@@ -74,6 +74,9 @@
     }
   });
 
+  // src/manifest.ts
+  var import_react2 = __toESM(require_react());
+
   // node_modules/@neos-project/neos-ui-extensibility/dist/index.js
   init_readFromConsumerApi();
   var dist_default = readFromConsumerApi("manifest");
@@ -86,44 +89,42 @@
     constructor() {
       super(...arguments);
       this.exportNodeButtonOnClick = () => {
-        const parts = this.props.currentUri.split("/");
-        const neosIndex = parts.indexOf("neos");
-        const baseUri = parts.slice(0, neosIndex === -1 ? parts.length : neosIndex).join("/");
-        window.location.href = baseUri + "/api/export-node/" + (this.props.nodeIdentifier ?? "");
+        window.location.href = "/api/export-node?node=" + encodeURIComponent(this.props.nodeAddress ?? "");
       };
     }
     render() {
+      const enabled = this.props.enabled === true;
       return /* @__PURE__ */ import_react.default.createElement(
         "button",
         {
           className: "neos-button-primary",
-          onClick: this.exportNodeButtonOnClick
+          onClick: this.exportNodeButtonOnClick,
+          disabled: !enabled,
+          title: enabled ? void 0 : "Only administrators can export nodes as test fixtures"
         },
         "Export Node"
       );
     }
   };
   ExportNodeButton.propTypes = {
-    value: import_prop_types.default.string,
-    commit: import_prop_types.default.func.isRequired,
-    nodeIdentifier: import_prop_types.default.string,
-    currentUri: import_prop_types.default.string
+    nodeAddress: import_prop_types.default.string,
+    enabled: import_prop_types.default.bool
   };
   ExportNodeButton = __decorateClass([
-    (0, import_react_redux.connect)((state) => {
-      const nodeContextPath = state.cr.nodes.focused.contextPaths[0];
-      return {
-        nodeIdentifier: state.cr.nodes.byContextPath[nodeContextPath]?.identifier,
-        currentUri: state.ui.contentCanvas.src
-      };
-    })
+    (0, import_react_redux.connect)((state) => ({
+      // Neos 9: the contextPath is the serialized NodeAddress (content repository, workspace, dimension, node id) -
+      // the export needs all of it, the node id alone isn't unique anymore.
+      // Focused content node if there is one, else the current document (selected in the document tree).
+      nodeAddress: state.cr.nodes.focused.contextPaths[0] ?? state.cr.nodes.documentNode
+    }))
   ], ExportNodeButton);
 
   // src/manifest.ts
-  dist_default("Sandstorm.E2ETestTools:ExportNodeButton", {}, (globalRegistry) => {
+  dist_default("Sandstorm.E2ETestTools:ExportNodeButton", {}, (globalRegistry, { frontendConfiguration }) => {
+    const enabled = frontendConfiguration?.["Sandstorm.E2ETestTools:ExportNodeButton"]?.enabled === true;
     const editorsRegistry = globalRegistry.get("inspector").get("editors");
     editorsRegistry.set("Sandstorm.E2ETestTools/Inspector/Editors/ExportNodeButton", {
-      component: ExportNodeButton
+      component: (props) => import_react2.default.createElement(ExportNodeButton, { ...props, enabled })
     });
   });
 })();

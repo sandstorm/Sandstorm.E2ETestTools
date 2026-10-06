@@ -1,0 +1,55 @@
+prototype(Sandstorm.E2ETestTools.TestSite:Content.Section) < prototype(Neos.Neos:ContentComponent) {
+    renderer = afx`<section><Neos.Neos:ContentCollectionRenderer /></section>`
+}
+
+prototype(Sandstorm.E2ETestTools.TestSite:Content.Headline) < prototype(Neos.Neos:ContentComponent) {
+    renderer = Neos.Neos:Editable {
+        property = 'title'
+    }
+}
+
+prototype(Sandstorm.E2ETestTools.TestSite:Content.Button) < prototype(Neos.Neos:ContentComponent) {
+    renderer = Sandstorm.E2ETestTools.TestSite:Component.Button {
+        title = Neos.Neos:Editable {
+            property = 'title'
+            block = false
+        }
+        type = ${node.properties.type}
+        href = Neos.Neos:ConvertUris {
+            value = ${node.properties.link}
+            @if.hasLink = ${node.properties.link}
+        }
+    }
+}
+
+prototype(Sandstorm.E2ETestTools.TestSite:Content.Download) < prototype(Neos.Neos:ContentComponent) {
+    renderer = afx`
+        <a href={props.fileUri} download>
+            <Neos.Neos:Editable property="description" block={false} />
+        </a>
+    `
+    fileUri = Neos.Fusion:ResourceUri {
+        resource = ${node.properties.file.resource}
+        @if.hasFile = ${node.properties.file}
+    }
+}
+
+prototype(Sandstorm.E2ETestTools.TestSite:Content.Image) < prototype(Neos.Neos:ContentComponent) {
+    imageUri = Neos.Neos:ImageUri {
+        asset = ${node.properties.image}
+        maximumWidth = 400
+        @if.hasImage = ${node.properties.image}
+    }
+    renderer = afx`
+        <figure>
+            <img src={props.imageUri} alt={node.properties.alternativeText} data-testid="image" />
+            <figcaption>{node.properties.image.copyrightNotice}</figcaption>
+        </figure>
+    `
+}
+
+prototype(Sandstorm.E2ETestTools.TestSite:Content.TestMarkup) < prototype(Neos.Neos:ContentComponent) {
+    renderer = Neos.Fusion:Renderer {
+        type = ${'Sandstorm.E2ETestTools.TestSite:TestMarkup.' + node.properties.markup}
+    }
+}
