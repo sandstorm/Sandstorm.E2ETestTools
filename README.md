@@ -53,7 +53,8 @@ see [CONTRIBUTING.md](CONTRIBUTING.md).
 - [Writing Behat Tests](#writing-behat-tests)
   - [Tags](#tags)
   - [Fixtures](#fixtures)
-  - [Fixtures from existing content](#fixtures-from-existing-content)
+    - [Writing fixtures by hand](#writing-fixtures-by-hand)
+    - [Exporting existing content](#exporting-existing-content)
   - [Steps](#steps)
   - [Dynamic SUT URL](#dynamic-sut-url)
   - [Mocked third-party APIs (WireMock)](#mocked-third-party-apis-wiremock)
@@ -284,6 +285,11 @@ Other tags in the guide, like `@mailpit`, are project tags with a hook of your o
 
 ## Fixtures
 
+Every scenario creates its content: write the nodes as Gherkin table or YAML file, or export existing pages into the
+same format.
+
+### Writing fixtures by hand
+
 Create the site, then its nodes - as table, or from a YAML file with the same rows:
 
 ```gherkin
@@ -319,7 +325,7 @@ And I have the following nodes in site "site":
   for node properties - see [Download.feature](Tests/E2E/Features/PersistentResources/Download.feature). They're
   published right away (resource settings: [Setup step 2](#2-two-flow-contexts-two-ports)).
 
-### Default dimension space point
+#### Default dimension space point
 
 Set it in the Background and leave out the `DimensionSpacePoint` column - every feature then shows which dimension its
 fixtures are in:
@@ -345,7 +351,7 @@ And I have the following nodes in site "site":
 A row of another dimension needs a parent that's visible there (e.g. `ch` specializing `de`) - the fixtures create no
 variants. See [DefaultDimension.feature](Tests/E2E/Features/Fixtures/DefaultDimension.feature).
 
-## Fixtures from existing content
+### Exporting existing content
 
 Writing node tables by hand keeps most people from writing tests: every parent, tethered child, property format and
 constraint has to be right before the first assertion. Exporting a page editors built gives real NodeType
@@ -618,7 +624,7 @@ In the feature files ([Fixtures](#fixtures) shows the result):
 | `I get a node by path "/sites/site" with the following context:` + table | `I get the node "homepage" in dimension '{"language":"de"}'` |
 | `I have the following nodes from file "x.yaml" [with overwrites]` | `... from file "x.yaml" in site "site" [with overwrites:]` |
 | overwrite columns `identifier \| property \| value` | `nodeAggregateId \| property \| value` |
-| YAML exported with the Neos 8 button (nodes keyed by identifier, nested `children`) | rejected - export again ([Fixtures from existing content](#fixtures-from-existing-content)) |
+| YAML exported with the Neos 8 button (nodes keyed by identifier, nested `children`) | rejected - export again ([Exporting existing content](#exporting-existing-content)) |
 
 # Troubleshooting
 
