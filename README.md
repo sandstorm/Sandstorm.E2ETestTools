@@ -94,7 +94,8 @@ E2E tests need full control over the database (creating/deleting nodes, resettin
 so they need their own database — which means their own Flow context. That context also needs
 to be reachable over HTTP for Playwright, so it needs its own port too. Two contexts are involved:
 
-- **`Testing/Behat`** — the context the Behat CLI process itself runs under. It creates the fixtures in the database
+- **`Testing/Behat`** — the context the Behat CLI process itself runs under (Neos.Behat insists on it: run Behat
+  with `FLOW_CONTEXT=Testing/Behat`, or a sub context like `Testing/Behat/Docker`). It creates the fixtures in the database
   the SUT serves, so it needs the same database settings as your SUT context (plus the cache and resource settings
   below) in `Configuration/Testing/Behat/Settings.yaml`.
 - **Your SUT context** — whatever context actually serves the app for Playwright to hit (e.g.
@@ -219,7 +220,7 @@ remember them. For example, the Neos-on-Docker kickstart ships `mise run tests:e
 ```bash
 docker compose exec maria-db /createTestingDB.sh
 docker compose exec neos bash -c "FLOW_CONTEXT=Production/E2E-SUT ./flow doctrine:migrate"
-docker compose exec neos bin/behat -c DistributionPackages/Your.SitePackageKey/Tests/Behavior/behat.yml.dist $1
+docker compose exec -e FLOW_CONTEXT=Testing/Behat neos bin/behat -c DistributionPackages/Your.SitePackageKey/Tests/Behavior/behat.yml.dist $1
 ```
 
 ## 7. CI Pipeline (optional)
@@ -244,7 +245,7 @@ built lean:
 
 Then: migrate/warm the SUT's caches, start the web server in the background, point
 `PLAYWRIGHT_API_URL`/`SYSTEM_UNDER_TEST_URL_FOR_PLAYWRIGHT` at the right hostnames for your CI system's networking,
-and run `bin/behat` — a JUnit-format report (`--format junit --out <dir>`) is worth adding so your CI system can show
+and run `bin/behat` with `FLOW_CONTEXT=Testing/Behat` — a JUnit-format report (`--format junit --out <dir>`) is worth adding so your CI system can show
 per-scenario results rather than just a pass/fail job.
 
 Illustrated with GitLab CI, since that's what we use — the same shape (image reuse, services, env vars shared with
@@ -273,7 +274,7 @@ e2e_test:
     - your-web-server-start-command &
     - export PLAYWRIGHT_API_URL=http://playwright-bridge:3000
     - export SYSTEM_UNDER_TEST_URL_FOR_PLAYWRIGHT=http://$(hostname -i):9090
-    - ./bin/behat --format junit --out e2e-results -c DistributionPackages/Your.SitePackageKey/Tests/Behavior/behat.yml.dist
+    - FLOW_CONTEXT=Testing/Behat ./bin/behat --format junit --out e2e-results -c DistributionPackages/Your.SitePackageKey/Tests/Behavior/behat.yml.dist
   artifacts:
     reports:
       junit: e2e-results/*.xml
@@ -562,14 +563,18 @@ active stubs.
 3. Run Behat where your application runs (e.g. `docker compose exec neos ...`, `kubectl exec ...`, or locally):
 
    ```bash
-   bin/behat -c DistributionPackages/Your.SitePackageKey/Tests/Behavior/behat.yml.dist
+   FLOW_CONTEXT=Testing/Behat bin/behat -c DistributionPackages/Your.SitePackageKey/Tests/Behavior/behat.yml.dist
    ```
+
+   Neos.Behat boots Flow in `FLOW_CONTEXT` and accepts only `Testing/Behat` or a sub context of it
+   (`Testing/Behat/...`) - set it explicitly when your container sets another context; without `FLOW_CONTEXT`, it uses
+   `Testing/Behat`.
 
    Add a folder, a feature file or a `file:line` after the config to run only those scenarios:
 
    ```bash
-   bin/behat -c DistributionPackages/Your.SitePackageKey/Tests/Behavior/behat.yml.dist DistributionPackages/Your.SitePackageKey/Tests/Behavior/Features/Fusion/
-   bin/behat -c DistributionPackages/Your.SitePackageKey/Tests/Behavior/behat.yml.dist DistributionPackages/Your.SitePackageKey/Tests/Behavior/Features/WebsiteRendering.feature:27
+   FLOW_CONTEXT=Testing/Behat bin/behat -c DistributionPackages/Your.SitePackageKey/Tests/Behavior/behat.yml.dist DistributionPackages/Your.SitePackageKey/Tests/Behavior/Features/Fusion/
+   FLOW_CONTEXT=Testing/Behat bin/behat -c DistributionPackages/Your.SitePackageKey/Tests/Behavior/behat.yml.dist DistributionPackages/Your.SitePackageKey/Tests/Behavior/Features/WebsiteRendering.feature:27
    ```
 
 IDE "run" buttons for Behat usually don't work when Behat runs inside a Docker container — use the CLI (or your
@@ -618,6 +623,8 @@ Start your `FeatureContext` from [`FeatureContext.php.default`](Templates/Featur
   bridge with the new one.
 - `Testing/Behat` needs the SUT's cache storage and `applicationIdentifier` and its persistent resource storage/target
   ([Setup step 2](#2-two-flow-contexts-two-ports)).
+- Behat must run with `FLOW_CONTEXT=Testing/Behat` (or a sub context) - Neos.Behat 9.1 refuses other contexts, e.g. a
+  container-wide `Development/...` or the SUT context of a CI job.
 - Symfony projects are no longer supported - stay on 8.x there.
 
 In the feature files:

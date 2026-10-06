@@ -16,7 +16,7 @@
         "neos/contentrepositoryregistry": "^9.1",
         "neos/contentgraph-doctrinedbaladapter": "^9.1",
         "neos/utility-files": "^9.1",
-        "neos/behat": "^9.0",
+        "neos/behat": "^9.1",
         "behat/behat": "^3.16",
         "phpunit/phpunit": "^10.5 || ^11.0",
         "guzzlehttp/psr7": "^2.0",
