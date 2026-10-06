@@ -1,9 +1,7 @@
 {
-    "devDependencies": {
-        "playwright": "^1.51.1"
-    },
+    "private": true,
     "dependencies": {
         "@hapi/hapi": "^21.4.0",
-        "@playwright/test": "^1.51.1"
+        "playwright": "1.51.1"
     }
 }

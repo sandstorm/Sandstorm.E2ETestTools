@@ -27,7 +27,8 @@
  * we expose through the HTTP API.
  *
  * We assume this all runs in a TRUSTED ENVIRONMENT, as it allows SENDING ARBITRARY JAVASCRIPT to this server
- * which is then evaluated.
+ * which is then evaluated. It listens on all interfaces (port 3000), so it is reachable from containers - never
+ * publish that port to a network you don't trust.
  *
  * The server exposes the following API endpoints:
  *
@@ -38,7 +39,7 @@
  *     - `vars` is a writable JS Object (`{}`) which you can use to pass information from one call to `/exec/[contextName]` to the next.
  *       Simple `const myVar` variable declarations are NOT preserved to the next invocation (because I do not know how ;).
  *   - The REPLY is sent as soon as the step has completed; so that means we wait until everything has run - the API behaves SYNCHRONOUSLY.
- *     - In case of an error, a 500 status code is sent.
+ *     - In case of an error (also a syntax error in the script), a 500 status code is sent.
  *     - In case of success, a 200 status code is sent.
 
  *     The response format is always structured as JSON like this:
@@ -56,9 +57,6 @@
  * curl http://127.0.0.1:3000/exec/t1 --data-raw 'vars.page = await context.newPage();'
  * curl http://127.0.0.1:3000/exec/t1 --data-raw 'await vars.page.goto("http://spiegel.de");'
  * curl -XPOST http://127.0.0.1:3000/stop/t1
- *
- *
- * NOTE: if this all works out as we hope, this should probably become part of a custom PHP package or so.
  */
 
 const { chromium } = require('playwright');
@@ -94,12 +92,13 @@ const init = async () => {
             const contextName = request.params.context;
             if (!currentlyKnownContexts[contextName]) {
                 console.log(`Creating ${contextName}`);
+                const playwrightContext = await browser.newContext();
+                playwrightContext.setDefaultTimeout(15000); // 15 s
                 currentlyKnownContexts[contextName] = {
-                    playwrightContext: await browser.newContext(),
+                    playwrightContext,
                     vars: {},
                     script: []
                 };
-                currentlyKnownContexts[contextName].playwrightContext.setDefaultTimeout(15000); // 15 s
             }
 
             const payload = request.payload.toString('utf-8');
@@ -107,10 +106,9 @@ const init = async () => {
 
             currentlyKnownContexts[contextName].script.push(payload);
 
-            // API towards the script
-            const fn = eval("(async (context, vars) => {\n" + payload + "\n});");
-
             try {
+                // API towards the script - inside the try, so a syntax error is reported like any other error
+                const fn = eval("(async (context, vars) => {\n" + payload + "\n});");
                 const returnValue = await fn(currentlyKnownContexts[contextName].playwrightContext, currentlyKnownContexts[contextName].vars);
                 console.log("Finished execution...");
                 return h.response(JSON.stringify({
@@ -147,6 +145,13 @@ const init = async () => {
 
     await server.start();
     console.log('Server running on %s', server.info.uri);
+
+    // docker stop: close the browser instead of waiting for the kill
+    process.on('SIGTERM', async () => {
+        await server.stop();
+        await browser.close();
+        process.exit(0);
+    });
 };
 
 process.on('unhandledRejection', (err) => {
@@ -181,12 +186,3 @@ function wrapForDebug(scriptBlocks) {
         }
     }).join("") + endBlock;
 }
-
-
-/**
- *
- * composer require neos/behat
- *
- * npx playwright codegen wikipedia.org
- *
- */
