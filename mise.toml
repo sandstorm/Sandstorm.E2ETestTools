@@ -22,6 +22,9 @@ run = "{{vars.compose}} build --pull"
 description = "Start the distribution and wait until the system under test answers"
 run = '''
 mkdir -p "{{config_root}}/Tests/SystemUnderTest/e2e-results"
+# bind-mounted into the container, where Behat writes as www-data - on Linux (e.g. CI) the directory belongs to the host
+# user, so screenshots, traces and log copies would fail with "Permission denied"
+chmod a+rwx "{{config_root}}/Tests/SystemUnderTest/e2e-results"
 {{vars.compose}} up -d
 echo "Waiting for the system under test (first start: migrations, cr:setup)..."
 for i in $(seq 1 120); do
