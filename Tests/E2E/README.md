@@ -5,7 +5,7 @@ The package's own Behat suite. It runs against the test site of the development 
 package provides: copy a feature into your site package's `Tests/Behavior/Features/`, replace
 `Sandstorm.E2ETestTools.TestSite` with your site package key and adapt NodeTypes, properties and texts.
 
-Run it from the package root (see "Development distribution" in the [README](../../README.md#development-distribution)):
+Run it from the package root (see [Development distribution](../../CONTRIBUTING.md#development-distribution)):
 
 ```bash
 mise run start

@@ -1,4 +1,4 @@
-# Development distribution of Sandstorm.E2ETestTools (see "Development distribution" in README.md).
+# Development distribution of Sandstorm.E2ETestTools (see "Development distribution" in CONTRIBUTING.md).
 #
 # mise trust            # once
 # mise run build        # build the images (again after changing a composer.json or the Dockerfile)
