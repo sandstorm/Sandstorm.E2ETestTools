@@ -45,6 +45,9 @@ jobs:
             core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN)
             core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL)
             core.exportVariable('ACTIONS_RESULTS_URL', process.env.ACTIONS_RESULTS_URL)
+            // BuildKit only uses GitHub's current cache API (v2) with this set - the old v1 API is switched off and
+            // answers with an HTML error page ("Our services aren't available right now")
+            core.exportVariable('ACTIONS_CACHE_SERVICE_V2', process.env.ACTIONS_CACHE_SERVICE_V2 || 'True')
 
       # image layers come from the GitHub Actions cache (docker-compose.ci-cache.yml) - a full build only after a
       # change to the Dockerfile or a composer.json; the other images are pulled meanwhile
