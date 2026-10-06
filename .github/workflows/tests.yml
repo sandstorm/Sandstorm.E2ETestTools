@@ -31,13 +31,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: jdx/mise-action@v2
+      # third-party: pinned to the commit of v2.4.4, so it can't change without a change here
+      - uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac # v2.4.4
 
       # the GitHub Actions cache backend (type=gha) needs a buildx builder with the docker-container driver ...
       - uses: docker/setup-buildx-action@v3
 
-      # ... and the cache token/URL in the environment of docker compose
-      - uses: crazy-max/ghaction-github-runtime@v3
+      # ... and the cache token/URL in the environment of docker compose - only actions see them, `run:` steps don't
+      - name: Expose the cache token to docker compose
+        uses: actions/github-script@v7
+        with:
+          script: |
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN)
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL)
+            core.exportVariable('ACTIONS_RESULTS_URL', process.env.ACTIONS_RESULTS_URL)
 
       # image layers come from the GitHub Actions cache (docker-compose.ci-cache.yml) - a full build only after a
       # change to the Dockerfile or a composer.json; the other images are pulled meanwhile
