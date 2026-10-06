@@ -55,27 +55,33 @@ jobs:
           wait
 
       - name: Start the distribution
+        id: start
         run: mise run start
 
+      # each test step runs when the distribution is up - also after another test step failed, so a run reports all
+      # three - but not after a failed build or start
       - name: Unit tests
+        if: ${{ !cancelled() && steps.start.outcome == 'success' }}
         run: mise run tests:unit
 
       - name: Functional tests
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.start.outcome == 'success' }}
         run: mise run tests:functional
 
       - name: E2E tests
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.start.outcome == 'success' }}
         run: mise run tests:e2e
 
+      # the neos container exists once the start step ran, even if the system under test didn't come up
       - name: Collect the Flow logs
-        if: ${{ failure() }}
+        if: ${{ failure() && steps.start.outcome != 'skipped' }}
         run: $COMPOSE cp neos:/app/Data/Logs Tests/SystemUnderTest/e2e-results/flow-logs
 
       - name: Upload screenshots, traces and logs
-        if: ${{ failure() }}
+        if: ${{ failure() && steps.start.outcome != 'skipped' }}
         uses: actions/upload-artifact@v4
         with:
           name: e2e-results-${{ matrix.sut }}
           path: Tests/SystemUnderTest/e2e-results/
+          if-no-files-found: ignore
           retention-days: 7
