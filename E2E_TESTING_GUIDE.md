@@ -205,8 +205,8 @@ component does when its link is missing or of a certain kind - and that decision
   - **every link state the component handles differently**: internal, external, asset, empty - and, where it
     matters, a target that is hidden or removed later. A `Scenario Outline` with direct Fusion rendering, or several
     buttons on one page checked in one visit;
-  - the visible result of each state: the link and its `href` (`in the fusion output, the attributes of CSS selector
-    ... are:`), the disabled button, the icon of the external link, or that there is no link at all - always together
+  - the visible result of each state: the link and its `href` (`the attributes of ... in the Fusion output
+    should be:`), the disabled button, the icon of the external link, or that there is no link at all - always together
     with the rest of the component that must still be there.
 - **Where:** link states are rendering states - render them directly with Fusion when there are many of them (like the
   [teaser example above](#content-elements-every-nodetype-with-a-fusion-integration)). A target that is hidden later
@@ -267,7 +267,7 @@ matter of tests. What a developer can get wrong or forget is the wiring in the r
   - the component without an image;
   - that a download link answers with status 200 and the right file name.
 
-  Use `in the fusion output, the attributes of CSS selector ... are:` or a check on the element's attributes in the
+  Use `the attributes of ... in the Fusion output should be:` or a check on the element's attributes in the
   browser.
 - **Don't check which candidate the browser picks** from `srcset`. That depends on viewport size, pixel density, the
   browser's cache and the image itself - such a test is flaky and tests the browser, not your project.
@@ -472,8 +472,8 @@ changes. The package's `WireMockTrait` (see the [README](README.md#mocked-third-
 
 - **Base answers per scenario:** in features tagged `@wireMock`, WireMock is reset before every scenario and loads the
   `_base` answers (auth token, standard login). The scenario adds the answers it's about; they win over the base.
-- **Answers in files**, grouped by feature (`Given the API "shop" path "/order" on "POST" serves response
-  "Voucher/order_with_voucher"`), or one folder per scenario (`Given I load the stubs "login-locked-customer" of the
+- **Answers in files**, grouped by feature (`Given the API "shop" serves "Voucher/order_with_voucher" for
+  "POST" "/order"`), or one folder per scenario (`Given I load the stubs "login-locked-customer" of the
   API "shop"`). When the values are the point of the scenario, build the answer from a table in a project step.
 - **Mock the error answers too** - an error status, an empty or unexpected answer.
 - **Check the outgoing call when it is the feature:** `Then the API "shop" should have received "POST" "/order"` -

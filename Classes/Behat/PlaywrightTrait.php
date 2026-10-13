@@ -12,7 +12,7 @@ use Behat\Hook\AfterScenario;
 use Behat\Hook\AfterStep;
 use Behat\Hook\BeforeScenario;
 use Behat\Hook\BeforeStep;
-use Behat\Step\Then;
+use Behat\Step\When;
 use Behat\Testwork\Tester\Result\TestResult;
 use Closure;
 use Neos\Utility\Files;
@@ -431,7 +431,7 @@ trait PlaywrightTrait
     /**
      * Prints the Playwright script of the scenario so far.
      */
-    #[Then('I debug the playwright script')]
+    #[When('I debug the Playwright script')]
     public function iDebugThePlaywrightScript(): void
     {
         $js = $this->playwrightConnector->getCurrentJsCode($this->requirePlaywrightContext());
@@ -446,8 +446,8 @@ trait PlaywrightTrait
     /**
      * The file name is relative to the results directory.
      */
-    #[Then('I do a screenshot :filename')]
-    public function iDoAScreenshot(string $filename): void
+    #[When('I take a screenshot :filename')]
+    public function iTakeAScreenshot(string $filename): void
     {
         // NOTE: intentionally no "path" option here - see the comment in playwrightAfterStep().
         $base64Image = $this->playwrightConnector->execute($this->requirePlaywrightContext(), '

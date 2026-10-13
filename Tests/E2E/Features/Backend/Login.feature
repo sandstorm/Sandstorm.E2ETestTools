@@ -8,7 +8,7 @@ Feature: Backend login
     Given the default dimension space point is '{"language":"de"}'
 
   Scenario: an editor logs in and navigates the backend
-    Given I have a site for Site Node "site" with name "TestSite"
+    Given I have a site for the site node "site" with name "TestSite"
     And I have the following nodes in site "site":
       | NodeAggregateId | Parent   | NodeType                                           | Properties                                   |
       | homepage        |          | Sandstorm.E2ETestTools.TestSite:Document.StartPage | {"uriPathSegment":"site","title":"Homepage"} |
@@ -22,3 +22,12 @@ Feature: Backend login
     Then the URI path should be "/neos/management"
     When I click the overview dashboard tile "Media"
     Then the URI path should be "/neos/management/media"
+
+  Scenario: log in with the placeholders of the login form
+    Given I have a site for the site node "site" with name "TestSite"
+    And I have the following nodes in site "site":
+      | NodeAggregateId | Parent | NodeType                                           | Properties                                   |
+      | homepage        |        | Sandstorm.E2ETestTools.TestSite:Document.StartPage | {"uriPathSegment":"site","title":"Homepage"} |
+    And I have a Neos backend user "admin" with password "password" and role "Neos.Neos:Administrator"
+    When I log into the backend using credentials "admin" "password" with username placeholder "Username" and password placeholder "Password"
+    Then the URI path should be "/neos/content"

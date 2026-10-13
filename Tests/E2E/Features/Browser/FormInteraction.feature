@@ -4,7 +4,7 @@
 Feature: Form interaction
 
   Background:
-    Given I have a site for Site Node "site" with name "TestSite"
+    Given I have a site for the site node "site" with name "TestSite"
     And I create the following nodes in site "site":
       | NodeAggregateId | Parent        | NodeType                                           | Properties                                   | DimensionSpacePoint |
       | homepage        |               | Sandstorm.E2ETestTools.TestSite:Document.StartPage | {"uriPathSegment":"site","title":"Form"}     | {"language":"de"}   |

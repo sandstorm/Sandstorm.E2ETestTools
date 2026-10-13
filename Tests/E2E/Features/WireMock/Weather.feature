@@ -5,7 +5,7 @@
 Feature: Mocked third-party API
 
   Background:
-    Given I have a site for Site Node "site" with name "TestSite"
+    Given I have a site for the site node "site" with name "TestSite"
     And I have the following nodes in site "site":
       | NodeAggregateId | Parent        | NodeType                                           | Properties                                  | DimensionSpacePoint |
       | homepage        |               | Sandstorm.E2ETestTools.TestSite:Document.StartPage | {"uriPathSegment":"site","title":"Weather"} | {"language":"de"}   |
@@ -18,12 +18,12 @@ Feature: Mocked third-party API
     And the API "weather" should have received "GET" "/forecast"
 
   Scenario: a response for this scenario
-    Given the API "weather" path "/forecast" on "GET" serves response "rainy"
+    Given the API "weather" serves "rainy" for "GET" "/forecast"
     When I access the URI path "/"
     Then there should be the text "Forecast: rainy" in "[data-testid=forecast]"
 
   Scenario: the API fails
-    Given the API "weather" path "/forecast" on "GET" serves response "error" with status 500
+    Given the API "weather" serves "error" for "GET" "/forecast" with status 500
     When I access the URI path "/"
     Then there should be the text "Weather unavailable" in "[data-testid=forecast]"
 
@@ -33,7 +33,7 @@ Feature: Mocked third-party API
     Then there should be the text "Forecast: stormy" in "[data-testid=forecast]"
 
   Scenario: back to the base stubs
-    Given the API "weather" path "/forecast" on "GET" serves response "rainy"
+    Given the API "weather" serves "rainy" for "GET" "/forecast"
     And I clear all API stubs
     When I access the URI path "/"
     Then there should be the text "Forecast: sunny" in "[data-testid=forecast]"
@@ -42,3 +42,4 @@ Feature: Mocked third-party API
     When I access the URI path "/"
     And I access the URI path "/"
     Then the API "weather" should have received "GET" "/forecast" 2 times
+    And the step 'the API "weather" should have received "GET" "/forecast" 3 times' should fail with 'Unexpected number of GET /forecast requests to the API "weather"'

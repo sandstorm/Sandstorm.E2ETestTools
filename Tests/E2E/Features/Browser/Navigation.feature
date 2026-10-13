@@ -4,7 +4,7 @@
 Feature: Navigation
 
   Background:
-    Given I have a site for Site Node "site"
+    Given I have a site for the site node "site"
     And I have the following nodes in site "site":
       | NodeAggregateId | Parent        | NodeType                                           | Properties                                   | DimensionSpacePoint |
       | homepage        |               | Sandstorm.E2ETestTools.TestSite:Document.StartPage | {"uriPathSegment":"site","title":"Elements"} | {"language":"de"}   |
@@ -24,17 +24,17 @@ Feature: Navigation
 
   Scenario: screen size
     When I access the URI path "/"
-    And the viewport size is 400 x 800
+    And the viewport is 400 x 800 px
     Then there should be the text "400 px, ratio 1" in "[data-testid=screen]"
     When the screen is 500 x 800 px with pixel ratio 2
     Then there should be the text "500 px, ratio 2" in "[data-testid=screen]"
 
   Scenario: scrolling
     When I access the URI path "/"
-    And the viewport size is 1280 x 600
+    And the viewport is 1280 x 600 px
     Then the heading "Far below" should not be in the viewport
     When I scroll to the bottom of the page
     Then the heading "Far below" should be in the viewport
-    When I scroll up by 50 pixels
+    When I scroll up by 50 px
     And I click the button "Back to top"
     Then the page should be scrolled to the top

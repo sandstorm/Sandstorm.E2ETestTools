@@ -62,8 +62,8 @@ trait NetworkTrait
      * Waits until the network is idle first - an unwanted request might still be on its way. :host is matched as part
      * of the host name.
      */
-    #[Then('there should be no request to :host')]
-    public function thereShouldBeNoRequestTo(string $host): void
+    #[Then('there should not be a request to :host')]
+    public function thereShouldNotBeARequestTo(string $host): void
     {
         $hosts = $this->playwrightStrings(self::network_requireRecording() . <<<'JS'
             await vars.page.waitForLoadState('networkidle');
@@ -94,7 +94,11 @@ trait NetworkTrait
         JS, $selector);
 
         Assert::assertNotEmpty($statusByHref, sprintf('"%s" contains no links.', $selector));
-        Assert::assertSame([], array_filter($statusByHref, static fn ($status) => $status !== 200), 'These links do not respond with 200.');
+        $failing = array_filter($statusByHref, static fn ($status) => $status !== 200);
+        Assert::assertSame([], $failing, sprintf(
+            'These links do not respond with 200: %s',
+            implode(', ', array_map(static fn ($href, $status) => sprintf('%s (%s)', $href, is_scalar($status) ? $status : '?'), array_keys($failing), $failing))
+        ));
     }
 
     private static function network_requireRecording(): string

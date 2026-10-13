@@ -6,7 +6,7 @@
 Feature: Download of a fixture file
 
   Scenario: download node links the fixture file
-    Given I have a site for Site Node "site" with name "TestSite"
+    Given I have a site for the site node "site" with name "TestSite"
     And I have a textual persistent resource "74d819f0-0bf4-44df-ae36-0c7639c1afcc" named "hello.txt" with the following content:
       """
       Hello from a fixture resource

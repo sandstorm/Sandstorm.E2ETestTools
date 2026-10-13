@@ -34,8 +34,8 @@ trait FixtureExportTrait
     /**
      * Clicks a button that starts a download and keeps the downloaded file as exported fixture.
      */
-    #[When('I download the file of the button :caption')]
-    public function iDownloadTheFileOfTheButton(string $caption): void
+    #[When('I download the file of the button :name')]
+    public function iDownloadTheFileOfTheButton(string $name): void
     {
         $this->fixtureExport_output = self::playwrightString($this->playwrightRun(<<<'JS'
             const [download] = await Promise.all([
@@ -47,14 +47,8 @@ trait FixtureExportTrait
                 chunks.push(chunk);
             }
             return Buffer.concat(chunks).toString("utf8");
-        JS, $caption));
+        JS, $name));
         $this->fixtureExport_exitCode = 0;
-    }
-
-    #[Then('the button :caption should be disabled')]
-    public function theButtonShouldBeDisabled(string $caption): void
-    {
-        $this->playwrightRun('await expect(vars.page.getByRole("button", {name: %s, exact: true})).toBeDisabled();', $caption);
     }
 
     /**

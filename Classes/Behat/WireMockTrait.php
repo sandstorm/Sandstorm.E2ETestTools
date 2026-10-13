@@ -21,7 +21,7 @@ use Sandstorm\E2ETestTools\WireMock\WireMockAdmin;
  *   ]);
  *
  * Fixture directory per API: `_base/*.json` - WireMock mapping files loaded before every scenario; response bodies
- * (`order_success.json`) for "serves response"; one directory per scenario ("tape") with mapping files for
+ * (`order_success.json`) for "serves"; one directory per scenario ("tape") with mapping files for
  * "I load the stubs".
  *
  * Tag features that use the mock with the tag "wireMock" - the server is reset before each of their scenarios.
@@ -55,14 +55,14 @@ trait WireMockTrait
     /**
      * @param string $file response body, relative to the API's fixture directory (".json" may be omitted)
      */
-    #[Given('the API :api path :path on :method serves response :file')]
-    public function theApiPathServesResponse(string $api, string $path, string $method, string $file): void
+    #[Given('the API :api serves :file for :method :path')]
+    public function theApiServesFor(string $api, string $file, string $method, string $path): void
     {
-        $this->theApiPathServesResponseWithStatus($api, $path, $method, $file, 200);
+        $this->theApiServesForWithStatus($api, $file, $method, $path, 200);
     }
 
-    #[Given('the API :api path :path on :method serves response :file with status :status')]
-    public function theApiPathServesResponseWithStatus(string $api, string $path, string $method, string $file, int $status): void
+    #[Given('the API :api serves :file for :method :path with status :status')]
+    public function theApiServesForWithStatus(string $api, string $file, string $method, string $path, int $status): void
     {
         $bodyFile = $this->wireMock_fixturePath($api, str_ends_with($file, '.json') ? $file : $file . '.json');
         if (!is_file($bodyFile)) {

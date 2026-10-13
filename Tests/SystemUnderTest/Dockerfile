@@ -13,6 +13,10 @@ RUN install-php-extensions \
     gd \
     redis
 
+# Flow >= 9.2 passes the loaded php.ini to its CLI sub-requests and fails without one; the image only ships templates.
+# Our settings come from conf.d/php-ini-overrides.ini.
+RUN cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
+
 RUN apt-get update \
     && apt-get install -y git unzip mariadb-client \
     && apt-get clean \

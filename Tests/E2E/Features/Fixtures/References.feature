@@ -4,7 +4,7 @@
 Feature: Node references
 
   Scenario: start page references the privacy page
-    Given I have a site for Site Node "site" with name "TestSite"
+    Given I have a site for the site node "site" with name "TestSite"
     And I have the following nodes in site "site":
       | NodeAggregateId | Parent   | NodeType                               | Properties                                     | DimensionSpacePoint |
       | homepage        |          | Sandstorm.E2ETestTools.TestSite:Document.StartPage | {"uriPathSegment":"site","title":"Homepage"}   | {"language":"de"}   |
@@ -17,4 +17,4 @@ Feature: Node references
       """
       testcase = ${q(node).referenceNodes('privacyPage').property('title')}
       """
-    Then the Fusion output should equal to "Privacy"
+    Then the Fusion output should be "Privacy"

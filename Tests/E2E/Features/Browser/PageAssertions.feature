@@ -5,7 +5,7 @@
 Feature: Page assertions
 
   Background:
-    Given I have a site for Site Node "site"
+    Given I have a site for the site node "site"
     And I have the following nodes in site "site":
       | NodeAggregateId | Parent        | NodeType                                           | Properties                                   | DimensionSpacePoint |
       | homepage        |               | Sandstorm.E2ETestTools.TestSite:Document.StartPage | {"uriPathSegment":"site","title":"Elements"} | {"language":"de"}   |
@@ -28,6 +28,13 @@ Feature: Page assertions
     And the element with test id "enabled-button" should be enabled
     And the element with test id "disabled-button" should be disabled
     And the element with test id "aria-disabled-link" should be disabled
+
+  Scenario: element states by role and accessible name
+    Then the button "Enabled" should be visible
+    And the button "Enabled" should be enabled
+    And the button "Disabled" should be disabled
+    And the link "Unavailable" should be disabled
+    And the button "Hidden button" should be hidden
 
   Scenario: viewport
     Then the element with test id "visible-box" should be in the viewport

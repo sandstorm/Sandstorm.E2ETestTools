@@ -92,6 +92,37 @@ trait PageAssertionsTrait
         );
     }
 
+    #[Then('the :role :name should be visible')]
+    public function theShouldBeVisible(string $role, string $name): void
+    {
+        $this->pageAssertions_expect($this->pageAssertions_role($role, $name), 'toBeVisible(%s)');
+    }
+
+    /**
+     * Finds elements hidden from assistive technology too. Like Playwright's toBeHidden() it also passes if there is no
+     * such element - check the element is visible before the action that should hide it.
+     */
+    #[Then('the :role :name should be hidden')]
+    public function theShouldBeHidden(string $role, string $name): void
+    {
+        $this->pageAssertions_expect($this->pageAssertions_role($role, $name, true), 'toBeHidden(%s)');
+    }
+
+    #[Then('the :role :name should be enabled')]
+    public function theShouldBeEnabled(string $role, string $name): void
+    {
+        $this->pageAssertions_expect($this->pageAssertions_role($role, $name), 'toBeEnabled(%s)');
+    }
+
+    /**
+     * Also passes for aria-disabled="true".
+     */
+    #[Then('the :role :name should be disabled')]
+    public function theShouldBeDisabled(string $role, string $name): void
+    {
+        $this->pageAssertions_expect($this->pageAssertions_role($role, $name), 'toBeDisabled(%s)');
+    }
+
     #[Then('the :role :name should be in the viewport')]
     public function theShouldBeInTheViewport(string $role, string $name): void
     {

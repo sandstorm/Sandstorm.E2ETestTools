@@ -29,16 +29,16 @@ trait FormInteractionTrait
         $this->formInteraction_currentFeatureFile = $scope->getFeature()->getFile() ?? '';
     }
 
-    #[When('I click the button :caption')]
-    public function iClickTheButton(string $caption): void
+    #[When('I click the button :name')]
+    public function iClickTheButton(string $name): void
     {
-        $this->formInteraction_run('getByRole("button", {name: %s, exact: true}).click()', $caption);
+        $this->formInteraction_run('getByRole("button", {name: %s, exact: true}).click()', $name);
     }
 
-    #[When('I click the link :caption')]
-    public function iClickTheLink(string $caption): void
+    #[When('I click the link :name')]
+    public function iClickTheLink(string $name): void
     {
-        $this->formInteraction_run('getByRole("link", {name: %s, exact: true}).click()', $caption);
+        $this->formInteraction_run('getByRole("link", {name: %s, exact: true}).click()', $name);
     }
 
     #[When('I click the element with test id :testId')]

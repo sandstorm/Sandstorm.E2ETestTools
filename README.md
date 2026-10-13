@@ -9,7 +9,7 @@ is reset and filled with fixtures for every scenario.
 Feature: Headline integration
 
   Scenario: a headline node renders as h1
-    Given I have a site for Site Node "site" with name "My Site"
+    Given I have a site for the site node "site" with name "My Site"
     And I have the following nodes in site "site":
       | NodeAggregateId | Parent        | NodeType                   | Properties                                   | DimensionSpacePoint |
       | homepage        |               | My.Site:Document.StartPage | {"uriPathSegment":"home","title":"Homepage"} | {"language":"de"}   |
@@ -19,7 +19,7 @@ Feature: Headline integration
       """
       testcase = My.Site:Content.Headline
       """
-    Then in the fusion output, the inner HTML of CSS selector "h1" matches "Hello"
+    Then the inner HTML of "h1" in the Fusion output should be "Hello"
 ```
 
 ## What you get
@@ -302,7 +302,7 @@ same format.
 Create the site, then its nodes - as table, or from a YAML file with the same rows:
 
 ```gherkin
-Given I have a site for Site Node "site" with name "YourSiteName"
+Given I have a site for the site node "site" with name "YourSiteName"
 And I have the following nodes in site "site":
   | NodeAggregateId | Parent        | NodeType                               | Properties                                   | DimensionSpacePoint |
   | homepage        |               | Your.SitePackageKey:Document.StartPage | {"uriPathSegment":"site","title":"Homepage"} | {"language":"de"}   |
@@ -400,7 +400,7 @@ as ambiguous. Elements are found by their role and accessible name (`the button 
 
 ### FusionRenderingTrait
 
-- `I have a site for Site Node :siteNodeName [with name :siteName]`
+- `I have a site for the site node :siteNodeName [with name :siteName]`
 - `I have/create the following nodes in site :siteName:`
 - `the following node references:`
 - `the default dimension space point is :dimensionSpacePoint`
@@ -408,9 +408,9 @@ as ambiguous. Elements are found by their role and accessible name (`the button 
 - `I render the Fusion object :fusionPath:`
 - `I render the Fusion object :fusionPath with the current context node:`
 - `I render the page`
-- `the Fusion output should equal to :expected`
-- `in the fusion output, the inner HTML of CSS selector :selector matches :expected`
-- `in the fusion output, the attributes of CSS selector :selector are:`
+- `the Fusion output should be :expected`
+- `the inner HTML of :selector in the Fusion output should be :expected`
+- `the attributes of :selector in the Fusion output should be:`
 
 ### NodeImportTrait
 
@@ -425,8 +425,8 @@ Comes with `FusionRenderingTrait`.
 
 ### PlaywrightTrait
 
-- `I do a screenshot :filename`
-- `I debug the playwright script` - prints the generated Playwright JS
+- `I take a screenshot :filename`
+- `I debug the Playwright script` - prints the generated Playwright JS
 
 ### NavigationTrait
 
@@ -434,10 +434,10 @@ Comes with `FusionRenderingTrait`.
 - `I reload the page`
 - `the URI path should be :uriPath` - waits for the navigation
 - `the response status code should be :status`
-- `the viewport size is :width x :height` - reloads the page
+- `the viewport is :width x :height px` - reloads the page
 - `the screen is :width x :height px with pixel ratio :ratio` - clears the browser cache and reloads; Chromium only
 - `I scroll to the bottom of the page`
-- `I scroll up by :pixels pixels`
+- `I scroll up by :pixels px`
 - `the page should be scrolled to the top`
 
 ### NeosBackendControlTrait
@@ -457,13 +457,15 @@ Comes with `FusionRenderingTrait`.
   technology
 - `the focus should be inside :selector`
 - `the :role :name should (not) be in the viewport`
+- `the :role :name should be visible/hidden/enabled/disabled` - `hidden` also finds elements hidden from assistive
+  technology, and passes if there is no such element
 - `the element with test id :testId should be visible/hidden/focused/enabled/disabled`
 - `the element with test id :testId should (not) be in the viewport`
 
 ### FormInteractionTrait
 
-- `I click the button :caption`
-- `I click the link :caption`
+- `I click the button :name`
+- `I click the link :name`
 - `I click the element with test id :testId`
 - `I fill :value into the field :label`
 - `the field :label should have the value :value`
@@ -486,7 +488,7 @@ Comes with `FusionRenderingTrait`.
 - `I delete the cookie :name`
 - `the local/session storage key :key should have the value :value`
 - `the local/session storage key :key should not be set`
-- `I remove the local/session storage key :key`
+- `I delete the local/session storage key :key`
 
 ### NetworkTrait
 
@@ -513,11 +515,11 @@ Needs [Mailpit](https://mailpit.axllent.org) as SMTP server of the SUT; Behat re
 ### StepTimingTrait
 
 No steps: with `E2E_TIMINGS=1` it writes the duration of every step and scenario to `step-timings.jsonl` in the results
-directory - see [Debugging](#debugging).
+directory - see [Debugging](#debugging). A local dev tool for measuring the suite - not meant for the pipeline.
 
 ### WireMockTrait
 
-- `the API :api path :path on :method serves response :file [with status :status]`
+- `the API :api serves :file for :method :path [with status :status]`
 - `I load the stubs :tape of the API :api`
 - `I clear all API stubs`
 - `the API :api should have received :method :path [:count times]`
@@ -526,8 +528,8 @@ Setup and details: [Mocked third-party APIs](#mocked-third-party-apis-wiremock).
 
 ### Notes on the steps
 
-- `the Fusion output should equal to` compares the whole HTML and breaks with every changed space or class - prefer
-  the CSS selector steps. `... matches ...` compares for equality, not as regular expression.
+- `the Fusion output should be` compares the whole HTML and breaks with every changed space or class - prefer
+  the CSS selector steps. `the inner HTML of ... should be` compares for equality, not as regular expression.
 - Escaped quotes (`\"`) inside a `"..."` parameter don't match the step - put values with double quotes in single
   quotes (`'{"all":true}'`).
 - The assertions on the page wait for the expected state (Playwright's
@@ -606,7 +608,7 @@ When the site talks to an external API (shop backend, CRM, newsletter service), 
 Per API, the fixture directory holds `_base/*.json` (mapping files loaded before every scenario), response bodies and
 one directory of mapping files per "tape":
 
-- `the API :api path :path on :method serves response :file [with status :status]` - answers one call with a body file
+- `the API :api serves :file for :method :path [with status :status]` - answers one call with a body file
   (`.json` may be omitted); wins over base stubs; a path with query string must match exactly
 - `I load the stubs :tape of the API :api` - imports all mapping files of the tape directory
 - `I clear all API stubs` - back to the base stubs, e.g. when the API's answer changes after an action
@@ -643,7 +645,7 @@ IDE "run" buttons usually don't work when Behat runs in a container - use the CL
 
 - **Watch the tests**: start the bridge with `HEADLESS=false node index.js` - worth a project task next to the
   headless one.
-- **Screenshots**: `And I do a screenshot "name.png"` in a `@playwright` scenario; failed steps get an `error_*.png`
+- **Screenshots**: `And I take a screenshot "name.png"` in a `@playwright` scenario; failed steps get an `error_*.png`
   automatically. Both go to the results directory: `e2e-results/` where Behat runs, or what you pass to
   `setupPlaywright($resultsDir)`.
 - **Traces**: failed `@playwright` scenarios write `report_<feature>_<scenario>.zip` to the results directory - open it
@@ -667,6 +669,7 @@ IDE "run" buttons usually don't work when Behat runs in a container - use the CL
   and scenario: feature, line, step text, duration (`ms`), result, and the number of requests to the bridge with their
   time (`bridgeCalls`, `bridgeMs`) - the rest is PHP (fixtures, cache, database). The kickstart sums it up with
   `mise run tests:e2e:timings <label>` and compares two labels with `mise run tests:e2e:timings:compare <a> <b>`.
+  It's a local dev tool for measuring the suite - don't set `E2E_TIMINGS` in the pipeline.
 - **Let an agent analyse failures**: the results directory holds screenshots, traces, server logs and - with
   `--format junit --out <dir>` - the JUnit report. Tell a coding agent like Claude where it is.
 
@@ -721,6 +724,43 @@ themselves are shipped now:
   before fails now - check the element that shows the text, or wait for it with another step first.
 - All assertions wait `setPlaywrightTimeout()` (default 5000 ms). `$pageAssertions_timeout` still works, but is
   deprecated.
+
+**Renamed steps** - one wording for the same thing (`px`, `delete`, `should not be`, `:method :path`, `should be`):
+
+| Before | Now |
+|---|---|
+| `I have a site for Site Node ...` | `I have a site for the site node ...` |
+| `the Fusion output should equal to :expected` | `the Fusion output should be :expected` |
+| `in the fusion output, the inner HTML of CSS selector :selector matches :expected` | `the inner HTML of :selector in the Fusion output should be :expected` |
+| `in the fusion output, the attributes of CSS selector :selector are:` | `the attributes of :selector in the Fusion output should be:` |
+| `I do a screenshot :filename` | `I take a screenshot :filename` |
+| `I debug the playwright script` | `I debug the Playwright script` |
+| `the viewport size is :width x :height` | `the viewport is :width x :height px` |
+| `I scroll up by :pixels pixels` | `I scroll up by :pixels px` |
+| `I remove the local/session storage key :key` | `I delete the local/session storage key :key` |
+| `there should be no request to :host` | `there should not be a request to :host` |
+| `the API :api path :path on :method serves response :file` | `the API :api serves :file for :method :path` |
+
+Most of them with sed (GNU sed; on macOS `sed -i ''`), from the directory with your features:
+
+```bash
+find . -name '*.feature' -exec sed -i -E \
+  -e 's/I have a site for Site Node/I have a site for the site node/' \
+  -e 's/the Fusion output should equal to/the Fusion output should be/' \
+  -e 's/in the fusion output, the inner HTML of CSS selector ("[^"]*") matches/the inner HTML of \1 in the Fusion output should be/' \
+  -e 's/in the fusion output, the attributes of CSS selector ("[^"]*") are:/the attributes of \1 in the Fusion output should be:/' \
+  -e 's/I do a screenshot/I take a screenshot/' \
+  -e 's/I debug the playwright script/I debug the Playwright script/' \
+  -e 's/the viewport size is ([^ ]+) x ([^ ]+)/the viewport is \1 x \2 px/' \
+  -e 's/I scroll up by ([^ ]+) pixels/I scroll up by \1 px/' \
+  -e 's/I remove the ([^ ]+) storage key/I delete the \1 storage key/' \
+  -e 's/there should be no request to/there should not be a request to/' \
+  -e 's/the API ("[^"]*") path ("[^"]*") on ("[^"]*") serves response ("[^"]*")/the API \1 serves \4 for \3 \2/' \
+  {} +
+```
+
+New: `the :role :name should be visible/hidden/enabled/disabled` - delete a project step like `the button :caption
+should be disabled`, it's ambiguous now.
 
 **Custom steps:** `$this->playwrightConnector->execute($this->requirePlaywrightContext(), sprintf(..., JsValue::of(...)))`
 still works; `$this->playwrightRun('...%s...', $value)` is shorter. The private helpers of the traits
@@ -793,3 +833,16 @@ it and run `npm ci && npx playwright install chromium`. Build the CI image again
 
    `Testing/Behat` stores and publishes them somewhere else than the SUT looks - use the SUT's resource storage and
    target there ([Setup step 2](#2-two-flow-contexts-two-ports)).
+
+5. **`RuntimeException: broken` in a `BeforeScenario` hook (`setupContentRepository()`), with Neos 9.2 or later.**
+
+   Neos 9.2 wires the `FakeClock` of `neos/contentrepository-testsuite` in every `Testing` context - a dev dependency
+   that projects usually don't install. The package switches it back to the real clock for `Testing/Behat`
+   (`Configuration/Testing/Behat/Objects.yaml`); if Behat runs in another `Testing` sub context, copy that file into
+   your configuration for that context.
+
+6. **`Could not resolve ini file` when Flow starts (Flow 9.2 or later).**
+
+   Flow passes the loaded php.ini to its CLI sub-requests and fails if PHP loaded none - as in the official PHP and
+   FrankenPHP images, which only ship `php.ini-production`/`php.ini-development`. Copy one of them to `php.ini` in the
+   image (see `Tests/SystemUnderTest/Dockerfile`).

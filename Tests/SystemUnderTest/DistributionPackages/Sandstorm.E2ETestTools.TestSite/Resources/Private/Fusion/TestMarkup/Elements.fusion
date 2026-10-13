@@ -14,6 +14,12 @@ prototype(Sandstorm.E2ETestTools.TestSite:TestMarkup.Elements) < prototype(Neos.
         <nav class="links" aria-label="Links">
             <a href="/">Start</a>
         </nav>
+        <nav class="broken-links" aria-label="Broken links">
+            <a href="/">Start</a>
+            <a href="/does-not-exist">Gone</a>
+        </nav>
+        <div style="display: none"><button type="button">Hidden button</button></div>
+        <div inert><button type="button">Behind the dialog</button></div>
         <img src="https://example.invalid/pixel.png" alt="" />
         <div style="height: 3000px"></div>
         <div data-testid="far-below"><h2>Far below</h2></div>

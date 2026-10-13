@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Sandstorm\E2ETestTools\Behat;
 
+use Behat\Step\Given;
 use Behat\Step\Then;
 use Behat\Step\When;
 use PHPUnit\Framework\Assert;
@@ -65,8 +66,8 @@ trait NavigationTrait
      * Resizes the current page and reloads it - after `I access the URI path`, which opens a new page. The reload lets
      * the page start at this size: a resize of the loaded page only fires the resize handlers of its scripts.
      */
-    #[When('the viewport size is :width x :height')]
-    public function theViewportSizeIs(int $width, int $height): void
+    #[Given('the viewport is :width x :height px')]
+    public function theViewportIs(int $width, int $height): void
     {
         $this->playwrightRun('
             await vars.page.setViewportSize({width: %s, height: %s});
@@ -82,7 +83,7 @@ trait NavigationTrait
      * The browser cache is cleared before: the first visit loaded the images for the default screen, and Chromium may
      * reuse an already loaded larger srcset image instead of the one for this screen.
      */
-    #[When('the screen is :width x :height px with pixel ratio :ratio')]
+    #[Given('the screen is :width x :height px with pixel ratio :ratio')]
     public function theScreenIsWithPixelRatio(int $width, int $height, float $ratio): void
     {
         $this->playwrightRun('
@@ -108,8 +109,8 @@ trait NavigationTrait
         ' . self::navigation_afterScroll(), $this->playwrightTimeout);
     }
 
-    #[When('I scroll up by :pixels pixels')]
-    public function iScrollUpByPixels(int $pixels): void
+    #[When('I scroll up by :pixels px')]
+    public function iScrollUpBy(int $pixels): void
     {
         $this->playwrightRun('
             const before = await vars.page.evaluate(() => window.scrollY);

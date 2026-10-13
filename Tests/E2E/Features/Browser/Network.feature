@@ -4,7 +4,7 @@
 Feature: Network
 
   Background:
-    Given I have a site for Site Node "site"
+    Given I have a site for the site node "site"
     And I have the following nodes in site "site":
       | NodeAggregateId | Parent        | NodeType                                           | Properties                                   | DimensionSpacePoint |
       | homepage        |               | Sandstorm.E2ETestTools.TestSite:Document.StartPage | {"uriPathSegment":"site","title":"Elements"} | {"language":"de"}   |
@@ -15,7 +15,7 @@ Feature: Network
     Given requests to other hosts are recorded and blocked
     When I access the URI path "/"
     Then there should be a request to "example.invalid"
-    And there should be no request to "example.com"
+    And there should not be a request to "example.com"
     When I forget the recorded requests
     And I reload the page
     Then there should be a request to "example.invalid"

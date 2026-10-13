@@ -89,8 +89,8 @@ trait BrowserStateTrait
         $this->browserState_expectStorage($storage, $key, 'toBeNull()');
     }
 
-    #[When('I remove the :storage storage key :key')]
-    public function iRemoveTheStorageKey(string $storage, string $key): void
+    #[When('I delete the :storage storage key :key')]
+    public function iDeleteTheStorageKey(string $storage, string $key): void
     {
         $this->playwrightRun('await vars.page.evaluate((key) => window[%s].removeItem(key), %s);', $this->browserState_storageObject($storage), $key);
     }

@@ -109,13 +109,13 @@ trait FusionRenderingTrait
         $this->defaultDimensionSpacePoint = NodeFixtureGherkin::dimensionSpacePoint($dimensionSpacePoint, 'the default dimension space point');
     }
 
-    #[Given('I have a site for Site Node :siteNodeName')]
+    #[Given('I have a site for the site node :siteNodeName')]
     public function iHaveASite(string $siteNodeName): void
     {
         $this->createAndPersistSite($siteNodeName);
     }
 
-    #[Given('I have a site for Site Node :siteNodeName with name :siteName')]
+    #[Given('I have a site for the site node :siteNodeName with name :siteName')]
     public function iHaveASiteWithName(string $siteNodeName, string $siteName): void
     {
         /** @var SiteRepository $siteRepository */
@@ -350,8 +350,8 @@ trait FusionRenderingTrait
     /**
      * Compares the whole HTML - prefer the CSS selector steps.
      */
-    #[Then('the Fusion output should equal to :expected')]
-    public function theFusionOutputShouldEqualTo(string $expected): void
+    #[Then('the Fusion output should be :expected')]
+    public function theFusionOutputShouldBe(string $expected): void
     {
         Assert::assertEquals($expected, $this->lastRenderedHtml());
     }
@@ -359,8 +359,8 @@ trait FusionRenderingTrait
     /**
      * Compares the inner HTML of the first match for equality (no regular expression).
      */
-    #[Then('in the fusion output, the inner HTML of CSS selector :selector matches :expected')]
-    public function inTheFusionOutputTheInnerHtmlOfCssSelectorMatches(string $selector, string $expected): void
+    #[Then('the inner HTML of :selector in the Fusion output should be :expected')]
+    public function theInnerHtmlInTheFusionOutputShouldBe(string $selector, string $expected): void
     {
         $crawler = (new Crawler($this->lastRenderedHtml()))->filter($selector);
         Assert::assertGreaterThan(0, $crawler->count(), sprintf('No element matches the CSS selector "%s".', $selector));
@@ -370,8 +370,8 @@ trait FusionRenderingTrait
     /**
      * Columns: Key, Value - the attributes of the first match.
      */
-    #[Then('in the fusion output, the attributes of CSS selector :selector are:')]
-    public function inTheFusionOutputTheAttributesOfSelectorAre(string $selector, TableNode $attributes): void
+    #[Then('the attributes of :selector in the Fusion output should be:')]
+    public function theAttributesInTheFusionOutputShouldBe(string $selector, TableNode $attributes): void
     {
         $crawler = (new Crawler($this->lastRenderedHtml()))->filter($selector);
         Assert::assertGreaterThan(0, $crawler->count(), sprintf('No element matches the CSS selector "%s".', $selector));

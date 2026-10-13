@@ -11,6 +11,7 @@ use Sandstorm\E2ETestTools\Behat\BrowserStateTrait;
 use Sandstorm\E2ETestTools\Behat\DebuggingTrait;
 use Sandstorm\E2ETestTools\Behat\FormInteractionTrait;
 use Sandstorm\E2ETestTools\Behat\FusionRenderingTrait;
+use Sandstorm\E2ETestTools\Behat\MailpitTrait;
 use Sandstorm\E2ETestTools\Behat\NavigationTrait;
 use Sandstorm\E2ETestTools\Behat\NeosBackendControlTrait;
 use Sandstorm\E2ETestTools\Behat\NetworkTrait;
@@ -22,8 +23,7 @@ use Sandstorm\E2ETestTools\Behat\WireMockTrait;
 
 /**
  * The package's own E2E suite, against the test site of the development distribution (Tests/SystemUnderTest/). Uses every
- * shipped trait but MailpitTrait (no Mailpit service here - the kickstart covers it), like a project's FeatureContext
- * (see Templates/FeatureContext.php.default).
+ * shipped trait, like a project's FeatureContext (see Templates/FeatureContext.php.default).
  */
 class FeatureContext implements Context
 {
@@ -41,9 +41,12 @@ class FeatureContext implements Context
     use DebuggingTrait;
     use StepTimingTrait;
     use WireMockTrait;
+    use MailpitTrait;
 
-    // only for testing the fixture export of this package
+    // only for testing this package: the fixture export, mails without a mailer, failure messages
     use FixtureExportTrait;
+    use MailFixtureTrait;
+    use StepFailureTrait;
 
     public function __construct()
     {

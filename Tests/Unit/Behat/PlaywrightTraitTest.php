@@ -114,6 +114,47 @@ class PlaywrightTraitTest extends UnitTestCase
         self::assertSame('box.style.width = "100%";', PlaywrightTraitTestContext::script('box.style.width = "100%";'));
     }
 
+    #[Test]
+    public function playwrightArrayReturnsTheArray(): void
+    {
+        self::assertSame(['a' => 1], (new PlaywrightTraitCannedResultContext(['a' => 1]))->array());
+    }
+
+    #[Test]
+    public function playwrightArrayFailsForAnotherType(): void
+    {
+        $this->expectExceptionMessage('The Playwright script returned string instead of an array.');
+        (new PlaywrightTraitCannedResultContext('a'))->array();
+    }
+
+    #[Test]
+    public function playwrightStringsTurnsTheEntriesIntoAList(): void
+    {
+        self::assertSame(['a', '1', 'true', 'NULL', '{"b":2}'], (new PlaywrightTraitCannedResultContext(['x' => 'a', 1, true, null, ['b' => 2]]))->strings());
+    }
+
+    /**
+     * @return array<string, array{mixed, string}>
+     */
+    public static function scriptResults(): array
+    {
+        return [
+            'string' => ['a', 'a'],
+            'int' => [42, '42'],
+            'float' => [1.5, '1.5'],
+            'bool' => [false, 'false'],
+            'null' => [null, 'NULL'],
+            'array' => [['a', 1], '["a",1]'],
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('scriptResults')]
+    public function playwrightStringTurnsAResultIntoAString(mixed $result, string $expected): void
+    {
+        self::assertSame($expected, PlaywrightTraitTestContext::string($result));
+    }
+
     private function contextWithTracingMode(int $mode): PlaywrightTraitTestContext
     {
         $context = new PlaywrightTraitTestContext();
@@ -142,5 +183,41 @@ class PlaywrightTraitTestContext
     public static function script(string $script, mixed ...$values): string
     {
         return self::playwrightScript($script, ...$values);
+    }
+
+    public static function string(mixed $value): string
+    {
+        return self::playwrightString($value);
+    }
+}
+
+/**
+ * Answers every script with a fixed result instead of asking the bridge.
+ */
+class PlaywrightTraitCannedResultContext extends PlaywrightTraitTestContext
+{
+    public function __construct(private readonly mixed $result)
+    {
+    }
+
+    protected function playwrightRun(string $script, mixed ...$values): mixed
+    {
+        return $this->result;
+    }
+
+    /**
+     * @return array<mixed>
+     */
+    public function array(): array
+    {
+        return $this->playwrightArray('return 1;');
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function strings(): array
+    {
+        return $this->playwrightStrings('return 1;');
     }
 }

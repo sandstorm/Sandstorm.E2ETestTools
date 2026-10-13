@@ -4,7 +4,7 @@
 Feature: Fixture export command
 
   Background:
-    Given I have a site for Site Node "site" with name "TestSite"
+    Given I have a site for the site node "site" with name "TestSite"
     And I have the following nodes in site "site":
       | NodeAggregateId | Parent        | NodeType                                           | Properties                                   | DimensionSpacePoint |
       | homepage        |               | Sandstorm.E2ETestTools.TestSite:Document.StartPage | {"uriPathSegment":"site","title":"Homepage"} | {"language":"de"}   |
@@ -52,7 +52,7 @@ Feature: Fixture export command
       """
       testcase = ${q(node).referenceNodes('privacyPage').property('title')}
       """
-    Then the Fusion output should equal to "Nested"
+    Then the Fusion output should be "Nested"
 
   Scenario: neither NodeAggregateId nor URI path
     When I run the fixture export with the arguments:
