@@ -588,6 +588,8 @@ Not shipped yet - we add them when projects need them (open an issue with your u
 - the response: headers (cache, security headers), redirects with their status
 - page meta and SEO: meta tags, canonical URL, `lang`, hreflang alternates
 - interactions: hover, downloads, links that open a new tab
+- the error message of a field as screen readers announce it (`toHaveAccessibleErrorMessage`)
+- the structure of an area (navigation, form) as an ARIA snapshot in the feature (`toMatchAriaSnapshot`)
 
 ### Examples by level
 

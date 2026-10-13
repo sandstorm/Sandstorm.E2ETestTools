@@ -42,11 +42,7 @@ trait FixtureExportTrait
                 vars.page.waitForEvent("download"),
                 vars.page.getByRole("button", {name: %s, exact: true}).click(),
             ]);
-            const chunks = [];
-            for await (const chunk of await download.createReadStream()) {
-                chunks.push(chunk);
-            }
-            return Buffer.concat(chunks).toString("utf8");
+            return await fs.readFile(await download.path(), "utf8");
         JS, $name));
         $this->fixtureExport_exitCode = 0;
     }
