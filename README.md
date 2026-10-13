@@ -30,7 +30,8 @@ Feature: Headline integration
   on its own port, Flow context and database.
 - **Neos backend steps** - create users, log in, use the menu, the dashboard and the document tree.
 - **Generic browser steps** - texts, titles, buttons, links, form fields, focus and keyboard, screen size and
-  scrolling, cookies and web storage (e.g. a preset cookie consent), requests to third parties, sent mails (Mailpit).
+  scrolling, cookies and web storage (e.g. a preset cookie consent), requests to third parties, sent mails (Mailpit),
+  and a smoke test per page (JavaScript errors, failed requests, images).
 - **Content fixtures** - nodes, references, hidden state and assets as Gherkin tables or YAML files, created through
   the content repository API.
 - **Fixture export** - turn existing pages into fixtures (backend button or CLI) instead of writing tables by hand.
@@ -497,6 +498,28 @@ Comes with `FusionRenderingTrait`.
 - `there should (not) be a request to :host` - part of the host name, e.g. `youtube`
 - `all links in :selector should respond with 200` - follows redirects
 
+### PageHealthTrait
+
+A smoke test for every page type:
+
+- `browser errors are recorded` - before the first visit: uncaught errors, `console.error()`, and requests to the site
+  under test that fail or answer with 4xx/5xx (other hosts are ignored - see `NetworkTrait`)
+- `there should be no JavaScript errors`
+- `there should be no failed requests [except:]` - the table's column `URI path` lists known gaps (part of the path)
+- `every image should be loaded` - loads lazy images right away, waits up to 15 seconds (thumbnails are generated on
+  their first request)
+- `every image should have an alt attribute` - `alt=""` and images hidden from assistive technology pass
+
+```gherkin
+Scenario: the homepage is healthy
+  Given browser errors are recorded
+  When I access the URI path "/"
+  Then there should be no JavaScript errors
+  And there should be no failed requests
+  And every image should be loaded
+  And every image should have an alt attribute
+```
+
 ### MailpitTrait
 
 Needs [Mailpit](https://mailpit.axllent.org) as SMTP server of the SUT; Behat reaches its API at `MAILPIT_API_URL`
@@ -555,6 +578,16 @@ Setup and details: [Mocked third-party APIs](#mocked-third-party-apis-wiremock).
       );
   }
   ```
+
+### Ideas for more steps
+
+Not shipped yet - we add them when projects need them (open an issue with your use case):
+
+- links and attributes: `the link :name should point to :href`, `the :role :name should have the attribute ...`,
+  counting elements, `there should be the text :text in the :role :name`
+- the response: headers (cache, security headers), redirects with their status
+- page meta and SEO: meta tags, canonical URL, `lang`, hreflang alternates
+- interactions: hover, downloads, links that open a new tab
 
 ### Examples by level
 
@@ -761,6 +794,8 @@ find . -name '*.feature' -exec sed -i -E \
 
 New: `the :role :name should be visible/hidden/enabled/disabled` - delete a project step like `the button :caption
 should be disabled`, it's ambiguous now.
+
+New: `PageHealthTrait` - JavaScript errors, failed requests and images of a page.
 
 **Custom steps:** `$this->playwrightConnector->execute($this->requirePlaywrightContext(), sprintf(..., JsValue::of(...)))`
 still works; `$this->playwrightRun('...%s...', $value)` is shorter. The private helpers of the traits

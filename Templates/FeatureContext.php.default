@@ -14,6 +14,7 @@ use Sandstorm\E2ETestTools\Behat\FusionRenderingTrait;
 use Sandstorm\E2ETestTools\Behat\NavigationTrait;
 use Sandstorm\E2ETestTools\Behat\NeosBackendControlTrait;
 use Sandstorm\E2ETestTools\Behat\NetworkTrait;
+use Sandstorm\E2ETestTools\Behat\PageHealthTrait;
 use Sandstorm\E2ETestTools\Behat\NodeImportTrait;
 use Sandstorm\E2ETestTools\Behat\PageAssertionsTrait;
 use Sandstorm\E2ETestTools\Behat\PlaywrightTrait;
@@ -46,11 +47,13 @@ class FeatureContext implements Context
     use NodeImportTrait;
 
     // Page title, texts, focus, elements by role or test id; buttons, links and fields by caption/label; cookies and
-    // storage; requests to third parties and links (part of Sandstorm.E2ETestTools)
+    // storage; requests to third parties and links; JavaScript errors, failed requests and images (part of
+    // Sandstorm.E2ETestTools)
     use PageAssertionsTrait;
     use FormInteractionTrait;
     use BrowserStateTrait;
     use NetworkTrait;
+    use PageHealthTrait;
 
     // "I pause for debugging" (see README, Debugging)
     use DebuggingTrait;

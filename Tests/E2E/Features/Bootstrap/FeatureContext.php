@@ -17,6 +17,7 @@ use Sandstorm\E2ETestTools\Behat\NeosBackendControlTrait;
 use Sandstorm\E2ETestTools\Behat\NetworkTrait;
 use Sandstorm\E2ETestTools\Behat\NodeImportTrait;
 use Sandstorm\E2ETestTools\Behat\PageAssertionsTrait;
+use Sandstorm\E2ETestTools\Behat\PageHealthTrait;
 use Sandstorm\E2ETestTools\Behat\PlaywrightTrait;
 use Sandstorm\E2ETestTools\Behat\StepTimingTrait;
 use Sandstorm\E2ETestTools\Behat\WireMockTrait;
@@ -38,6 +39,7 @@ class FeatureContext implements Context
     use FormInteractionTrait;
     use BrowserStateTrait;
     use NetworkTrait;
+    use PageHealthTrait;
     use DebuggingTrait;
     use StepTimingTrait;
     use WireMockTrait;

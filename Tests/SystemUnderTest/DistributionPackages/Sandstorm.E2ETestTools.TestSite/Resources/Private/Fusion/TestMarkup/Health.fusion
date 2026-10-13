@@ -1,0 +1,13 @@
+// PageHealthTrait: a healthy page - every image loads, has an alt attribute or is hidden from assistive technology
+prototype(Sandstorm.E2ETestTools.TestSite:TestMarkup.Health) < prototype(Neos.Fusion:Component) {
+    pixel = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
+    renderer = afx`
+        <p>A healthy page</p>
+        <img src={props.pixel} alt="A pixel" />
+        <img src={props.pixel} alt="" />
+        <img src={props.pixel} role="presentation" />
+        <div aria-hidden="true"><img src={props.pixel} /></div>
+        <div style="height: 3000px"></div>
+        <img src={props.pixel} alt="A lazy pixel far below" loading="lazy" />
+    `
+}
