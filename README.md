@@ -29,8 +29,8 @@ Feature: Headline integration
 - **Browser tests via Playwright** - Behat sends scripts to a small bridge service; the browser hits your application
   on its own port, Flow context and database.
 - **Neos backend steps** - create users, log in, use the menu, the dashboard and the document tree.
-- **Generic browser steps** - texts, titles, buttons, links, form fields, cookies and web storage (e.g. a preset cookie
-  consent).
+- **Generic browser steps** - texts, titles, buttons, links, form fields, focus and keyboard, screen size and
+  scrolling, cookies and web storage (e.g. a preset cookie consent), requests to third parties, sent mails (Mailpit).
 - **Content fixtures** - nodes, references, hidden state and assets as Gherkin tables or YAML files, created through
   the content repository API.
 - **Fixture export** - turn existing pages into fixtures (backend button or CLI) instead of writing tables by hand.
@@ -61,6 +61,7 @@ see [CONTRIBUTING.md](CONTRIBUTING.md).
 - [Running Behat Tests](#running-behat-tests)
   - [Debugging](#debugging)
 - [Migrating tests from Neos 8](#migrating-tests-from-neos-8)
+- [Upgrading the steps](#upgrading-the-steps)
 - [Upgrading the playwright-bridge](#upgrading-the-playwright-bridge)
 - [Troubleshooting](#troubleshooting)
 
@@ -287,8 +288,9 @@ test in a Neos project, where, and the pitfalls: **[Neos E2E Testing Guide](E2E_
   `/sites` root) via your `FeatureContext`'s hook. Needed for every scenario that creates nodes.
 - `@playwright` - starts a browser context in the bridge. Needed for page visits, backend steps and screenshots.
 - `@wireMock` - resets WireMock to its base stubs ([Mocked third-party APIs](#mocked-third-party-apis-wiremock)).
+- `@mailpit` - empties the Mailpit inbox ([MailpitTrait](#mailpittrait)).
 
-Other tags in the guide, like `@mailpit`, are project tags with a hook of your own.
+Other tags in the guide are project tags with a hook of your own.
 
 ## Fixtures
 
@@ -389,10 +391,12 @@ build an example page in the backend, export it by URI path into the feature's f
 
 ## Steps
 
-All traits are in `Sandstorm\E2ETestTools\Behat`. `FeatureContext.php.default` uses all but `WireMockTrait` (it needs a
-WireMock service); from `PageAssertionsTrait` on, the traits don't depend on each other - use the ones you need. Remove
-project steps with the same wording before using them, otherwise Behat reports the steps as ambiguous. Buttons and
-links are found by their accessible name, fields by their label, elements by `data-testid`.
+All traits are in `Sandstorm\E2ETestTools\Behat`. `FeatureContext.php.default` uses all but `WireMockTrait` and
+`MailpitTrait` (they need a WireMock or Mailpit service); the browser traits need `PlaywrightTrait`, but not each other -
+use the ones you need. Remove project steps with the same wording before using them, otherwise Behat reports the steps
+as ambiguous. Elements are found by their role and accessible name (`the button "Send"`, `the link "Next page"` -
+:role is an [ARIA role](https://www.w3.org/TR/wai-aria-1.2/#role_definitions)), fields by their label, otherwise by
+`data-testid`.
 
 ### FusionRenderingTrait
 
@@ -424,12 +428,20 @@ Comes with `FusionRenderingTrait`.
 - `I do a screenshot :filename`
 - `I debug the playwright script` - prints the generated Playwright JS
 
+### NavigationTrait
+
+- `I access the URI path :uriPath` - opens a new page
+- `I reload the page`
+- `the URI path should be :uriPath` - waits for the navigation
+- `the response status code should be :status`
+- `the viewport size is :width x :height` - reloads the page
+- `the screen is :width x :height px with pixel ratio :ratio` - clears the browser cache and reloads; Chromium only
+- `I scroll to the bottom of the page`
+- `I scroll up by :pixels pixels`
+- `the page should be scrolled to the top`
+
 ### NeosBackendControlTrait
 
-- `I access the URI path :uriPath`
-- `the response status code should be :status`
-- `there should be the text :expected on the page`
-- `the URI path should be :uriPath` - waits for the navigation
 - `I have a Neos backend user :username with password :password and role :role`
 - `I log into the backend using credentials :username :password [with username placeholder ... and password placeholder ...]`
 - `I click the main menu item :menuItem`
@@ -439,8 +451,12 @@ Comes with `FusionRenderingTrait`.
 ### PageAssertionsTrait
 
 - `the page title should be :title`
-- `there should not be the text :text on the page`
+- `there should (not) be the text :text on the page` - rendered text: hidden text counts as absent
 - `there should (not) be the text :text in :selector`
+- `the :role :name should be focused` - fails with the focused element, or if the element is hidden from assistive
+  technology
+- `the focus should be inside :selector`
+- `the :role :name should (not) be in the viewport`
 - `the element with test id :testId should be visible/hidden/focused/enabled/disabled`
 - `the element with test id :testId should (not) be in the viewport`
 
@@ -456,8 +472,10 @@ Comes with `FusionRenderingTrait`.
 - `I choose the radio button :label`
 - `I select :option in the field :label`
 - `the field :label should have :option selected`
+- `the field :label should be invalid` - the browser's validation (`required`, `type="email"`, ...)
 - `I upload the file :fileName to the field :label` - relative to the feature file
 - `I press the key :key`
+- `I focus the :role :name` - like reaching it with Tab
 
 ### BrowserStateTrait
 
@@ -469,6 +487,24 @@ Comes with `FusionRenderingTrait`.
 - `the local/session storage key :key should have the value :value`
 - `the local/session storage key :key should not be set`
 - `I remove the local/session storage key :key`
+
+### NetworkTrait
+
+- `requests to other hosts are recorded and blocked` - before the first visit; the site under test is not blocked
+- `I forget the recorded requests`
+- `there should (not) be a request to :host` - part of the host name, e.g. `youtube`
+- `all links in :selector should respond with 200` - follows redirects
+
+### MailpitTrait
+
+Needs [Mailpit](https://mailpit.axllent.org) as SMTP server of the SUT; Behat reaches its API at `MAILPIT_API_URL`
+(default `http://mailpit:8025`). Tag the scenarios with `@mailpit`: the inbox is emptied before them.
+
+- `exactly :count mail(s) should have been sent to :recipient` - waits up to 5 seconds (`0 mails` always waits)
+- `the mail to :recipient should have the subject :subject`
+- `the mail to :recipient should contain :text` - the plain text part
+- `the mail to :recipient should reply to :address`
+- `the mail to :recipient should have the attachment :fileName`
 
 ### DebuggingTrait
 
@@ -495,13 +531,28 @@ Setup and details: [Mocked third-party APIs](#mocked-third-party-apis-wiremock).
 - Escaped quotes (`\"`) inside a `"..."` parameter don't match the step - put values with double quotes in single
   quotes (`'{"all":true}'`).
 - The assertions on the page wait for the expected state (Playwright's
-  [web-first assertions](https://playwright.dev/docs/test-assertions)): up to 5 seconds, `there should be the text
-  ... on the page` up to 15. A negative check (`should not`, `hidden`) passes as soon as the state is reached.
+  [web-first assertions](https://playwright.dev/docs/test-assertions)): up to 5 seconds - change it with
+  `$this->setPlaywrightTimeout(10000)` in the `FeatureContext` constructor. A negative check (`should not`, `hidden`)
+  passes as soon as the state is reached.
 - Screenshots document a result, they don't check it.
-- Project-specific steps go into your `FeatureContext` or a trait of your project; the shipped traits show how to drive
-  the browser with `$this->playwrightConnector->execute()`. Pass step parameters with `JsValue::of()` (a JS literal)
-  and, inside a CSS selector, with `CssValue::of()` (a CSS string, e.g. `[data-name=%s]`). Assert with `expect` in
-  the script - it waits and reports expected and received value - instead of returning a value and asserting in PHP.
+- Project-specific steps go into your `FeatureContext` or a trait of your project. Drive the browser with
+  `$this->playwrightRun($script, ...$values)`: every `%s` in the script becomes the next value as JS literal, so
+  quotes in step parameters can't break it - JavaScript the step builds itself goes in as `JsCode::of(...)`, a value
+  inside a CSS selector through `CssValue::of()` first (a CSS string, e.g. `[data-name=%s]`). Assert with `expect` in
+  the script - it waits and reports expected and received value - instead of returning a value and asserting in PHP;
+  where you need the value in PHP, `playwrightArray()` and `playwrightStrings()` check its type:
+
+  ```php
+  #[Then('the teaser :title should link to :uriPath')]
+  public function theTeaserShouldLinkTo(string $title, string $uriPath): void
+  {
+      $this->playwrightRun(
+          'await expect(vars.page.getByRole("article").filter({hasText: %s}).getByRole("link")).toHaveAttribute("href", %s);',
+          $title,
+          $uriPath
+      );
+  }
+  ```
 
 ### Examples by level
 
@@ -649,6 +700,31 @@ In the feature files ([Fixtures](#fixtures) shows the result):
 | `I have the following nodes from file "x.yaml" [with overwrites]` | `... from file "x.yaml" in site "site" [with overwrites:]` |
 | overwrite columns `identifier \| property \| value` | `nodeAggregateId \| property \| value` |
 | YAML exported with the Neos 8 button (nodes keyed by identifier, nested `children`) | rejected - export again ([Exporting existing content](#exporting-existing-content)) |
+
+# Upgrading the steps
+
+**Split traits** - the steps of a page visit moved out of `NeosBackendControlTrait`, and steps many projects wrote
+themselves are shipped now:
+
+- Add `use NavigationTrait;` to your `FeatureContext` - `I access the URI path`, `the URI path should be` and `the
+  response status code should be` are there now. Without it, Behat reports these steps as undefined.
+- `there should be the text ... on the page` moved to `PageAssertionsTrait`.
+- New: `NavigationTrait` (reload, screen size, scrolling), `NetworkTrait` (requests to other hosts, links), `MailpitTrait`,
+  and in `PageAssertionsTrait`/`FormInteractionTrait` the steps by role and accessible name (`I focus the :role :name`,
+  `the :role :name should be focused`, ...) and `the field :label should be invalid`. Delete project steps with the same
+  wording, or keep yours and don't use the trait - Behat reports both as ambiguous.
+
+**Changed behaviour:**
+
+- `there should be the text ... on the page` checks the rendered text now, like its `not` variant: text in hidden
+  elements counts as absent, the case matters, and it waits 5 seconds instead of 15. A step that found hidden text
+  before fails now - check the element that shows the text, or wait for it with another step first.
+- All assertions wait `setPlaywrightTimeout()` (default 5000 ms). `$pageAssertions_timeout` still works, but is
+  deprecated.
+
+**Custom steps:** `$this->playwrightConnector->execute($this->requirePlaywrightContext(), sprintf(..., JsValue::of(...)))`
+still works; `$this->playwrightRun('...%s...', $value)` is shorter. The private helpers of the traits
+(`formInteraction_expect()`, `pageAssertions_expect()`) changed their signatures - don't call them from your steps.
 
 # Upgrading the playwright-bridge
 

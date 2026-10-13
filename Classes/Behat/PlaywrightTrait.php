@@ -17,6 +17,8 @@ use Behat\Testwork\Tester\Result\TestResult;
 use Closure;
 use Neos\Utility\Files;
 use Sandstorm\E2ETestTools\Debugging\LogDirectory;
+use Sandstorm\E2ETestTools\Playwright\JsCode;
+use Sandstorm\E2ETestTools\Playwright\JsValue;
 
 /**
  * This trait should be included in your `FeatureContext` for integration with Playwright.
@@ -37,25 +39,24 @@ use Sandstorm\E2ETestTools\Debugging\LogDirectory;
  *
  * USAGE:
  *
- * You can use $this->playwrightConnector->execute($this->requirePlaywrightContext(), 'your-playwright-script-here')
- * in your custom steps. Pass step parameters into the script with JsValue::of() (escaped JS literal).
+ * In your custom steps, run scripts with $this->playwrightRun('your-playwright-script-here', ...$values) - every %s
+ * becomes the next value as escaped JS literal (JsValue), so step parameters can't break the script. Wrap JavaScript
+ * the step builds itself (a locator, a matcher) in JsCode::of(). playwrightArray() and playwrightStrings() check the
+ * type of what the script returned.
  *
  *
  * EXAMPLE:
  *
- * $this->playwrightConnector->execute($this->requirePlaywrightContext(), "
+ * $this->playwrightRun('
  *     vars.page = await context.newPage();
- *     await vars.page.goto('BASEURL');
- * ");
+ *     await vars.page.goto("BASEURL" + %s);
+ * ', $uriPath);
  *
  *
  * Assertions: Playwright's web-first assertions (`expect`) wait until the page is in the expected state and fail with
  * a readable message - read values into PHP only for what expect can't check:
  *
- * $this->playwrightConnector->execute($this->requirePlaywrightContext(), sprintf(
- *     'await expect(vars.page.getByRole("heading", {level: 2})).toHaveText(%s);',
- *     JsValue::of($headline)
- * ));
+ * $this->playwrightRun('await expect(vars.page.getByRole("heading", {level: 2})).toHaveText(%s, {timeout: %s});', $headline, $this->playwrightTimeout);
  */
 trait PlaywrightTrait
 {
@@ -95,6 +96,11 @@ trait PlaywrightTrait
 
     protected string $resultsDir = 'e2e-results';
 
+    /**
+     * How long the assertions of the steps wait for the expected state, in milliseconds - see setPlaywrightTimeout().
+     */
+    protected int $playwrightTimeout = 5000;
+
     private int $playwrightTracingMode = self::PLAYWRIGHT_TRACING_MODE_ON_ERROR;
 
     /**
@@ -125,6 +131,15 @@ trait PlaywrightTrait
     {
         $this->flowLogsDirectory = $directory;
         $this->flowLogsDirectoryConfigured = true;
+    }
+
+    /**
+     * How long the assertions of the shipped steps wait for the expected state (default: 5000 ms). Raise it for a slow
+     * system under test, e.g. in CI.
+     */
+    protected final function setPlaywrightTimeout(int $milliseconds): void
+    {
+        $this->playwrightTimeout = $milliseconds;
     }
 
     /**
@@ -336,6 +351,69 @@ trait PlaywrightTrait
             throw new \RuntimeException('No active Playwright context. Did you forget the @playwright tag on this scenario?');
         }
         return $this->playwrightContext;
+    }
+
+    /**
+     * Runs the script in the browser context of the scenario and returns what it returned. Every %s (or %1$s, ...) in
+     * $script is replaced by the next value as JS literal - a {@see JsCode} as it is. Without values, the script is
+     * sent unchanged (a % in it needs no escaping then).
+     */
+    protected function playwrightRun(string $script, mixed ...$values): mixed
+    {
+        return $this->playwrightConnector->execute($this->requirePlaywrightContext(), self::playwrightScript($script, ...$values));
+    }
+
+    /**
+     * Like {@see playwrightRun()}, for scripts that return an object or array, e.g. `return {page: "...", notice: "..."};`
+     *
+     * @return array<mixed>
+     */
+    protected function playwrightArray(string $script, mixed ...$values): array
+    {
+        $result = $this->playwrightRun($script, ...$values);
+        if (!is_array($result)) {
+            throw new \UnexpectedValueException(sprintf('The Playwright script returned %s instead of an array.', get_debug_type($result)));
+        }
+        return $result;
+    }
+
+    /**
+     * Like {@see playwrightRun()}, for scripts that return a list, e.g. `return [...new Set(hosts)];` - the entries as
+     * strings.
+     *
+     * @return list<string>
+     */
+    protected function playwrightStrings(string $script, mixed ...$values): array
+    {
+        return array_values(array_map(static fn (mixed $value): string => self::playwrightString($value), $this->playwrightArray($script, ...$values)));
+    }
+
+    /**
+     * A value of a script result as string - for assertions and failure messages.
+     */
+    protected static function playwrightString(mixed $value): string
+    {
+        if (is_string($value)) {
+            return $value;
+        }
+        if (is_scalar($value) || $value === null) {
+            return var_export($value, true);
+        }
+        return (string)json_encode($value);
+    }
+
+    /**
+     * The script {@see playwrightRun()} sends.
+     */
+    protected static function playwrightScript(string $script, mixed ...$values): string
+    {
+        if ($values === []) {
+            return $script;
+        }
+        return sprintf($script, ...array_map(
+            static fn (mixed $value): string => $value instanceof JsCode ? $value->code : JsValue::of($value),
+            $values
+        ));
     }
 
     /**

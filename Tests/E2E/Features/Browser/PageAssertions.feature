@@ -1,4 +1,5 @@
-# PageAssertionsTrait: page title, texts on the page and in elements, element states by test id, viewport.
+# PageAssertionsTrait: page title, texts on the page and in elements, focus, element states by role and by test id,
+# viewport.
 # The page is a Fusion fixture of the test site (TestMarkup.Elements).
 @playwright @flowEntities
 Feature: Page assertions
@@ -14,6 +15,7 @@ Feature: Page assertions
 
   Scenario: title and texts
     Then the page title should be "Elements"
+    And there should be the text "Welcome" on the page
     And there should be the text "Welcome" in ".intro"
     And there should not be the text "Welcome" in ".outro"
     # text in hidden elements counts as absent
@@ -30,3 +32,11 @@ Feature: Page assertions
   Scenario: viewport
     Then the element with test id "visible-box" should be in the viewport
     And the element with test id "far-below" should not be in the viewport
+
+  Scenario: focus and viewport by role and accessible name
+    Then the textbox "Focused field" should be focused
+    And the heading "Far below" should not be in the viewport
+    When I focus the button "Enabled"
+    Then the button "Enabled" should be focused
+    When I focus the link "Start"
+    Then the focus should be inside ".links"

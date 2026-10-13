@@ -80,7 +80,7 @@ Scenario: main menu shows the pages in order and marks the current one
     | Home    | 1     |         |
     | About   | 1     | true    |
     | Team    | 2     |         |
-  And all links in "nav.main" should respond with 200         # project step
+  And all links in "nav.main" should respond with 200
 ```
 
 Caching needs its own scenario: change something after the first visit, with no cache flush in between - whether the
@@ -361,8 +361,8 @@ Scenario: newsletter sign-up is confirmed via the link in the mail
   When I access the URI path "/newsletter"
   And I fill "jane@example.com" into the field "E-mail"
   And I click the button "Subscribe"
-  Then exactly 1 mail should have been sent to "jane@example.com"            # project step
-  And the mail to "jane@example.com" should have the subject "Please confirm your subscription"   # project step
+  Then exactly 1 mail should have been sent to "jane@example.com"
+  And the mail to "jane@example.com" should have the subject "Please confirm your subscription"
   When I follow the link "Confirm subscription" in the mail to "jane@example.com"                 # project step
   Then there should be the text "Thank you for subscribing" on the page
 ```
@@ -420,8 +420,8 @@ Scenario: a new news article shows up in the news list on the homepage
 
 - **What breaks:** the skip link, keyboard operation, the focus after an action (item removed, undo, dialog opened or
   closed, "back to top"), and overlays that trap the focus.
-- **What to check:** which element has the focus or is in view after the action (`the element with test id ... should
-  be focused`, `... should be in the viewport`, `I press the key :key`). Static checks like contrast and missing
+- **What to check:** which element has the focus or is in view after the action (`the button "Close" should be
+  focused`, `the focus should be inside ...`, `... should be in the viewport`, `I press the key :key`). Static checks like contrast and missing
   labels are better done by an accessibility scanner.
 - **Where:** in the browser, with a fixed viewport size. Smooth scrolling and sticky headers change what is "in the
   viewport" - the shipped steps wait for the final state; project steps must do the same.
@@ -483,9 +483,9 @@ changes. The package's `WireMockTrait` (see the [README](README.md#mocked-third-
 
 ### Mail catching (Mailpit)
 
-- [Mailpit](https://mailpit.axllent.org) (or similar) is the mail server of the site under test; project steps read the
-  inbox through its HTTP API. Empty it in a `@BeforeScenario` hook for a project tag like `@mailpit`, so "exactly one
-  mail" means "this scenario sent one".
+- [Mailpit](https://mailpit.axllent.org) is the mail server of the site under test; `MailpitTrait` reads the inbox
+  through its HTTP API and empties it before every scenario tagged `@mailpit`, so "exactly one mail" means "this
+  scenario sent one". For another mail catcher, write project steps the same way.
 - Poll the inbox until the mail is there, and on timeout list the mails that *did* arrive. Mails sent from a queue: let
   the queue run synchronously in the site under test's context (queue configuration), so the mail is sent during the
   request.
@@ -577,7 +577,7 @@ Scenario: registration validates every step and sends the welcome mail
   When I fill "12345" into the field "Postal code"
   And I click the button "Next"
   # ... the same for every field of the following steps
-  Then exactly 1 mail should have been sent to "jane.doe@example.com"         # project step
+  Then exactly 1 mail should have been sent to "jane.doe@example.com"
 ```
 
 ### Make each scenario cheaper

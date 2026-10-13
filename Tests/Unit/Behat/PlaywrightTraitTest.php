@@ -8,9 +8,11 @@ use Neos\Flow\Tests\UnitTestCase;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use Sandstorm\E2ETestTools\Behat\PlaywrightTrait;
+use Sandstorm\E2ETestTools\Playwright\JsCode;
 
 /**
- * Tracing itself needs the bridge and is covered by the E2E suite - only the choice of the mode is tested.
+ * Tracing and running scripts need the bridge and are covered by the E2E suite - only the choice of the tracing mode
+ * and the scripts sent to the bridge are tested.
  */
 class PlaywrightTraitTest extends UnitTestCase
 {
@@ -79,6 +81,39 @@ class PlaywrightTraitTest extends UnitTestCase
         $context->tracingMode();
     }
 
+    #[Test]
+    public function valuesBecomeJsLiterals(): void
+    {
+        self::assertSame(
+            'await vars.page.getByLabel("Say \\"hi\\"").fill(42, {"force":true});',
+            PlaywrightTraitTestContext::script('await vars.page.getByLabel(%s).fill(%s, %s);', 'Say "hi"', 42, ['force' => true])
+        );
+    }
+
+    #[Test]
+    public function jsCodeIsInsertedAsItIs(): void
+    {
+        self::assertSame(
+            'await expect(vars.page.locator("nav")).toBeVisible();',
+            PlaywrightTraitTestContext::script('await expect(%s).%s;', JsCode::of('vars.page.locator("nav")'), JsCode::of('toBeVisible()'))
+        );
+    }
+
+    #[Test]
+    public function positionalPlaceholdersCanRepeatAValue(): void
+    {
+        self::assertSame(
+            'await "a".waitFor(); return "a";',
+            PlaywrightTraitTestContext::script('await %1$s.waitFor(); return %1$s;', 'a')
+        );
+    }
+
+    #[Test]
+    public function withoutValuesTheScriptIsSentUnchanged(): void
+    {
+        self::assertSame('box.style.width = "100%";', PlaywrightTraitTestContext::script('box.style.width = "100%";'));
+    }
+
     private function contextWithTracingMode(int $mode): PlaywrightTraitTestContext
     {
         $context = new PlaywrightTraitTestContext();
@@ -102,5 +137,10 @@ class PlaywrightTraitTestContext
     public function tracingMode(): int
     {
         return $this->getPlaywrightTracingMode();
+    }
+
+    public static function script(string $script, mixed ...$values): string
+    {
+        return self::playwrightScript($script, ...$values);
     }
 }

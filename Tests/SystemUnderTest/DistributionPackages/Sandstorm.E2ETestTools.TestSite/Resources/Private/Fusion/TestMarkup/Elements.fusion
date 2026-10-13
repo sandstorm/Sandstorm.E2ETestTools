@@ -1,15 +1,27 @@
-// PageAssertionsTrait: texts, element states by test id, viewport
+// PageAssertionsTrait: texts, focus, element states by role and by test id, viewport
+// NavigationTrait: screen size, scrolling - NetworkTrait: a request to another host, links
 prototype(Sandstorm.E2ETestTools.TestSite:TestMarkup.Elements) < prototype(Neos.Fusion:Component) {
     renderer = afx`
         <p class="intro">Welcome to the elements page</p>
         <p class="outro">Goodbye</p>
+        <p data-testid="screen"></p>
         <div data-testid="visible-box">Visible box</div>
         <div data-testid="hidden-box" style="display: none">Secret text</div>
         <input data-testid="focused-field" aria-label="Focused field" autofocus />
         <button data-testid="enabled-button" type="button">Enabled</button>
         <button data-testid="disabled-button" type="button" disabled>Disabled</button>
         <a data-testid="aria-disabled-link" href="#" aria-disabled="true">Unavailable</a>
+        <nav class="links" aria-label="Links">
+            <a href="/">Start</a>
+        </nav>
+        <img src="https://example.invalid/pixel.png" alt="" />
         <div style="height: 3000px"></div>
-        <div data-testid="far-below">Far below</div>
+        <div data-testid="far-below"><h2>Far below</h2></div>
+        <button type="button" id="back-to-top">Back to top</button>
+        <script>{props.script}</script>
     `
+    script = '
+        document.querySelector("[data-testid=screen]").textContent = window.innerWidth + " px, ratio " + window.devicePixelRatio;
+        document.getElementById("back-to-top").addEventListener("click", () => window.scrollTo({top: 0, behavior: "smooth"}));
+    '
 }

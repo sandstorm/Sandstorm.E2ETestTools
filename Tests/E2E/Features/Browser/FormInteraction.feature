@@ -33,6 +33,9 @@ Feature: Form interaction
     And the checkbox "Terms accepted" should not be checked
     And the field "Country" should have "Austria" selected
 
+  Scenario: the browser's validation
+    Then the field "Email" should be invalid
+
   Scenario: uploading a file next to the feature file
     When I upload the file "hello.txt" to the field "Attachment"
     Then there should be the text "Uploaded hello.txt: Hello upload" in "[data-testid=upload-result]"

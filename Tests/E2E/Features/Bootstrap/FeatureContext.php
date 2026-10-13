@@ -11,7 +11,9 @@ use Sandstorm\E2ETestTools\Behat\BrowserStateTrait;
 use Sandstorm\E2ETestTools\Behat\DebuggingTrait;
 use Sandstorm\E2ETestTools\Behat\FormInteractionTrait;
 use Sandstorm\E2ETestTools\Behat\FusionRenderingTrait;
+use Sandstorm\E2ETestTools\Behat\NavigationTrait;
 use Sandstorm\E2ETestTools\Behat\NeosBackendControlTrait;
+use Sandstorm\E2ETestTools\Behat\NetworkTrait;
 use Sandstorm\E2ETestTools\Behat\NodeImportTrait;
 use Sandstorm\E2ETestTools\Behat\PageAssertionsTrait;
 use Sandstorm\E2ETestTools\Behat\PlaywrightTrait;
@@ -20,7 +22,8 @@ use Sandstorm\E2ETestTools\Behat\WireMockTrait;
 
 /**
  * The package's own E2E suite, against the test site of the development distribution (Tests/SystemUnderTest/). Uses every
- * shipped trait, like a project's FeatureContext (see Templates/FeatureContext.php.default).
+ * shipped trait but MailpitTrait (no Mailpit service here - the kickstart covers it), like a project's FeatureContext
+ * (see Templates/FeatureContext.php.default).
  */
 class FeatureContext implements Context
 {
@@ -28,11 +31,13 @@ class FeatureContext implements Context
     use FlowEntitiesTrait;
     use PlaywrightTrait;
     use FusionRenderingTrait;
+    use NavigationTrait;
     use NeosBackendControlTrait;
     use NodeImportTrait;
     use PageAssertionsTrait;
     use FormInteractionTrait;
     use BrowserStateTrait;
+    use NetworkTrait;
     use DebuggingTrait;
     use StepTimingTrait;
     use WireMockTrait;

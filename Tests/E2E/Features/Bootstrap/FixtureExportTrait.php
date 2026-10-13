@@ -7,7 +7,6 @@ use Behat\Step\Then;
 use Behat\Step\When;
 use PHPUnit\Framework\Assert;
 use Sandstorm\E2ETestTools\Fixture\NodeFixtureYaml;
-use Sandstorm\E2ETestTools\Playwright\JsValue;
 use Symfony\Component\Yaml\Yaml;
 
 /**
@@ -29,10 +28,7 @@ trait FixtureExportTrait
     #[When('I open the inspector tab :title')]
     public function iOpenTheInspectorTab(string $title): void
     {
-        $this->playwrightConnector->execute($this->requirePlaywrightContext(), sprintf(
-            'await vars.page.locator("#neos-Inspector").getByRole("tab", {name: %s, exact: true}).click();',
-            JsValue::of($title)
-        ));
+        $this->playwrightRun('await vars.page.locator("#neos-Inspector").getByRole("tab", {name: %s, exact: true}).click();', $title);
     }
 
     /**
@@ -41,7 +37,7 @@ trait FixtureExportTrait
     #[When('I download the file of the button :caption')]
     public function iDownloadTheFileOfTheButton(string $caption): void
     {
-        $this->fixtureExport_output = (string)$this->playwrightConnector->execute($this->requirePlaywrightContext(), sprintf(<<<'JS'
+        $this->fixtureExport_output = self::playwrightString($this->playwrightRun(<<<'JS'
             const [download] = await Promise.all([
                 vars.page.waitForEvent("download"),
                 vars.page.getByRole("button", {name: %s, exact: true}).click(),
@@ -51,18 +47,14 @@ trait FixtureExportTrait
                 chunks.push(chunk);
             }
             return Buffer.concat(chunks).toString("utf8");
-        JS, JsValue::of($caption)));
+        JS, $caption));
         $this->fixtureExport_exitCode = 0;
     }
 
     #[Then('the button :caption should be disabled')]
     public function theButtonShouldBeDisabled(string $caption): void
     {
-        $disabled = $this->playwrightConnector->execute($this->requirePlaywrightContext(), sprintf(
-            'return await vars.page.getByRole("button", {name: %s, exact: true}).isDisabled();',
-            JsValue::of($caption)
-        ));
-        Assert::assertTrue($disabled, sprintf('The button "%s" is enabled.', $caption));
+        $this->playwrightRun('await expect(vars.page.getByRole("button", {name: %s, exact: true})).toBeDisabled();', $caption);
     }
 
     /**
