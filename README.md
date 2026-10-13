@@ -500,19 +500,19 @@ Comes with `FusionRenderingTrait`.
 
 ### PageHealthTrait
 
-A smoke test for every page type:
+A smoke test for every page type. It checks the page of the last `I access the URI path`, with what Playwright
+collected since (`page.pageErrors()`, `page.consoleMessages()`, `page.requests()` - the last 200 errors and console
+messages, the last 100 requests).
 
-- `browser errors are recorded` - before the first visit: uncaught errors, `console.error()`, and requests to the site
-  under test that fail or answer with 4xx/5xx (other hosts are ignored - see `NetworkTrait`)
-- `there should be no JavaScript errors`
-- `there should be no failed requests [except:]` - the table's column `URI path` lists known gaps (part of the path)
+- `there should be no JavaScript errors` - uncaught errors and `console.error()`
+- `there should be no failed requests [except:]` - requests to the site under test that failed or got 4xx/5xx (other
+  hosts are ignored - see `NetworkTrait`); the table's column `URI path` lists known gaps (part of the path)
 - `every image should be loaded` - loads lazy images right away, waits up to 15 seconds (thumbnails are generated on
   their first request)
 - `every image should have an alt attribute` - `alt=""` and images hidden from assistive technology pass
 
 ```gherkin
 Scenario: the homepage is healthy
-  Given browser errors are recorded
   When I access the URI path "/"
   Then there should be no JavaScript errors
   And there should be no failed requests

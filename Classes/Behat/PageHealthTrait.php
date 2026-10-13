@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Sandstorm\E2ETestTools\Behat;
 
 use Behat\Gherkin\Node\TableNode;
-use Behat\Step\Given;
 use Behat\Step\Then;
 use PHPUnit\Framework\Assert;
 
@@ -13,62 +12,38 @@ use PHPUnit\Framework\Assert;
  * Checks every page should pass, whatever its content - a smoke test per page type: no JavaScript errors, no broken
  * requests to the site under test, every image loads and has an alt attribute.
  *
+ * The page of the last `I access the URI path` is checked, with what Playwright collected since it was opened
+ * (`page.pageErrors()`, `page.consoleMessages()`, `page.requests()` - the last 200 errors and messages, the last 100
+ * requests).
+ *
  * Needs {@see PlaywrightTrait}. Opt-in: use it in your FeatureContext; remove project steps with the same wording first,
  * otherwise Behat reports them as ambiguous.
  */
 trait PageHealthTrait
 {
     /**
-     * Before the first visit. Registered on the browser context, so it also covers the pages opened later by
-     * `I access the URI path`. Records uncaught errors and `console.error()` of the pages, and requests to the site under
-     * test that fail or answer with 4xx/5xx. Requests to other hosts are ignored - see NetworkTrait for them.
-     */
-    #[Given('browser errors are recorded')]
-    public function browserErrorsAreRecorded(): void
-    {
-        $this->playwrightRun(<<<'JS'
-            const siteUnderTest = new URL("BASEURL").host;
-            const errors = vars.browserErrors = {js: [], requests: []};
-            const pathOf = (url) => { try { return new URL(url).pathname; } catch { return url; } };
-            const where = (page) => page ? ` (on ${pathOf(page.url())})` : '';
-            const isSiteUnderTest = (url) => { try { return new URL(url).host === siteUnderTest; } catch { return false; } };
-            context.on('weberror', (webError) => errors.js.push(webError.error().message + where(webError.page())));
-            context.on('console', (message) => {
-                // Chromium logs every failed resource - that's a failed request, recorded below
-                if (message.type() === 'error' && !message.text().startsWith('Failed to load resource')) {
-                    errors.js.push('console.error: ' + message.text() + where(message.page()));
-                }
-            });
-            context.on('response', (response) => {
-                if (response.status() >= 400 && isSiteUnderTest(response.url())) {
-                    errors.requests.push(`${response.request().method()} ${pathOf(response.url())} (${response.status()})`);
-                }
-            });
-            context.on('requestfailed', (request) => {
-                if (isSiteUnderTest(request.url())) {
-                    errors.requests.push(`${request.method()} ${pathOf(request.url())} (${request.failure()?.errorText ?? 'failed'})`);
-                }
-            });
-        JS);
-    }
-
-    /**
-     * Waits until the network is idle first - an error might still come.
+     * Uncaught errors and `console.error()` - waits until the network is idle first, an error might still come.
      */
     #[Then('there should be no JavaScript errors')]
     public function thereShouldBeNoJavaScriptErrors(): void
     {
-        $errors = $this->pageHealth_recorded('js');
+        $errors = $this->playwrightStrings(self::pageHealth_afterLoading() . <<<'JS'
+            const consoleErrors = (await vars.page.consoleMessages())
+                // Chromium logs every failed resource - that's a failed request, not a script error
+                .filter((message) => message.type() === 'error' && !message.text().startsWith('Failed to load resource'))
+                .map((message) => 'console.error: ' + message.text());
+            return [...(await vars.page.pageErrors()).map((error) => error.message), ...consoleErrors];
+        JS);
         Assert::assertSame([], $errors, sprintf('JavaScript errors: %s', implode('; ', $errors)));
     }
 
     /**
-     * Requests to the site under test only. Waits until the network is idle first.
+     * Requests to the site under test that failed or got a 4xx/5xx answer - other hosts are ignored (see NetworkTrait).
      */
     #[Then('there should be no failed requests')]
     public function thereShouldBeNoFailedRequests(): void
     {
-        $failed = $this->pageHealth_recorded('requests');
+        $failed = $this->pageHealth_failedRequests();
         Assert::assertSame([], $failed, sprintf('Failed requests: %s', implode(', ', $failed)));
     }
 
@@ -78,10 +53,10 @@ trait PageHealthTrait
     #[Then('there should be no failed requests except:')]
     public function thereShouldBeNoFailedRequestsExcept(TableNode $exceptions): void
     {
-        $paths = array_map(static fn (array $row): string => $row['URI path'] ?? '', $exceptions->getHash());
+        $paths = array_filter(array_map(static fn (array $row): string => $row['URI path'] ?? '', $exceptions->getHash()));
         $failed = array_values(array_filter(
-            $this->pageHealth_recorded('requests'),
-            static fn (string $request) => array_filter($paths, static fn (string $path) => $path !== '' && str_contains($request, $path)) === []
+            $this->pageHealth_failedRequests(),
+            static fn (string $request) => array_filter($paths, static fn (string $path) => str_contains($request, $path)) === []
         ));
         Assert::assertSame([], $failed, sprintf('Failed requests: %s', implode(', ', $failed)));
     }
@@ -93,20 +68,19 @@ trait PageHealthTrait
     #[Then('every image should be loaded')]
     public function everyImageShouldBeLoaded(): void
     {
-        $broken = $this->playwrightStrings(<<<'JS'
-            if (!vars.page) { throw new Error('No page - use "I access the URI path" first.'); }
+        $broken = $this->playwrightStrings(self::pageHealth_requirePage() . <<<'JS'
             return await vars.page.evaluate(async () => {
                 document.querySelectorAll('img[loading="lazy"]').forEach((image) => image.loading = 'eager');
-                const timeout = new Promise((resolve) => setTimeout(() => resolve('timeout'), 15000));
-                const results = await Promise.all([...document.images].map((image) => Promise.race([
-                    // decode() waits for the image and fails if it can't be shown - also for SVGs without a size
-                    image.decode().then(() => null, () => image.currentSrc || image.src || image.outerHTML.slice(0, 100)),
-                    timeout.then(() => `${image.currentSrc || image.src} (still loading after 15 s)`),
-                ])));
-                return results.filter((result) => result !== null);
+                const timeout = new Promise((resolve) => setTimeout(resolve, 15000, 'still loading after 15 s'));
+                const problems = await Promise.all([...document.images].map((image) => Promise.race([
+                    // decode() waits for the image and fails if it can't be shown - unlike naturalWidth, also fine for SVGs without a size
+                    image.decode().then(() => null, () => 'not loaded'),
+                    timeout,
+                ]).then((problem) => problem && `${image.currentSrc || image.src} (${problem})`)));
+                return problems.filter(Boolean);
             });
         JS);
-        Assert::assertSame([], $broken, sprintf('Images that are not loaded: %s', implode(', ', $broken)));
+        Assert::assertSame([], $broken, sprintf('Images: %s', implode(', ', $broken)));
     }
 
     /**
@@ -116,25 +90,39 @@ trait PageHealthTrait
     #[Then('every image should have an alt attribute')]
     public function everyImageShouldHaveAnAltAttribute(): void
     {
-        $withoutAlt = $this->playwrightStrings(<<<'JS'
-            if (!vars.page) { throw new Error('No page - use "I access the URI path" first.'); }
-            return await vars.page.evaluate(() => [...document.querySelectorAll('img:not([alt])')]
-                .filter((image) => !['presentation', 'none'].includes(image.getAttribute('role')) && !image.closest('[aria-hidden="true"]'))
-                .map((image) => image.currentSrc || image.src || image.outerHTML.slice(0, 100)));
+        $withoutAlt = $this->playwrightStrings(self::pageHealth_requirePage() . <<<'JS'
+            return await vars.page.locator('img:not([alt]):not([role=presentation]):not([role=none])').evaluateAll((images) => images
+                .filter((image) => !image.closest('[aria-hidden="true"]'))
+                .map((image) => image.currentSrc || image.src));
         JS);
         Assert::assertSame([], $withoutAlt, sprintf('Images without alt attribute: %s', implode(', ', $withoutAlt)));
     }
 
     /**
-     * @param 'js'|'requests' $kind
-     * @return list<string>
+     * @return list<string> e.g. "GET /missing.png (404)"
      */
-    private function pageHealth_recorded(string $kind): array
+    private function pageHealth_failedRequests(): array
     {
-        return $this->playwrightStrings(<<<'JS'
-            if (!vars.browserErrors) { throw new Error('No browser errors are recorded - use "browser errors are recorded" first.'); }
-            if (vars.page) { await vars.page.waitForLoadState('networkidle'); }
-            return vars.browserErrors[%s];
-        JS, $kind);
+        return $this->playwrightStrings(self::pageHealth_afterLoading() . <<<'JS'
+            const siteUnderTest = new URL("BASEURL").host;
+            return (await vars.page.requests())
+                .filter((request) => new URL(request.url()).host === siteUnderTest)
+                .map((request) => {
+                    const status = request.existingResponse()?.status() ?? 0;
+                    const failure = request.failure()?.errorText;
+                    return status >= 400 || failure ? `${request.method()} ${new URL(request.url()).pathname} (${failure ?? status})` : null;
+                })
+                .filter(Boolean);
+        JS);
+    }
+
+    private static function pageHealth_requirePage(): string
+    {
+        return 'if (!vars.page) { throw new Error(\'No page - use "I access the URI path" first.\'); }' . "\n";
+    }
+
+    private static function pageHealth_afterLoading(): string
+    {
+        return self::pageHealth_requirePage() . 'await vars.page.waitForLoadState("networkidle");' . "\n";
     }
 }

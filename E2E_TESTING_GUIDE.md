@@ -35,7 +35,7 @@ When the interaction is the feature (basket, checkout, login, forms with several
 journey that checks everything on its way (see [journeys](#one-journey-checks-everything-on-its-way)). Everything that
 isn't the behaviour under test is set up as test data rather than clicked together.
 
-Every page type also gets a smoke scenario (`PageHealthTrait`): record the browser errors, visit the page, then no
+Every page type also gets a smoke scenario (`PageHealthTrait`): visit the page, then no
 JavaScript errors, no failed requests, every image loaded and with an alt attribute. It catches what no
 feature scenario looks at - a script error, a missing asset or a broken image.
 
