@@ -80,6 +80,19 @@ class PlaywrightConnector
         $this->executeInternal($contextName, '// ' . $stepText);
     }
 
+    /**
+     * Groups the actions of a Behat step in the trace - the Trace Viewer shows them under the step text.
+     */
+    public function startStepGroup(string $contextName, string $stepText): void
+    {
+        $this->execute($contextName, sprintf("// %s\nawait context.tracing.group(%s);", $stepText, JsValue::of($stepText)));
+    }
+
+    public function endStepGroup(string $contextName): void
+    {
+        $this->execute($contextName, 'await context.tracing.groupEnd();');
+    }
+
     public function startTracing(
         string $contextName,
         string $featureFile,
@@ -134,11 +147,12 @@ class PlaywrightConnector
             // Playwright can only save a trace to a file (unlike screenshots, which can be returned as a
             // buffer). So write a temporary file in the bridge, hand its content back to PHP (which writes
             // it to $resultsDir), and delete it again - otherwise a stray second copy stays in playwright-bridge/.
+            // Not named "fs": some bridge copies hand the script an "fs" parameter, and redeclaring it is a SyntaxError.
             const traceFile = %s;
             await context.tracing.stop({ path: traceFile });
-            const fs = require("fs");
-            const traceBase64 = fs.readFileSync(traceFile, "base64");
-            fs.unlinkSync(traceFile);
+            const nodeFs = require("fs");
+            const traceBase64 = nodeFs.readFileSync(traceFile, "base64");
+            nodeFs.unlinkSync(traceFile);
             return traceBase64;
             '// language=PHP
                 ,

@@ -579,9 +579,11 @@ IDE "run" buttons usually don't work when Behat runs in a container - use the CL
   automatically. Both go to the results directory: `e2e-results/` where Behat runs, or what you pass to
   `setupPlaywright($resultsDir)`.
 - **Traces**: failed `@playwright` scenarios write `report_<feature>_<scenario>.zip` to the results directory - open it
-  with `npx playwright show-trace <file>`. For traces of every scenario (or none), call
+  with `npx playwright show-trace <file>`. Each Behat step is a group in the trace, so the Trace Viewer shows the
+  actions per step. For traces of every scenario (or none), call
   `$this->setPlaywrightTracingMode(self::PLAYWRIGHT_TRACING_MODE_ALWAYS)` (or `..._OFF`; default `..._ON_ERROR`) in
-  the `FeatureContext` constructor.
+  the `FeatureContext` constructor. For a single run, set `E2E_TRACE=on-error|always|off` where Behat runs - it wins
+  over `setPlaywrightTracingMode()` (with `docker compose exec`, pass it on with `-e E2E_TRACE`).
 - **Server logs**: an exception in the SUT only shows up as error page, the stack trace is in the logs. The Flow logs
   (`Data/Logs`) are cleared before every scenario, and a failed scenario gets its log and exception files copied to
   `logs_<feature>_<line>_<scenario>/` in the results directory. If the SUT logs elsewhere, call

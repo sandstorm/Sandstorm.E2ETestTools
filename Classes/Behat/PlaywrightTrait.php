@@ -95,6 +95,13 @@ trait PlaywrightTrait
     private int $playwrightTracingMode = self::PLAYWRIGHT_TRACING_MODE_ON_ERROR;
 
     /**
+     * Whether the current scenario records a trace - each step then opens a group in it.
+     */
+    private bool $playwrightTracing = false;
+
+    private bool $playwrightStepGroupOpen = false;
+
+    /**
      * Data/Logs by default; null in projects without Flow.
      */
     private ?string $flowLogsDirectory = null;
@@ -114,10 +121,29 @@ trait PlaywrightTrait
 
     /**
      * When traces are written: self::PLAYWRIGHT_TRACING_MODE_ON_ERROR (default), _ALWAYS or _OFF.
+     * The environment variable E2E_TRACE=on-error|always|off overrides it for a single run.
      */
     protected final function setPlaywrightTracingMode(int $mode): void
     {
         $this->playwrightTracingMode = $mode;
+    }
+
+    /**
+     * The tracing mode of this run: E2E_TRACE if set, otherwise the one from setPlaywrightTracingMode().
+     */
+    protected final function getPlaywrightTracingMode(): int
+    {
+        $mode = getenv('E2E_TRACE');
+        return match ($mode) {
+            false, '' => $this->playwrightTracingMode,
+            'on-error' => self::PLAYWRIGHT_TRACING_MODE_ON_ERROR,
+            'always' => self::PLAYWRIGHT_TRACING_MODE_ALWAYS,
+            'off' => self::PLAYWRIGHT_TRACING_MODE_OFF,
+            default => throw new \RuntimeException(
+                sprintf('E2E_TRACE must be "on-error", "always" or "off" - got "%s".', $mode),
+                1728000001
+            ),
+        };
     }
 
     /**
@@ -176,7 +202,9 @@ trait PlaywrightTrait
         $this->playwrightContext = (string)preg_replace('/[^a-zA-Z0-9_]/', '', basename($event->getFeature()->getFile()) . '_' . $event->getScenario()->getTitle());
         $this->playwrightConnector->stopContext($this->playwrightContext);
         $this->playwrightConnector->setSystemUnderTestUrlModifier(null);
-        if ($this->playwrightTracingMode !== self::PLAYWRIGHT_TRACING_MODE_OFF) {
+        $this->playwrightStepGroupOpen = false;
+        $this->playwrightTracing = $this->getPlaywrightTracingMode() !== self::PLAYWRIGHT_TRACING_MODE_OFF;
+        if ($this->playwrightTracing) {
             $this->playwrightConnector->startTracing(
                 $this->playwrightContext,
                 $event->getFeature()->getFile(),
@@ -188,9 +216,10 @@ trait PlaywrightTrait
     #[AfterScenario('@playwright')]
     public function playwrightAfterScenario(AfterScenarioScope $event): void
     {
-        if ($this->playwrightContext && $this->playwrightTracingMode !== self::PLAYWRIGHT_TRACING_MODE_OFF) {
-            $keepTrace = ($this->playwrightTracingMode === self::PLAYWRIGHT_TRACING_MODE_ON_ERROR && $event->getTestResult()->getResultCode() === TestResult::FAILED)
-                || $this->playwrightTracingMode === self::PLAYWRIGHT_TRACING_MODE_ALWAYS;
+        if ($this->playwrightContext && $this->playwrightTracing) {
+            $mode = $this->getPlaywrightTracingMode();
+            $keepTrace = ($mode === self::PLAYWRIGHT_TRACING_MODE_ON_ERROR && $event->getTestResult()->getResultCode() === TestResult::FAILED)
+                || $mode === self::PLAYWRIGHT_TRACING_MODE_ALWAYS;
             $this->playwrightConnector->finishTracing(
                 $this->playwrightContext,
                 $event->getFeature()->getFile(),
@@ -232,13 +261,33 @@ trait PlaywrightTrait
     #[BeforeStep]
     public function playwrightBeforeStep(BeforeStepScope $event): void
     {
-        if ($this->playwrightContext) {
-            $this->playwrightConnector->setStepForDebugging($this->playwrightContext, $event->getStep()->getText());
+        if (!$this->playwrightContext) {
+            return;
+        }
+        $stepText = $event->getStep()->getKeyword() . ' ' . $event->getStep()->getText();
+        if ($this->playwrightTracing) {
+            $this->playwrightConnector->startStepGroup($this->playwrightContext, $stepText);
+            $this->playwrightStepGroupOpen = true;
+        } else {
+            $this->playwrightConnector->setStepForDebugging($this->playwrightContext, $stepText);
         }
     }
 
     #[AfterStep]
     public function playwrightAfterStep(AfterStepScope $event): void
+    {
+        try {
+            $this->takeErrorScreenshotOfFailedStep($event);
+        } finally {
+            // after the error screenshot, so it's part of the step's group
+            if ($this->playwrightContext && $this->playwrightStepGroupOpen) {
+                $this->playwrightStepGroupOpen = false;
+                $this->playwrightConnector->endStepGroup($this->playwrightContext);
+            }
+        }
+    }
+
+    private function takeErrorScreenshotOfFailedStep(AfterStepScope $event): void
     {
         if ($this->playwrightContext && $event->getTestResult()->getResultCode() === TestResult::FAILED) {
             $errorScreenshotFileName = (string)preg_replace('/[^a-zA-Z0-9_]/', '', basename($event->getFeature()->getFile()) . '_' . $event->getStep()->getText());
