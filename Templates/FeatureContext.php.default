@@ -15,6 +15,7 @@ use Sandstorm\E2ETestTools\Behat\NeosBackendControlTrait;
 use Sandstorm\E2ETestTools\Behat\NodeImportTrait;
 use Sandstorm\E2ETestTools\Behat\PageAssertionsTrait;
 use Sandstorm\E2ETestTools\Behat\PlaywrightTrait;
+use Sandstorm\E2ETestTools\Behat\StepTimingTrait;
 
 /**
  * This class is copied to new projects when setting up behat E2E tests via Sandstorm.E2ETestTools
@@ -47,6 +48,9 @@ class FeatureContext implements Context
 
     // "I pause for debugging" (see README, Debugging)
     use DebuggingTrait;
+
+    // Durations of steps and scenarios with E2E_TIMINGS=1 (see README, Debugging)
+    use StepTimingTrait;
 
     // Mocked third-party APIs: use WireMockTrait and call setupWireMock() in the constructor (see README)
 

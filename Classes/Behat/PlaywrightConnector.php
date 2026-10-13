@@ -23,6 +23,13 @@ class PlaywrightConnector
     private ?Closure $systemUnderTestUrlModifier = null;
 
     /**
+     * Bridge requests and the time spent in them since the last {@see takeRequestStatistics()} - for {@see StepTimingTrait}.
+     */
+    private static int $requestCount = 0;
+
+    private static float $requestMs = 0.0;
+
+    /**
      * @param string $playwrightApiUrl Playwright API URL, as seen from the perspective of the Behat test runner (inside the Docker container)
      * @param string $systemUnderTestUrl System under Test URL, as seen from Playwright
      * @param string $resultsDir Where trace zips get written (relative to CWD)
@@ -40,6 +47,19 @@ class PlaywrightConnector
     public function setSystemUnderTestUrlModifier(?Closure $urlModifier): void
     {
         $this->systemUnderTestUrlModifier = $urlModifier;
+    }
+
+    /**
+     * The bridge requests since the last call, and resets the count.
+     *
+     * @return array{calls: int, ms: float}
+     */
+    public static function takeRequestStatistics(): array
+    {
+        $statistics = ['calls' => self::$requestCount, 'ms' => self::$requestMs];
+        self::$requestCount = 0;
+        self::$requestMs = 0.0;
+        return $statistics;
     }
 
     public function stopContext(string $contextName)
@@ -256,7 +276,10 @@ class PlaywrightConnector
             throw new \RuntimeException('Not supported');
         }
 
+        $requestStart = hrtime(true);
         $curlResult = curl_exec($curlHandle);
+        self::$requestCount++;
+        self::$requestMs += (hrtime(true) - $requestStart) / 1e6;
         if ($curlResult === false) {
             $errorCode = curl_errno($curlHandle);
             $error = curl_error($curlHandle);

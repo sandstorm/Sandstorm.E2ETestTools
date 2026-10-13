@@ -61,6 +61,7 @@ see [CONTRIBUTING.md](CONTRIBUTING.md).
 - [Running Behat Tests](#running-behat-tests)
   - [Debugging](#debugging)
 - [Migrating tests from Neos 8](#migrating-tests-from-neos-8)
+- [Upgrading the playwright-bridge](#upgrading-the-playwright-bridge)
 - [Troubleshooting](#troubleshooting)
 
 <!-- /TOC -->
@@ -195,6 +196,12 @@ it at the root of the Git repository, next to the Neos root directory:
 cp -r Packages/Application/Sandstorm.E2ETestTools/Templates/playwright-bridge ./playwright-bridge
 cd playwright-bridge && npm ci && npx playwright install chromium && cd ..
 ```
+
+It uses Playwright 1.64 and needs Node 20 or newer (`.nvmrc`); its `Dockerfile` (for CI) is based on the Playwright
+image of the same version. Keep the two in sync when you update Playwright - the image brings the browsers. The scripts
+the steps send get `context` (the scenario's
+[BrowserContext](https://playwright.dev/docs/api/class-browsercontext)), `vars` (kept between the steps of a
+scenario), `expect` ([assertions](https://playwright.dev/docs/test-assertions)), `browser`, `contextName` and `fs`.
 
 It runs on your host (it drives a real browser), Behat usually in your app container. `setupPlaywright()` reads two
 environment variables, e.g. from your `docker-compose.yml`:
@@ -467,6 +474,11 @@ Comes with `FusionRenderingTrait`.
 
 - `I pause for debugging` - see [Debugging](#debugging)
 
+### StepTimingTrait
+
+No steps: with `E2E_TIMINGS=1` it writes the duration of every step and scenario to `step-timings.jsonl` in the results
+directory - see [Debugging](#debugging).
+
 ### WireMockTrait
 
 - `the API :api path :path on :method serves response :file [with status :status]`
@@ -482,9 +494,14 @@ Setup and details: [Mocked third-party APIs](#mocked-third-party-apis-wiremock).
   the CSS selector steps. `... matches ...` compares for equality, not as regular expression.
 - Escaped quotes (`\"`) inside a `"..."` parameter don't match the step - put values with double quotes in single
   quotes (`'{"all":true}'`).
+- The assertions on the page wait for the expected state (Playwright's
+  [web-first assertions](https://playwright.dev/docs/test-assertions)): up to 5 seconds, `there should be the text
+  ... on the page` up to 15. A negative check (`should not`, `hidden`) passes as soon as the state is reached.
 - Screenshots document a result, they don't check it.
 - Project-specific steps go into your `FeatureContext` or a trait of your project; the shipped traits show how to drive
-  the browser with `$this->playwrightConnector->execute()`.
+  the browser with `$this->playwrightConnector->execute()`. Pass step parameters with `JsValue::of()` (a JS literal)
+  and, inside a CSS selector, with `CssValue::of()` (a CSS string, e.g. `[data-name=%s]`). Assert with `expect` in
+  the script - it waits and reports expected and received value - instead of returning a value and asserting in PHP.
 
 ### Examples by level
 
@@ -594,6 +611,11 @@ IDE "run" buttons usually don't work when Behat runs in a container - use the CL
 - **Pause the browser**: `And I pause for debugging` opens the Playwright inspector (`page.pause()`) on the bridge
   side. It needs a visible browser (`HEADLESS=false`) and Behat run with `PAUSE_FOR_DEBUGGING=true`, otherwise the step
   fails right away. The SUT and its database keep the scenario's state, so you can click around.
+- **Slow steps**: use `StepTimingTrait` in your `FeatureContext` and run Behat with `E2E_TIMINGS=1` (with
+  `docker compose exec`: `-e E2E_TIMINGS`). `step-timings.jsonl` in the results directory then has one line per step
+  and scenario: feature, line, step text, duration (`ms`), result, and the number of requests to the bridge with their
+  time (`bridgeCalls`, `bridgeMs`) - the rest is PHP (fixtures, cache, database). The kickstart sums it up with
+  `mise run tests:e2e:timings <label>` and compares two labels with `mise run tests:e2e:timings:compare <a> <b>`.
 - **Let an agent analyse failures**: the results directory holds screenshots, traces, server logs and - with
   `--format junit --out <dir>` - the JUnit report. Tell a coding agent like Claude where it is.
 
@@ -627,6 +649,32 @@ In the feature files ([Fixtures](#fixtures) shows the result):
 | `I have the following nodes from file "x.yaml" [with overwrites]` | `... from file "x.yaml" in site "site" [with overwrites:]` |
 | overwrite columns `identifier \| property \| value` | `nodeAggregateId \| property \| value` |
 | YAML exported with the Neos 8 button (nodes keyed by identifier, nested `children`) | rejected - export again ([Exporting existing content](#exporting-existing-content)) |
+
+# Upgrading the playwright-bridge
+
+Your copy of the bridge ([Setup step 5](#5-playwright-playwright-bridge)) doesn't update with the package. Compare it
+with [`Templates/playwright-bridge/`](Templates/playwright-bridge) after an update - if you haven't changed it, replace
+it and run `npm ci && npx playwright install chromium`. Build the CI image again.
+
+**To Playwright 1.64** (from 1.51):
+
+- The steps assert with `expect` - a bridge that doesn't hand it to the scripts fails the first `@playwright` scenario
+  with "The playwright-bridge is too old" (#1728000002). The scripts now get
+  `(contextName, browser, context, vars, fs, expect)`; the template had `(context, vars)`, some project copies the
+  long list already. A custom step that declares one of these names itself (e.g. `const fs = require("fs")`) is a
+  `SyntaxError` now - rename the variable.
+- `package.json` has `@playwright/test` (for `expect`) next to `playwright`, both 1.64.0; the `Dockerfile` is based on
+  `mcr.microsoft.com/playwright:v1.64.0-noble`; Node 20 or newer (`.nvmrc`).
+- `chromium.launch()` no longer takes `devtools` (removed in 1.58) - if your copy passes it, drop it (or use
+  `args: ['--auto-open-devtools-for-tabs']`). `HEADLESS=false` or `--no-headless` show the browser.
+- Since 1.57 the browser is a "Chrome for Testing" build - screenshots can differ by a few pixels. Compare visual
+  baselines again, if you have any.
+- The assertions of `PageAssertionsTrait`, `FormInteractionTrait`, `BrowserStateTrait` and `the URI path should be` /
+  `there should be the text ... on the page` wait for the expected state now instead of checking once - a step that
+  was flaky because of a slow page passes now. Their failure messages come from Playwright (expected, received, call
+  log) instead of PHPUnit.
+- `I delete the cookie` uses `context.clearCookies({name})` - other cookies stay as they are (before, all were
+  removed and added again).
 
 # Troubleshooting
 

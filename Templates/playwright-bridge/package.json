@@ -1,7 +1,11 @@
 {
     "private": true,
+    "engines": {
+        "node": ">=20"
+    },
     "dependencies": {
-        "@hapi/hapi": "^21.4.0",
-        "playwright": "1.51.1"
+        "@hapi/hapi": "^21.4.10",
+        "@playwright/test": "1.64.0",
+        "playwright": "1.64.0"
     }
 }

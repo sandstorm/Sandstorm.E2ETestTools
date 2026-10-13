@@ -49,10 +49,13 @@ use Sandstorm\E2ETestTools\Debugging\LogDirectory;
  * ");
  *
  *
- * $actualHeadlineContent = $this->playwrightConnector->execute($this->requirePlaywrightContext(), "
- *     return await vars.page.textContent('h2');
- * ");
- * Assert::assertEquals($headlineName, $actualHeadlineContent, 'Headlines do not match');
+ * Assertions: Playwright's web-first assertions (`expect`) wait until the page is in the expected state and fail with
+ * a readable message - read values into PHP only for what expect can't check:
+ *
+ * $this->playwrightConnector->execute($this->requirePlaywrightContext(), sprintf(
+ *     'await expect(vars.page.getByRole("heading", {level: 2})).toHaveText(%s);',
+ *     JsValue::of($headline)
+ * ));
  */
 trait PlaywrightTrait
 {
@@ -100,6 +103,11 @@ trait PlaywrightTrait
     private bool $playwrightTracing = false;
 
     private bool $playwrightStepGroupOpen = false;
+
+    /**
+     * The bridge is checked once per Behat run.
+     */
+    private static bool $playwrightBridgeChecked = false;
 
     /**
      * Data/Logs by default; null in projects without Flow.
@@ -203,6 +211,16 @@ trait PlaywrightTrait
         $this->playwrightConnector->stopContext($this->playwrightContext);
         $this->playwrightConnector->setSystemUnderTestUrlModifier(null);
         $this->playwrightStepGroupOpen = false;
+        if (!self::$playwrightBridgeChecked) {
+            // older copies of the bridge hand the scripts only "context" and "vars" - the steps need "expect"
+            if ($this->playwrightConnector->execute($this->playwrightContext, 'return typeof expect;') !== 'function') {
+                throw new \RuntimeException(
+                    'The playwright-bridge is too old: its scripts get no "expect". Update your copy from Sandstorm.E2ETestTools/Templates/playwright-bridge - see "Upgrading the playwright-bridge" in the README of Sandstorm.E2ETestTools.',
+                    1728000002
+                );
+            }
+            self::$playwrightBridgeChecked = true;
+        }
         $this->playwrightTracing = $this->getPlaywrightTracingMode() !== self::PLAYWRIGHT_TRACING_MODE_OFF;
         if ($this->playwrightTracing) {
             $this->playwrightConnector->startTracing(

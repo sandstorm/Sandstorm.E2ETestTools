@@ -8,7 +8,6 @@ use Behat\Behat\Hook\Scope\BeforeScenarioScope;
 use Behat\Hook\BeforeScenario;
 use Behat\Step\Then;
 use Behat\Step\When;
-use PHPUnit\Framework\Assert;
 use Sandstorm\E2ETestTools\Playwright\JsValue;
 
 /**
@@ -58,7 +57,7 @@ trait FormInteractionTrait
     #[Then('the field :label should have the value :value')]
     public function theFieldShouldHaveTheValue(string $label, string $value): void
     {
-        Assert::assertSame($value, $this->formInteraction_run('getByLabel(%s, {exact: true}).inputValue()', $label), sprintf('Unexpected value of the field "%s".', $label));
+        $this->formInteraction_expect('getByLabel(%s, {exact: true})', 'toHaveValue(%s)', $label, $value);
     }
 
     #[When('I check the checkbox :label')]
@@ -76,13 +75,13 @@ trait FormInteractionTrait
     #[Then('the checkbox :label should be checked')]
     public function theCheckboxShouldBeChecked(string $label): void
     {
-        Assert::assertTrue($this->formInteraction_run('getByLabel(%s, {exact: true}).isChecked()', $label), sprintf('The checkbox "%s" is not checked.', $label));
+        $this->formInteraction_expect('getByLabel(%s, {exact: true})', 'toBeChecked()', $label);
     }
 
     #[Then('the checkbox :label should not be checked')]
     public function theCheckboxShouldNotBeChecked(string $label): void
     {
-        Assert::assertFalse($this->formInteraction_run('getByLabel(%s, {exact: true}).isChecked()', $label), sprintf('The checkbox "%s" is checked.', $label));
+        $this->formInteraction_expect('getByLabel(%s, {exact: true})', 'not.toBeChecked()', $label);
     }
 
     #[When('I choose the radio button :label')]
@@ -100,8 +99,12 @@ trait FormInteractionTrait
     #[Then('the field :label should have :option selected')]
     public function theFieldShouldHaveSelected(string $label, string $option): void
     {
-        $selected = $this->formInteraction_run('getByLabel(%s, {exact: true}).evaluate((select) => Array.from(select.selectedOptions).map((option) => option.label))', $label);
-        Assert::assertContains($option, (array)$selected, sprintf('"%s" is not selected in the field "%s" (selected: %s).', $option, $label, implode(', ', (array)$selected)));
+        $this->playwrightConnector->execute($this->requirePlaywrightContext(), sprintf(
+            'await expect.poll(() => vars.page.getByLabel(%s, {exact: true}).evaluate((select) => Array.from(select.selectedOptions).map((option) => option.label)), {message: %s}).toContain(%s);',
+            JsValue::of($label),
+            JsValue::of(sprintf('selected options of the field "%s"', $label)),
+            JsValue::of($option)
+        ));
     }
 
     /**
@@ -133,6 +136,18 @@ trait FormInteractionTrait
     public function iPressTheKey(string $key): void
     {
         $this->playwrightConnector->execute($this->requirePlaywrightContext(), sprintf('await vars.page.keyboard.press(%s);', JsValue::of($key)));
+    }
+
+    /**
+     * A web-first assertion: `await expect(vars.page.<locator>).<matcher>` waits for the expected state and fails with
+     * Playwright's message. %s in $locator and $matcher are replaced by the arguments as JS literals, in this order.
+     */
+    private function formInteraction_expect(string $locator, string $matcher, string ...$arguments): void
+    {
+        $this->playwrightConnector->execute(
+            $this->requirePlaywrightContext(),
+            'await expect(vars.page.' . sprintf($locator . ').' . $matcher, ...array_map(JsValue::of(...), $arguments)) . ';'
+        );
     }
 
     /**

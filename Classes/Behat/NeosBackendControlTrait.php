@@ -46,7 +46,7 @@ trait NeosBackendControlTrait
 
             await vars.page.getByPlaceholder(%s, {exact: true}).fill(%s);
             await vars.page.getByPlaceholder(%s, {exact: true}).fill(%s);
-            await vars.page.click(`button:has-text("Login")`);
+            await vars.page.getByRole("button", {name: "Login"}).click();
             // a failed login stays on the login page
             await vars.page.waitForURL((url) => !url.pathname.startsWith("/neos/login"), {timeout: 10000});
             ',
@@ -64,7 +64,7 @@ trait NeosBackendControlTrait
             // language=JavaScript
             '
             // open the main menu (Neos 9 UI), then follow the module link
-            await vars.page.click(`#neos-MenuToggler`);
+            await vars.page.locator("#neos-MenuToggler").click();
             await vars.page.locator(`[class*="drawer"]`).getByRole("link", {name: %s, exact: true}).first().click();
             ',
             JsValue::of($menuItem)
@@ -87,8 +87,10 @@ trait NeosBackendControlTrait
             // language=JavaScript
             '
             await vars.page.locator("body div[class*=leftSideBar__top]").getByRole("button", {name: %s}).click();
-            await vars.page.waitForSelector(`div#neos-Inspector`);
-            vars.neosContentFrame = await vars.page.frame(`neos-content-main`);
+            await vars.page.locator("div#neos-Inspector").waitFor();
+            // page.frame() does not wait - the frame of the content canvas exists once its iframe element does
+            await vars.page.locator("iframe[name=neos-content-main]").waitFor({state: "attached"});
+            vars.neosContentFrame = vars.page.frame("neos-content-main");
             ',
             JsValue::of($documentTitle)
         ));
@@ -100,12 +102,10 @@ trait NeosBackendControlTrait
     #[Then('the URI path should be :uriPath')]
     public function theUriPathShouldBe(string $uriPath): void
     {
-        $actual = $this->playwrightConnector->execute($this->requirePlaywrightContext(), sprintf('
-            const expected = %s;
-            await vars.page.waitForURL((url) => url.pathname.replace(/\\/$/, "") === expected, {timeout: 5000}).catch(() => {});
-            return vars.page.evaluate(() => window.location.pathname);
-        ', JsValue::of(rtrim($uriPath, '/'))));
-        Assert::assertEquals(rtrim($uriPath, '/'), rtrim($actual, '/'));
+        $this->playwrightConnector->execute($this->requirePlaywrightContext(), sprintf(
+            'await expect.poll(() => new URL(vars.page.url()).pathname.replace(/\\/$/, ""), {message: "URI path", timeout: 5000}).toBe(%s);',
+            JsValue::of(rtrim($uriPath, '/'))
+        ));
     }
 
     /**
@@ -115,7 +115,7 @@ trait NeosBackendControlTrait
     public function thereShouldBeTheTextOnThePage(string $expected): void
     {
         $this->playwrightConnector->execute($this->requirePlaywrightContext(), sprintf(
-            'await vars.page.getByText(%s).first().waitFor({state: "attached"});',
+            'await expect(vars.page.getByText(%s).first()).toBeAttached({timeout: 15000});',
             JsValue::of($expected)
         ));
     }
@@ -134,7 +134,8 @@ trait NeosBackendControlTrait
     {
         $actualStatusCode = $this->playwrightConnector->execute(
             $this->requirePlaywrightContext(),
-            'return vars.response.status();'
+            // goto() and reload() return null for a navigation within the page (e.g. to an anchor)
+            'if (!vars.response) { throw new Error("No response of a page load - use \\"I access the URI path\\" first."); } return vars.response.status();'
         );
         Assert::assertEquals($status, $actualStatusCode, 'HTTP response status code mismatch');
     }
