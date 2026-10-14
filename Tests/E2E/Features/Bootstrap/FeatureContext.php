@@ -11,10 +11,15 @@ use Sandstorm\E2ETestTools\Behat\BrowserStateTrait;
 use Sandstorm\E2ETestTools\Behat\DebuggingTrait;
 use Sandstorm\E2ETestTools\Behat\FormInteractionTrait;
 use Sandstorm\E2ETestTools\Behat\FusionRenderingTrait;
+use Sandstorm\E2ETestTools\Behat\MailpitTrait;
+use Sandstorm\E2ETestTools\Behat\NavigationTrait;
 use Sandstorm\E2ETestTools\Behat\NeosBackendControlTrait;
+use Sandstorm\E2ETestTools\Behat\NetworkTrait;
 use Sandstorm\E2ETestTools\Behat\NodeImportTrait;
 use Sandstorm\E2ETestTools\Behat\PageAssertionsTrait;
+use Sandstorm\E2ETestTools\Behat\PageHealthTrait;
 use Sandstorm\E2ETestTools\Behat\PlaywrightTrait;
+use Sandstorm\E2ETestTools\Behat\StepTimingTrait;
 use Sandstorm\E2ETestTools\Behat\WireMockTrait;
 
 /**
@@ -27,16 +32,23 @@ class FeatureContext implements Context
     use FlowEntitiesTrait;
     use PlaywrightTrait;
     use FusionRenderingTrait;
+    use NavigationTrait;
     use NeosBackendControlTrait;
     use NodeImportTrait;
     use PageAssertionsTrait;
     use FormInteractionTrait;
     use BrowserStateTrait;
+    use NetworkTrait;
+    use PageHealthTrait;
     use DebuggingTrait;
+    use StepTimingTrait;
     use WireMockTrait;
+    use MailpitTrait;
 
-    // only for testing the fixture export of this package
+    // only for testing this package: the fixture export, mails without a mailer, failure messages
     use FixtureExportTrait;
+    use MailFixtureTrait;
+    use StepFailureTrait;
 
     public function __construct()
     {

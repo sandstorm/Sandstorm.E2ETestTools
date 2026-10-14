@@ -9,4 +9,4 @@ Feature: Button component
         type = 'primary'
       }
       """
-    Then in the fusion output, the inner HTML of CSS selector "button span" matches "Click me"
+    Then the inner HTML of "button span" in the Fusion output should be "Click me"

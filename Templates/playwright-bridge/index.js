@@ -38,6 +38,10 @@
  *     - `context` is the Playwright [BrowserContext](https://playwright.dev/docs/api/class-browsercontext) object
  *     - `vars` is a writable JS Object (`{}`) which you can use to pass information from one call to `/exec/[contextName]` to the next.
  *       Simple `const myVar` variable declarations are NOT preserved to the next invocation (because I do not know how ;).
+ *     - `expect` is the [assertion library](https://playwright.dev/docs/test-assertions) of Playwright - its web-first
+ *       assertions (`await expect(locator).toHaveText(...)`) wait until the condition is met, or fail with a readable message
+ *     - `contextName` (the name from the URL), `browser` (the shared [Browser](https://playwright.dev/docs/api/class-browser))
+ *       and `fs` (`require("fs").promises`)
  *   - The REPLY is sent as soon as the step has completed; so that means we wait until everything has run - the API behaves SYNCHRONOUSLY.
  *     - In case of an error (also a syntax error in the script), a 500 status code is sent.
  *     - In case of success, a 200 status code is sent.
@@ -60,12 +64,18 @@
  */
 
 const { chromium } = require('playwright');
+const { expect } = require('@playwright/test');
 
 const Hapi = require('@hapi/hapi');
+const fs = require('fs').promises;
+
+// expect() colours its messages for a terminal - they end up in PHP exceptions, so without the escape codes
+const withoutAnsiColors = (text) => text.replace(/\u001b\[[0-9;]*m/g, '');
 
 const init = async () => {
-    // HEADLESS=false node index.js opens a visible browser to watch the tests (or debug them)
-    const browser = await chromium.launch({headless: process.env.HEADLESS !== 'false'});
+    // HEADLESS=false node index.js (or node index.js --no-headless) opens a visible browser to watch the tests (or debug them)
+    const headless = process.env.HEADLESS !== 'false' && !process.argv.slice(2).includes('--no-headless');
+    const browser = await chromium.launch({headless});
 
     // the "key" is the context identifier (from the URL)
     // the "value" is an object: {
@@ -108,8 +118,15 @@ const init = async () => {
 
             try {
                 // API towards the script - inside the try, so a syntax error is reported like any other error
-                const fn = eval("(async (context, vars) => {\n" + payload + "\n});");
-                const returnValue = await fn(currentlyKnownContexts[contextName].playwrightContext, currentlyKnownContexts[contextName].vars);
+                const fn = eval("(async (contextName, browser, context, vars, fs, expect) => {\n" + payload + "\n});");
+                const returnValue = await fn(
+                    contextName,
+                    browser,
+                    currentlyKnownContexts[contextName].playwrightContext,
+                    currentlyKnownContexts[contextName].vars,
+                    fs,
+                    expect
+                );
                 console.log("Finished execution...");
                 return h.response(JSON.stringify({
                     error: null,
@@ -117,9 +134,10 @@ const init = async () => {
                     js: wrapForDebug(currentlyKnownContexts[contextName].script)
                 }));
             } catch (error) {
-                console.log(`ERROR in context ${contextName}: ${error}`)
+                const message = withoutAnsiColors(String(error));
+                console.log(`ERROR in context ${contextName}: ${message}`)
                 return h.response(JSON.stringify({
-                    error: error.toString(),
+                    error: message,
                     returnValue: null,
                     js: wrapForDebug(currentlyKnownContexts[contextName].script)
                 })).code(500)
@@ -166,8 +184,11 @@ const beginBlock = `
 // and then run it using:     PWDEBUG=1 node test.js
 
 const { chromium } = require('playwright');
+const { expect } = require('@playwright/test');
+const fs = require('fs').promises;
 
 (async () => {
+const contextName = 'debug';
 const browser = await chromium.launch({headless: false, slowMo: 100});
 const context = await browser.newContext();
 const vars = {};

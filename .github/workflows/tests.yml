@@ -56,7 +56,7 @@ jobs:
       # change to the Dockerfile or a composer.json; the other images are pulled meanwhile
       - name: Build the distribution
         run: |
-          $COMPOSE pull --quiet maria-db redis-cache wiremock &
+          $COMPOSE pull --quiet maria-db redis-cache wiremock mailpit &
           $COMPOSE build
           wait
 

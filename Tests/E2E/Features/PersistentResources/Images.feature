@@ -4,7 +4,7 @@
 Feature: Image fixtures
 
   Background:
-    Given I have a site for Site Node "site" with name "TestSite"
+    Given I have a site for the site node "site" with name "TestSite"
     And I have the following images:
       | Image ID                             | Path                                                                                    | Collection | Filename      | Relative Publication Path | Copyright Notice    |
       | 0e4b3bb6-2b8c-4bcf-9d3f-3b4f5c6d7e8f | Application/Sandstorm.E2ETestTools/Tests/E2E/Features/PersistentResources/landscape.png | persistent | landscape.png |                           | © Test photographer |
@@ -20,8 +20,8 @@ Feature: Image fixtures
       """
       testcase = Sandstorm.E2ETestTools.TestSite:Content.Image
       """
-    Then in the fusion output, the inner HTML of CSS selector "figcaption" matches "© Test photographer"
-    And in the fusion output, the attributes of CSS selector "img" are:
+    Then the inner HTML of "figcaption" in the Fusion output should be "© Test photographer"
+    And the attributes of "img" in the Fusion output should be:
       | Key | Value             |
       | alt | A green landscape |
 

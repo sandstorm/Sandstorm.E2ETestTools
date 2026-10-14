@@ -26,6 +26,6 @@ trait DebuggingTrait
         if (getenv('PAUSE_FOR_DEBUGGING') !== 'true') {
             throw new \RuntimeException('"I pause for debugging" needs Behat started with PAUSE_FOR_DEBUGGING=true - otherwise the bridge request times out after 30 seconds.', 1728120002);
         }
-        $this->playwrightConnector->execute($this->requirePlaywrightContext(), 'await vars.page.pause();');
+        $this->playwrightRun('await vars.page.pause();');
     }
 }

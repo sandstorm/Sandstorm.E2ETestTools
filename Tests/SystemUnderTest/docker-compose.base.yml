@@ -26,6 +26,8 @@ services:
       WIREMOCK_ADMIN_URL: 'http://wiremock:8080'
       # third-party API of the test site, answered by WireMock (see Tests/E2E/Features/WireMock/)
       WEATHER_API_URL: 'http://wiremock:8080/weather-api'
+      # MailpitTrait (see Tests/E2E/Features/Mail/)
+      MAILPIT_API_URL: 'http://mailpit:8025'
       PAUSE_FOR_DEBUGGING: '${PAUSE_FOR_DEBUGGING:-false}'
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -47,6 +49,7 @@ services:
       - redis-cache
       - playwright-bridge
       - wiremock
+      - mailpit
 
   maria-db:
     networks:
@@ -77,5 +80,10 @@ services:
 
   wiremock:
     image: wiremock/wiremock:3.13.1
+    networks:
+      - e2e
+
+  mailpit:
+    image: axllent/mailpit:v1.31.5
     networks:
       - e2e

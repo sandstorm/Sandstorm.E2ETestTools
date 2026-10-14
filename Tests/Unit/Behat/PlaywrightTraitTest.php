@@ -1,0 +1,223 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Sandstorm\E2ETestTools\Tests\Unit\Behat;
+
+use Neos\Flow\Tests\UnitTestCase;
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\Test;
+use Sandstorm\E2ETestTools\Behat\PlaywrightTrait;
+use Sandstorm\E2ETestTools\Playwright\JsCode;
+
+/**
+ * Tracing and running scripts need the bridge and are covered by the E2E suite - only the choice of the tracing mode
+ * and the scripts sent to the bridge are tested.
+ */
+class PlaywrightTraitTest extends UnitTestCase
+{
+    private string|false $e2eTrace;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->e2eTrace = getenv('E2E_TRACE');
+        putenv('E2E_TRACE');
+    }
+
+    protected function tearDown(): void
+    {
+        putenv($this->e2eTrace === false ? 'E2E_TRACE' : 'E2E_TRACE=' . $this->e2eTrace);
+        parent::tearDown();
+    }
+
+    #[Test]
+    public function withoutE2eTraceTheConfiguredModeIsUsed(): void
+    {
+        $context = $this->contextWithTracingMode(PlaywrightTraitTestContext::PLAYWRIGHT_TRACING_MODE_ALWAYS);
+
+        self::assertSame(PlaywrightTraitTestContext::PLAYWRIGHT_TRACING_MODE_ALWAYS, $context->tracingMode());
+    }
+
+    #[Test]
+    public function anEmptyE2eTraceCountsAsUnset(): void
+    {
+        putenv('E2E_TRACE=');
+        $context = $this->contextWithTracingMode(PlaywrightTraitTestContext::PLAYWRIGHT_TRACING_MODE_OFF);
+
+        self::assertSame(PlaywrightTraitTestContext::PLAYWRIGHT_TRACING_MODE_OFF, $context->tracingMode());
+    }
+
+    /**
+     * @return array<string, array{string, int}>
+     */
+    public static function e2eTraceValues(): array
+    {
+        return [
+            'on-error' => ['on-error', PlaywrightTraitTestContext::PLAYWRIGHT_TRACING_MODE_ON_ERROR],
+            'always' => ['always', PlaywrightTraitTestContext::PLAYWRIGHT_TRACING_MODE_ALWAYS],
+            'off' => ['off', PlaywrightTraitTestContext::PLAYWRIGHT_TRACING_MODE_OFF],
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('e2eTraceValues')]
+    public function e2eTraceWinsOverTheConfiguredMode(string $e2eTrace, int $expectedMode): void
+    {
+        putenv('E2E_TRACE=' . $e2eTrace);
+        // a mode different from every expected one, so the configured mode can't pass by accident
+        $context = $this->contextWithTracingMode(-1);
+
+        self::assertSame($expectedMode, $context->tracingMode());
+    }
+
+    #[Test]
+    public function anUnknownE2eTraceFails(): void
+    {
+        putenv('E2E_TRACE=sometimes');
+        $context = $this->contextWithTracingMode(PlaywrightTraitTestContext::PLAYWRIGHT_TRACING_MODE_ON_ERROR);
+
+        $this->expectExceptionCode(1728000001);
+        $context->tracingMode();
+    }
+
+    #[Test]
+    public function valuesBecomeJsLiterals(): void
+    {
+        self::assertSame(
+            'await vars.page.getByLabel("Say \\"hi\\"").fill(42, {"force":true});',
+            PlaywrightTraitTestContext::script('await vars.page.getByLabel(%s).fill(%s, %s);', 'Say "hi"', 42, ['force' => true])
+        );
+    }
+
+    #[Test]
+    public function jsCodeIsInsertedAsItIs(): void
+    {
+        self::assertSame(
+            'await expect(vars.page.locator("nav")).toBeVisible();',
+            PlaywrightTraitTestContext::script('await expect(%s).%s;', JsCode::of('vars.page.locator("nav")'), JsCode::of('toBeVisible()'))
+        );
+    }
+
+    #[Test]
+    public function positionalPlaceholdersCanRepeatAValue(): void
+    {
+        self::assertSame(
+            'await "a".waitFor(); return "a";',
+            PlaywrightTraitTestContext::script('await %1$s.waitFor(); return %1$s;', 'a')
+        );
+    }
+
+    #[Test]
+    public function withoutValuesTheScriptIsSentUnchanged(): void
+    {
+        self::assertSame('box.style.width = "100%";', PlaywrightTraitTestContext::script('box.style.width = "100%";'));
+    }
+
+    #[Test]
+    public function playwrightArrayReturnsTheArray(): void
+    {
+        self::assertSame(['a' => 1], (new PlaywrightTraitCannedResultContext(['a' => 1]))->array());
+    }
+
+    #[Test]
+    public function playwrightArrayFailsForAnotherType(): void
+    {
+        $this->expectExceptionMessage('The Playwright script returned string instead of an array.');
+        (new PlaywrightTraitCannedResultContext('a'))->array();
+    }
+
+    #[Test]
+    public function playwrightStringsTurnsTheEntriesIntoAList(): void
+    {
+        self::assertSame(['a', '1', 'true', 'NULL', '{"b":2}'], (new PlaywrightTraitCannedResultContext(['x' => 'a', 1, true, null, ['b' => 2]]))->strings());
+    }
+
+    /**
+     * @return array<string, array{mixed, string}>
+     */
+    public static function scriptResults(): array
+    {
+        return [
+            'string' => ['a', 'a'],
+            'int' => [42, '42'],
+            'float' => [1.5, '1.5'],
+            'bool' => [false, 'false'],
+            'null' => [null, 'NULL'],
+            'array' => [['a', 1], '["a",1]'],
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('scriptResults')]
+    public function playwrightStringTurnsAResultIntoAString(mixed $result, string $expected): void
+    {
+        self::assertSame($expected, PlaywrightTraitTestContext::string($result));
+    }
+
+    private function contextWithTracingMode(int $mode): PlaywrightTraitTestContext
+    {
+        $context = new PlaywrightTraitTestContext();
+        $context->configureTracingMode($mode);
+        return $context;
+    }
+}
+
+/**
+ * Exposes the protected API of the trait.
+ */
+class PlaywrightTraitTestContext
+{
+    use PlaywrightTrait;
+
+    public function configureTracingMode(int $mode): void
+    {
+        $this->setPlaywrightTracingMode($mode);
+    }
+
+    public function tracingMode(): int
+    {
+        return $this->getPlaywrightTracingMode();
+    }
+
+    public static function script(string $script, mixed ...$values): string
+    {
+        return self::playwrightScript($script, ...$values);
+    }
+
+    public static function string(mixed $value): string
+    {
+        return self::playwrightString($value);
+    }
+}
+
+/**
+ * Answers every script with a fixed result instead of asking the bridge.
+ */
+class PlaywrightTraitCannedResultContext extends PlaywrightTraitTestContext
+{
+    public function __construct(private readonly mixed $result)
+    {
+    }
+
+    protected function playwrightRun(string $script, mixed ...$values): mixed
+    {
+        return $this->result;
+    }
+
+    /**
+     * @return array<mixed>
+     */
+    public function array(): array
+    {
+        return $this->playwrightArray('return 1;');
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function strings(): array
+    {
+        return $this->playwrightStrings('return 1;');
+    }
+}

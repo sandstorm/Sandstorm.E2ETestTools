@@ -23,6 +23,13 @@ class PlaywrightConnector
     private ?Closure $systemUnderTestUrlModifier = null;
 
     /**
+     * Bridge requests and the time spent in them since the last {@see takeRequestStatistics()} - for {@see StepTimingTrait}.
+     */
+    private static int $requestCount = 0;
+
+    private static float $requestMs = 0.0;
+
+    /**
      * @param string $playwrightApiUrl Playwright API URL, as seen from the perspective of the Behat test runner (inside the Docker container)
      * @param string $systemUnderTestUrl System under Test URL, as seen from Playwright
      * @param string $resultsDir Where trace zips get written (relative to CWD)
@@ -40,6 +47,19 @@ class PlaywrightConnector
     public function setSystemUnderTestUrlModifier(?Closure $urlModifier): void
     {
         $this->systemUnderTestUrlModifier = $urlModifier;
+    }
+
+    /**
+     * The bridge requests since the last call, and resets the count.
+     *
+     * @return array{calls: int, ms: float}
+     */
+    public static function takeRequestStatistics(): array
+    {
+        $statistics = ['calls' => self::$requestCount, 'ms' => self::$requestMs];
+        self::$requestCount = 0;
+        self::$requestMs = 0.0;
+        return $statistics;
     }
 
     public function stopContext(string $contextName)
@@ -78,6 +98,19 @@ class PlaywrightConnector
     public function setStepForDebugging(string $contextName, string $stepText)
     {
         $this->executeInternal($contextName, '// ' . $stepText);
+    }
+
+    /**
+     * Groups the actions of a Behat step in the trace - the Trace Viewer shows them under the step text.
+     */
+    public function startStepGroup(string $contextName, string $stepText): void
+    {
+        $this->execute($contextName, sprintf("// %s\nawait context.tracing.group(%s);", $stepText, JsValue::of($stepText)));
+    }
+
+    public function endStepGroup(string $contextName): void
+    {
+        $this->execute($contextName, 'await context.tracing.groupEnd();');
     }
 
     public function startTracing(
@@ -134,11 +167,12 @@ class PlaywrightConnector
             // Playwright can only save a trace to a file (unlike screenshots, which can be returned as a
             // buffer). So write a temporary file in the bridge, hand its content back to PHP (which writes
             // it to $resultsDir), and delete it again - otherwise a stray second copy stays in playwright-bridge/.
+            // Not named "fs": some bridge copies hand the script an "fs" parameter, and redeclaring it is a SyntaxError.
             const traceFile = %s;
             await context.tracing.stop({ path: traceFile });
-            const fs = require("fs");
-            const traceBase64 = fs.readFileSync(traceFile, "base64");
-            fs.unlinkSync(traceFile);
+            const nodeFs = require("fs");
+            const traceBase64 = nodeFs.readFileSync(traceFile, "base64");
+            nodeFs.unlinkSync(traceFile);
             return traceBase64;
             '// language=PHP
                 ,
@@ -242,7 +276,10 @@ class PlaywrightConnector
             throw new \RuntimeException('Not supported');
         }
 
+        $requestStart = hrtime(true);
         $curlResult = curl_exec($curlHandle);
+        self::$requestCount++;
+        self::$requestMs += (hrtime(true) - $requestStart) / 1e6;
         if ($curlResult === false) {
             $errorCode = curl_errno($curlHandle);
             $error = curl_error($curlHandle);

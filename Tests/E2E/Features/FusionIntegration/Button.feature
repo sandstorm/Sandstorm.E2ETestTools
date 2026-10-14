@@ -4,7 +4,7 @@
 Feature: Button integration
 
   Background:
-    Given I have a site for Site Node "site" with name "TestSite"
+    Given I have a site for the site node "site" with name "TestSite"
     And I have the following nodes in site "site":
       | NodeAggregateId | Parent        | NodeType                               | Properties                                               | DimensionSpacePoint |
       | homepage        |               | Sandstorm.E2ETestTools.TestSite:Document.StartPage | {"uriPathSegment":"site","title":"Homepage"}             | {"language":"de"}   |
@@ -18,7 +18,7 @@ Feature: Button integration
       """
       testcase = Sandstorm.E2ETestTools.TestSite:Content.Button
       """
-    Then in the fusion output, the inner HTML of CSS selector "a span" matches "Go"
-    And in the fusion output, the attributes of CSS selector "a" are:
+    Then the inner HTML of "a span" in the Fusion output should be "Go"
+    And the attributes of "a" in the Fusion output should be:
       | Key  | Value   |
       | href | /nested |

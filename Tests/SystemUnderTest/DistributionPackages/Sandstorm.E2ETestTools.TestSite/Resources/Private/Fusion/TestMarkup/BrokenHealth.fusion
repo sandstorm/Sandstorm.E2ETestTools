@@ -1,0 +1,14 @@
+// PageHealthTrait: everything a page health check should find - and a request to another host, which it ignores
+prototype(Sandstorm.E2ETestTools.TestSite:TestMarkup.BrokenHealth) < prototype(Neos.Fusion:Component) {
+    renderer = afx`
+        <p>A broken page</p>
+        <img src="/missing-image.png" />
+        <img src="https://example.invalid/pixel.png" alt="" />
+        <script>{props.script}</script>
+    `
+    script = '
+        console.error("Logged on purpose");
+        setTimeout(() => { throw new Error("Thrown on purpose"); });
+        fetch("/missing-api");
+    '
+}

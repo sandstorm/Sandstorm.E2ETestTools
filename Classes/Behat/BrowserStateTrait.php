@@ -7,8 +7,7 @@ namespace Sandstorm\E2ETestTools\Behat;
 use Behat\Step\Given;
 use Behat\Step\Then;
 use Behat\Step\When;
-use PHPUnit\Framework\Assert;
-use Sandstorm\E2ETestTools\Playwright\JsValue;
+use Sandstorm\E2ETestTools\Playwright\JsCode;
 
 /**
  * Cookies and web storage of the browser context - consent, settings and anything else a page remembers.
@@ -27,23 +26,19 @@ trait BrowserStateTrait
     #[Given('the cookie :name has the value :value')]
     public function theCookieHasTheValue(string $name, string $value): void
     {
-        $this->playwrightConnector->execute($this->requirePlaywrightContext(), sprintf(
-            'await context.addCookies([{name: %s, value: %s, url: "BASEURL"}]);',
-            JsValue::of($name),
-            JsValue::of($value)
-        ));
+        $this->playwrightRun('await context.addCookies([{name: %s, value: %s, url: "BASEURL"}]);', $name, $value);
     }
 
     #[Then('the cookie :name should be set')]
     public function theCookieShouldBeSet(string $name): void
     {
-        Assert::assertNotNull($this->browserState_cookieValue($name), sprintf('The cookie "%s" is not set.', $name));
+        $this->browserState_expectCookie($name, 'not.toBeNull()');
     }
 
     #[Then('the cookie :name should not be set')]
     public function theCookieShouldNotBeSet(string $name): void
     {
-        Assert::assertNull($this->browserState_cookieValue($name), sprintf('The cookie "%s" is set.', $name));
+        $this->browserState_expectCookie($name, 'toBeNull()');
     }
 
     /**
@@ -52,23 +47,13 @@ trait BrowserStateTrait
     #[Then('the cookie :name should have the value :value')]
     public function theCookieShouldHaveTheValue(string $name, string $value): void
     {
-        $actual = $this->browserState_cookieValue($name);
-        Assert::assertNotNull($actual, sprintf('The cookie "%s" is not set.', $name));
-        Assert::assertSame($value, rawurldecode($actual), sprintf('Unexpected value of the cookie "%s".', $name));
+        $this->browserState_expectCookie($name, self::playwrightScript('toBe(%s)', $value), true);
     }
 
     #[When('I delete the cookie :name')]
     public function iDeleteTheCookie(string $name): void
     {
-        // clearCookies() only takes a filter since Playwright 1.43 - clear all and add the others back
-        $this->playwrightConnector->execute($this->requirePlaywrightContext(), sprintf(<<<'JS'
-            const cookies = await context.cookies();
-            await context.clearCookies();
-            const remaining = cookies.filter((cookie) => cookie.name !== %s);
-            if (remaining.length > 0) {
-                await context.addCookies(remaining);
-            }
-        JS, JsValue::of($name)));
+        $this->playwrightRun('await context.clearCookies({name: %s});', $name);
     }
 
     /**
@@ -80,13 +65,13 @@ trait BrowserStateTrait
     #[Given('the :storage storage key :key has the value :value')]
     public function theStorageKeyHasTheValue(string $storage, string $key, string $value): void
     {
-        $this->playwrightConnector->execute($this->requirePlaywrightContext(), sprintf(<<<'JS'
+        $this->playwrightRun(<<<'JS'
             await context.addInitScript(([storage, key, value, origin]) => {
                 if (window.location.origin === origin && window[storage].getItem(key) === null) {
                     window[storage].setItem(key, value);
                 }
             }, [%s, %s, %s, new URL("BASEURL").origin]);
-        JS, JsValue::of($this->browserState_storageObject($storage)), JsValue::of($key), JsValue::of($value)));
+        JS, $this->browserState_storageObject($storage), $key, $value);
     }
 
     /**
@@ -95,40 +80,51 @@ trait BrowserStateTrait
     #[Then('the :storage storage key :key should have the value :value')]
     public function theStorageKeyShouldHaveTheValue(string $storage, string $key, string $value): void
     {
-        Assert::assertSame($value, $this->browserState_storageValue($storage, $key), sprintf('Unexpected value of the %s storage key "%s".', $storage, $key));
+        $this->browserState_expectStorage($storage, $key, self::playwrightScript('toBe(%s)', $value));
     }
 
     #[Then('the :storage storage key :key should not be set')]
     public function theStorageKeyShouldNotBeSet(string $storage, string $key): void
     {
-        Assert::assertNull($this->browserState_storageValue($storage, $key), sprintf('The %s storage key "%s" is set.', $storage, $key));
+        $this->browserState_expectStorage($storage, $key, 'toBeNull()');
     }
 
-    #[When('I remove the :storage storage key :key')]
-    public function iRemoveTheStorageKey(string $storage, string $key): void
+    #[When('I delete the :storage storage key :key')]
+    public function iDeleteTheStorageKey(string $storage, string $key): void
     {
-        $this->playwrightConnector->execute($this->requirePlaywrightContext(), sprintf(
-            'await vars.page.evaluate((key) => window[%s].removeItem(key), %s);',
-            JsValue::of($this->browserState_storageObject($storage)),
-            JsValue::of($key)
-        ));
+        $this->playwrightRun('await vars.page.evaluate((key) => window[%s].removeItem(key), %s);', $this->browserState_storageObject($storage), $key);
     }
 
-    private function browserState_cookieValue(string $name): ?string
+    /**
+     * Polls the cookie value (null if it isn't set) until $matcher passes - a page sets cookies e.g. after a click,
+     * asynchronously. $decoded compares the URL-decoded value.
+     */
+    private function browserState_expectCookie(string $name, string $matcher, bool $decoded = false): void
     {
-        return $this->playwrightConnector->execute($this->requirePlaywrightContext(), sprintf(<<<'JS'
-            const cookie = (await context.cookies()).find((cookie) => cookie.name === %s);
-            return cookie === undefined ? null : cookie.value;
-        JS, JsValue::of($name)));
+        $this->playwrightRun(<<<'JS'
+            await expect.poll(async () => {
+                const cookie = (await context.cookies()).find((cookie) => cookie.name === %1$s);
+                return cookie === undefined ? null : %2$s;
+            }, {message: %3$s, timeout: %4$s}).%5$s;
+        JS,
+            $name,
+            JsCode::of($decoded ? 'decodeURIComponent(cookie.value)' : 'cookie.value'),
+            sprintf('value of the cookie "%s"', $name),
+            $this->playwrightTimeout,
+            JsCode::of($matcher)
+        );
     }
 
-    private function browserState_storageValue(string $storage, string $key): ?string
+    private function browserState_expectStorage(string $storage, string $key, string $matcher): void
     {
-        return $this->playwrightConnector->execute($this->requirePlaywrightContext(), sprintf(
-            'return await vars.page.evaluate((key) => window[%s].getItem(key), %s);',
-            JsValue::of($this->browserState_storageObject($storage)),
-            JsValue::of($key)
-        ));
+        $this->playwrightRun(
+            'await expect.poll(() => vars.page.evaluate((key) => window[%s].getItem(key), %s), {message: %s, timeout: %s}).%s;',
+            $this->browserState_storageObject($storage),
+            $key,
+            sprintf('value of the %s storage key "%s"', $storage, $key),
+            $this->playwrightTimeout,
+            JsCode::of($matcher)
+        );
     }
 
     private function browserState_storageObject(string $storage): string

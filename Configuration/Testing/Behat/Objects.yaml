@@ -1,0 +1,7 @@
+# Neos >= 9.2 wires the FakeClock of neos/contentrepository-testsuite in the Testing context - a dev dependency that a
+# project usually doesn't install, so creating the live workspace fails with "broken". Behat runs against the real
+# system under test, so it uses the real clock (the default outside Testing).
+Neos\Neos\Domain\SubtreeTagging\SoftRemoval\SoftRemovalGarbageCollector:
+  arguments:
+    4:
+      object: 'Neos\ContentRepositoryRegistry\Factory\Clock\SystemClock'

@@ -4,7 +4,7 @@
 Feature: Form interaction
 
   Background:
-    Given I have a site for Site Node "site" with name "TestSite"
+    Given I have a site for the site node "site" with name "TestSite"
     And I create the following nodes in site "site":
       | NodeAggregateId | Parent        | NodeType                                           | Properties                                   | DimensionSpacePoint |
       | homepage        |               | Sandstorm.E2ETestTools.TestSite:Document.StartPage | {"uriPathSegment":"site","title":"Form"}     | {"language":"de"}   |
@@ -32,6 +32,9 @@ Feature: Form interaction
     Then the field "Name" should have the value "Jane"
     And the checkbox "Terms accepted" should not be checked
     And the field "Country" should have "Austria" selected
+
+  Scenario: the browser's validation
+    Then the field "Email" should be invalid
 
   Scenario: uploading a file next to the feature file
     When I upload the file "hello.txt" to the field "Attachment"

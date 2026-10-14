@@ -9,7 +9,7 @@ is reset and filled with fixtures for every scenario.
 Feature: Headline integration
 
   Scenario: a headline node renders as h1
-    Given I have a site for Site Node "site" with name "My Site"
+    Given I have a site for the site node "site" with name "My Site"
     And I have the following nodes in site "site":
       | NodeAggregateId | Parent        | NodeType                   | Properties                                   | DimensionSpacePoint |
       | homepage        |               | My.Site:Document.StartPage | {"uriPathSegment":"home","title":"Homepage"} | {"language":"de"}   |
@@ -19,7 +19,7 @@ Feature: Headline integration
       """
       testcase = My.Site:Content.Headline
       """
-    Then in the fusion output, the inner HTML of CSS selector "h1" matches "Hello"
+    Then the inner HTML of "h1" in the Fusion output should be "Hello"
 ```
 
 ## What you get
@@ -29,19 +29,21 @@ Feature: Headline integration
 - **Browser tests via Playwright** - Behat sends scripts to a small bridge service; the browser hits your application
   on its own port, Flow context and database.
 - **Neos backend steps** - create users, log in, use the menu, the dashboard and the document tree.
-- **Generic browser steps** - texts, titles, buttons, links, form fields, cookies and web storage (e.g. a preset cookie
-  consent).
+- **Generic browser steps** - texts, titles, buttons, links, form fields, focus and keyboard, screen size and
+  scrolling, cookies and web storage (e.g. a preset cookie consent), requests to third parties, sent mails (Mailpit),
+  and a smoke test per page (JavaScript errors, failed requests, images).
 - **Content fixtures** - nodes, references, hidden state and assets as Gherkin tables or YAML files, created through
   the content repository API.
 - **Fixture export** - turn existing pages into fixtures (backend button or CLI) instead of writing tables by hand.
 - **Mocked third-party APIs** - WireMock stubs per scenario and checks of the calls your site made.
 - **Debugging and CI** - screenshots, traces and server logs of failed scenarios, a pause step and a CI example.
 
-Requires Neos 9.1+ / Flow 9.1+. For Neos 8, use the 8.x releases (latest: 8.3.2). Developing the package itself:
+Requires Neos 9.1+ / Flow 9.1+ - for older Neos versions see [Versions](#versions). Developing the package itself:
 see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 <!-- TOC -->
 
+- [Versions](#versions)
 - [Setup](#setup)
   - [1. Install the package](#1-install-the-package)
   - [2. Two Flow Contexts, Two Ports](#2-two-flow-contexts-two-ports)
@@ -60,10 +62,21 @@ see [CONTRIBUTING.md](CONTRIBUTING.md).
   - [Mocked third-party APIs (WireMock)](#mocked-third-party-apis-wiremock)
 - [Running Behat Tests](#running-behat-tests)
   - [Debugging](#debugging)
-- [Migrating tests from Neos 8](#migrating-tests-from-neos-8)
 - [Troubleshooting](#troubleshooting)
 
 <!-- /TOC -->
+
+# Versions
+
+With 10.0.0 we stopped numbering after the Neos version and switched to [SemVer](https://semver.org), so breaking
+changes can be released independent of Neos. What changed and how to upgrade: [CHANGELOG.md](CHANGELOG.md).
+
+| Package | Neos / Flow | Note |
+|---|---|---|
+| 10.x | 9.1+ | [upgrading from 9.1](CHANGELOG.md#upgrading-the-steps-to-100) |
+| 9.1.x | 9.1+ | [migrating from Neos 8](CHANGELOG.md#migrating-tests-from-neos-8) |
+| 8.x | 8 | latest 8.3.2 |
+| 1.x | 7 and older | |
 
 # Setup
 
@@ -75,6 +88,8 @@ projects for a setup command. Steps 1–5 are required; without step 2, Behat em
 ```bash
 composer require --dev sandstorm/e2etesttools
 ```
+
+For Neos 8 or older, require the matching version from [Versions](#versions), e.g. `sandstorm/e2etesttools:^8.3`.
 
 ## 2. Two Flow Contexts, Two Ports
 
@@ -196,6 +211,12 @@ cp -r Packages/Application/Sandstorm.E2ETestTools/Templates/playwright-bridge ./
 cd playwright-bridge && npm ci && npx playwright install chromium && cd ..
 ```
 
+It uses Playwright 1.64 and needs Node 20 or newer (`.nvmrc`); its `Dockerfile` (for CI) is based on the Playwright
+image of the same version. Keep the two in sync when you update Playwright - the image brings the browsers. The scripts
+the steps send get `context` (the scenario's
+[BrowserContext](https://playwright.dev/docs/api/class-browsercontext)), `vars` (kept between the steps of a
+scenario), `expect` ([assertions](https://playwright.dev/docs/test-assertions)), `browser`, `contextName` and `fs`.
+
 It runs on your host (it drives a real browser), Behat usually in your app container. `setupPlaywright()` reads two
 environment variables, e.g. from your `docker-compose.yml`:
 
@@ -206,6 +227,10 @@ environment:
   # where the browser (on the host) reaches the SUT port from step 2
   SYSTEM_UNDER_TEST_URL_FOR_PLAYWRIGHT: 'http://127.0.0.1:9090'
 ```
+
+Your copy doesn't update with the package. After an update, compare it with
+[`Templates/playwright-bridge/`](Templates/playwright-bridge) - if you haven't changed it, replace it and run
+`npm ci && npx playwright install chromium`, then build the CI image again. What changed: [CHANGELOG.md](CHANGELOG.md).
 
 ## 6. Project tasks (recommended)
 
@@ -280,8 +305,9 @@ test in a Neos project, where, and the pitfalls: **[Neos E2E Testing Guide](E2E_
   `/sites` root) via your `FeatureContext`'s hook. Needed for every scenario that creates nodes.
 - `@playwright` - starts a browser context in the bridge. Needed for page visits, backend steps and screenshots.
 - `@wireMock` - resets WireMock to its base stubs ([Mocked third-party APIs](#mocked-third-party-apis-wiremock)).
+- `@mailpit` - empties the Mailpit inbox ([MailpitTrait](#mailpittrait)).
 
-Other tags in the guide, like `@mailpit`, are project tags with a hook of your own.
+Other tags in the guide are project tags with a hook of your own.
 
 ## Fixtures
 
@@ -293,7 +319,7 @@ same format.
 Create the site, then its nodes - as table, or from a YAML file with the same rows:
 
 ```gherkin
-Given I have a site for Site Node "site" with name "YourSiteName"
+Given I have a site for the site node "site" with name "YourSiteName"
 And I have the following nodes in site "site":
   | NodeAggregateId | Parent        | NodeType                               | Properties                                   | DimensionSpacePoint |
   | homepage        |               | Your.SitePackageKey:Document.StartPage | {"uriPathSegment":"site","title":"Homepage"} | {"language":"de"}   |
@@ -382,14 +408,16 @@ build an example page in the backend, export it by URI path into the feature's f
 
 ## Steps
 
-All traits are in `Sandstorm\E2ETestTools\Behat`. `FeatureContext.php.default` uses all but `WireMockTrait` (it needs a
-WireMock service); from `PageAssertionsTrait` on, the traits don't depend on each other - use the ones you need. Remove
-project steps with the same wording before using them, otherwise Behat reports the steps as ambiguous. Buttons and
-links are found by their accessible name, fields by their label, elements by `data-testid`.
+All traits are in `Sandstorm\E2ETestTools\Behat`. `FeatureContext.php.default` uses all but `WireMockTrait` and
+`MailpitTrait` (they need a WireMock or Mailpit service); the browser traits need `PlaywrightTrait`, but not each other -
+use the ones you need. Delete project steps with the same wording before using them, otherwise Behat reports the steps
+as ambiguous. Elements are found by their role and accessible name (`the button "Send"`, `the link "Next page"` -
+:role is an [ARIA role](https://www.w3.org/TR/wai-aria-1.2/#role_definitions)), fields by their label, otherwise by
+`data-testid`.
 
 ### FusionRenderingTrait
 
-- `I have a site for Site Node :siteNodeName [with name :siteName]`
+- `I have a site for the site node :siteNodeName [with name :siteName]`
 - `I have/create the following nodes in site :siteName:`
 - `the following node references:`
 - `the default dimension space point is :dimensionSpacePoint`
@@ -397,9 +425,9 @@ links are found by their accessible name, fields by their label, elements by `da
 - `I render the Fusion object :fusionPath:`
 - `I render the Fusion object :fusionPath with the current context node:`
 - `I render the page`
-- `the Fusion output should equal to :expected`
-- `in the fusion output, the inner HTML of CSS selector :selector matches :expected`
-- `in the fusion output, the attributes of CSS selector :selector are:`
+- `the Fusion output should be :expected`
+- `the inner HTML of :selector in the Fusion output should be :expected`
+- `the attributes of :selector in the Fusion output should be:`
 
 ### NodeImportTrait
 
@@ -414,15 +442,23 @@ Comes with `FusionRenderingTrait`.
 
 ### PlaywrightTrait
 
-- `I do a screenshot :filename`
-- `I debug the playwright script` - prints the generated Playwright JS
+- `I take a screenshot :filename`
+- `I debug the Playwright script` - prints the generated Playwright JS
+
+### NavigationTrait
+
+- `I access the URI path :uriPath` - opens a new page
+- `I reload the page`
+- `the URI path should be :uriPath` - waits for the navigation
+- `the response status code should be :status`
+- `the viewport is :width x :height px` - reloads the page
+- `the screen is :width x :height px with pixel ratio :ratio` - clears the browser cache and reloads; Chromium only
+- `I scroll to the bottom of the page`
+- `I scroll up by :pixels px`
+- `the page should be scrolled to the top`
 
 ### NeosBackendControlTrait
 
-- `I access the URI path :uriPath`
-- `the response status code should be :status`
-- `there should be the text :expected on the page`
-- `the URI path should be :uriPath` - waits for the navigation
 - `I have a Neos backend user :username with password :password and role :role`
 - `I log into the backend using credentials :username :password [with username placeholder ... and password placeholder ...]`
 - `I click the main menu item :menuItem`
@@ -432,15 +468,21 @@ Comes with `FusionRenderingTrait`.
 ### PageAssertionsTrait
 
 - `the page title should be :title`
-- `there should not be the text :text on the page`
+- `there should (not) be the text :text on the page` - rendered text: hidden text counts as absent
 - `there should (not) be the text :text in :selector`
+- `the :role :name should be focused` - fails with the focused element, or if the element is hidden from assistive
+  technology
+- `the focus should be inside :selector`
+- `the :role :name should (not) be in the viewport`
+- `the :role :name should be visible/hidden/enabled/disabled` - `hidden` also finds elements hidden from assistive
+  technology, and passes if there is no such element
 - `the element with test id :testId should be visible/hidden/focused/enabled/disabled`
 - `the element with test id :testId should (not) be in the viewport`
 
 ### FormInteractionTrait
 
-- `I click the button :caption`
-- `I click the link :caption`
+- `I click the button :name`
+- `I click the link :name`
 - `I click the element with test id :testId`
 - `I fill :value into the field :label`
 - `the field :label should have the value :value`
@@ -449,8 +491,10 @@ Comes with `FusionRenderingTrait`.
 - `I choose the radio button :label`
 - `I select :option in the field :label`
 - `the field :label should have :option selected`
+- `the field :label should be invalid` - the browser's validation (`required`, `type="email"`, ...)
 - `I upload the file :fileName to the field :label` - relative to the feature file
 - `I press the key :key`
+- `I focus the :role :name` - like reaching it with Tab
 
 ### BrowserStateTrait
 
@@ -461,15 +505,59 @@ Comes with `FusionRenderingTrait`.
 - `I delete the cookie :name`
 - `the local/session storage key :key should have the value :value`
 - `the local/session storage key :key should not be set`
-- `I remove the local/session storage key :key`
+- `I delete the local/session storage key :key`
+
+### NetworkTrait
+
+- `requests to other hosts are recorded and blocked` - before the first visit; the site under test is not blocked
+- `I forget the recorded requests`
+- `there should (not) be a request to :host` - part of the host name, e.g. `youtube`
+- `all links in :selector should respond with 200` - follows redirects
+
+### PageHealthTrait
+
+A smoke test for every page type. It checks the page of the last `I access the URI path`, with what Playwright
+collected since (`page.pageErrors()`, `page.consoleMessages()`, `page.requests()` - the last 200 errors and console
+messages, the last 100 requests).
+
+- `there should be no JavaScript errors` - uncaught errors and `console.error()`
+- `there should be no failed requests [except:]` - requests to the site under test that failed or got 4xx/5xx (other
+  hosts are ignored - see `NetworkTrait`); the table's column `URI path` lists known gaps (part of the path)
+- `every image should be loaded` - loads lazy images right away, waits up to 15 seconds (thumbnails are generated on
+  their first request)
+- `every image should have an alt attribute` - `alt=""` and images hidden from assistive technology pass
+
+```gherkin
+Scenario: the homepage is healthy
+  When I access the URI path "/"
+  Then there should be no JavaScript errors
+  And there should be no failed requests
+  And every image should be loaded
+  And every image should have an alt attribute
+```
+
+### MailpitTrait
+
+Needs [Mailpit](https://mailpit.axllent.org) as SMTP server of the SUT; Behat reaches its API at `MAILPIT_API_URL`
+(default `http://mailpit:8025`). Tag the scenarios with `@mailpit`: the inbox is emptied before them.
+
+- `exactly :count mail(s) should have been sent to :recipient` - waits up to 5 seconds (`0 mails` always waits)
+- `the mail to :recipient should have the subject :subject`
+- `the mail to :recipient should contain :text` - the plain text part
+- `the mail to :recipient should reply to :address`
+- `the mail to :recipient should have the attachment :fileName`
 
 ### DebuggingTrait
 
 - `I pause for debugging` - see [Debugging](#debugging)
 
+### StepTimingTrait
+
+No steps - measures the duration of every step and scenario, see "Slow steps" in [Debugging](#debugging).
+
 ### WireMockTrait
 
-- `the API :api path :path on :method serves response :file [with status :status]`
+- `the API :api serves :file for :method :path [with status :status]`
 - `I load the stubs :tape of the API :api`
 - `I clear all API stubs`
 - `the API :api should have received :method :path [:count times]`
@@ -478,13 +566,45 @@ Setup and details: [Mocked third-party APIs](#mocked-third-party-apis-wiremock).
 
 ### Notes on the steps
 
-- `the Fusion output should equal to` compares the whole HTML and breaks with every changed space or class - prefer
-  the CSS selector steps. `... matches ...` compares for equality, not as regular expression.
+- `the Fusion output should be` compares the whole HTML and breaks with every changed space or class - prefer
+  the CSS selector steps. `the inner HTML of ... should be` compares for equality, not as regular expression.
 - Escaped quotes (`\"`) inside a `"..."` parameter don't match the step - put values with double quotes in single
   quotes (`'{"all":true}'`).
+- The assertions on the page wait for the expected state (Playwright's
+  [web-first assertions](https://playwright.dev/docs/test-assertions)): up to 5 seconds - change it with
+  `$this->setPlaywrightTimeout(10000)` in the `FeatureContext` constructor. A negative check (`should not`, `hidden`)
+  passes as soon as the state is reached.
 - Screenshots document a result, they don't check it.
-- Project-specific steps go into your `FeatureContext` or a trait of your project; the shipped traits show how to drive
-  the browser with `$this->playwrightConnector->execute()`.
+- Project-specific steps go into your `FeatureContext` or a trait of your project. Drive the browser with
+  `$this->playwrightRun($script, ...$values)`: every `%s` in the script becomes the next value as JS literal, so
+  quotes in step parameters can't break it - JavaScript the step builds itself goes in as `JsCode::of(...)`, a value
+  inside a CSS selector through `CssValue::of()` first (a CSS string, e.g. `[data-name=%s]`). Assert with `expect` in
+  the script - it waits and reports expected and received value - instead of returning a value and asserting in PHP;
+  where you need the value in PHP, `playwrightArray()` and `playwrightStrings()` check its type:
+
+  ```php
+  #[Then('the teaser :title should link to :uriPath')]
+  public function theTeaserShouldLinkTo(string $title, string $uriPath): void
+  {
+      $this->playwrightRun(
+          'await expect(vars.page.getByRole("article").filter({hasText: %s}).getByRole("link")).toHaveAttribute("href", %s);',
+          $title,
+          $uriPath
+      );
+  }
+  ```
+
+### Ideas for more steps
+
+Not shipped yet - we add them when projects need them (open an issue with your use case):
+
+- links and attributes: `the link :name should point to :href`, `the :role :name should have the attribute ...`,
+  counting elements, `there should be the text :text in the :role :name`
+- the response: headers (cache, security headers), redirects with their status
+- page meta and SEO: meta tags, canonical URL, `lang`, hreflang alternates
+- interactions: hover, downloads, links that open a new tab
+- the error message of a field as screen readers announce it (`toHaveAccessibleErrorMessage`)
+- the structure of an area (navigation, form) as an ARIA snapshot in the feature (`toMatchAriaSnapshot`)
 
 ### Examples by level
 
@@ -538,7 +658,7 @@ When the site talks to an external API (shop backend, CRM, newsletter service), 
 Per API, the fixture directory holds `_base/*.json` (mapping files loaded before every scenario), response bodies and
 one directory of mapping files per "tape":
 
-- `the API :api path :path on :method serves response :file [with status :status]` - answers one call with a body file
+- `the API :api serves :file for :method :path [with status :status]` - answers one call with a body file
   (`.json` may be omitted); wins over base stubs; a path with query string must match exactly
 - `I load the stubs :tape of the API :api` - imports all mapping files of the tape directory
 - `I clear all API stubs` - back to the base stubs, e.g. when the API's answer changes after an action
@@ -575,13 +695,15 @@ IDE "run" buttons usually don't work when Behat runs in a container - use the CL
 
 - **Watch the tests**: start the bridge with `HEADLESS=false node index.js` - worth a project task next to the
   headless one.
-- **Screenshots**: `And I do a screenshot "name.png"` in a `@playwright` scenario; failed steps get an `error_*.png`
+- **Screenshots**: `And I take a screenshot "name.png"` in a `@playwright` scenario; failed steps get an `error_*.png`
   automatically. Both go to the results directory: `e2e-results/` where Behat runs, or what you pass to
   `setupPlaywright($resultsDir)`.
 - **Traces**: failed `@playwright` scenarios write `report_<feature>_<scenario>.zip` to the results directory - open it
-  with `npx playwright show-trace <file>`. For traces of every scenario (or none), call
+  with `npx playwright show-trace <file>`. Each Behat step is a group in the trace, so the Trace Viewer shows the
+  actions per step. For traces of every scenario (or none), call
   `$this->setPlaywrightTracingMode(self::PLAYWRIGHT_TRACING_MODE_ALWAYS)` (or `..._OFF`; default `..._ON_ERROR`) in
-  the `FeatureContext` constructor.
+  the `FeatureContext` constructor. For a single run, set `E2E_TRACE=on-error|always|off` where Behat runs - it wins
+  over `setPlaywrightTracingMode()` (with `docker compose exec`, pass it on with `-e E2E_TRACE`).
 - **Server logs**: an exception in the SUT only shows up as error page, the stack trace is in the logs. The Flow logs
   (`Data/Logs`) are cleared before every scenario, and a failed scenario gets its log and exception files copied to
   `logs_<feature>_<line>_<scenario>/` in the results directory. If the SUT logs elsewhere, call
@@ -592,39 +714,14 @@ IDE "run" buttons usually don't work when Behat runs in a container - use the CL
 - **Pause the browser**: `And I pause for debugging` opens the Playwright inspector (`page.pause()`) on the bridge
   side. It needs a visible browser (`HEADLESS=false`) and Behat run with `PAUSE_FOR_DEBUGGING=true`, otherwise the step
   fails right away. The SUT and its database keep the scenario's state, so you can click around.
+- **Slow steps**: use `StepTimingTrait` in your `FeatureContext` and run Behat with `E2E_TIMINGS=1` (with
+  `docker compose exec`: `-e E2E_TIMINGS`). `step-timings.jsonl` in the results directory then has one line per step
+  and scenario: feature, line, step text, duration (`ms`), result, and the number of requests to the bridge with their
+  time (`bridgeCalls`, `bridgeMs`) - the rest is PHP (fixtures, cache, database). The kickstart sums it up with
+  `mise run tests:e2e:timings <label>` and compares two labels with `mise run tests:e2e:timings:compare <a> <b>`.
+  It's a local dev tool for measuring the suite - don't set `E2E_TIMINGS` in the pipeline.
 - **Let an agent analyse failures**: the results directory holds screenshots, traces, server logs and - with
   `--format junit --out <dir>` - the JUnit report. Tell a coding agent like Claude where it is.
-
-# Migrating tests from Neos 8
-
-Start your `FeatureContext` from [`FeatureContext.php.default`](Templates/FeatureContext.php.default) instead of
-patching the old one - a `FeatureContext` of an older version fails with missing classes. Also new:
-
-- The traits moved from `Sandstorm\E2ETestTools\Tests\Behavior\Bootstrap\` to `Sandstorm\E2ETestTools\Behat\` and are
-  autoloaded - drop the `require_once` lines.
-- The templates are in `Templates/` (`FeatureContext.php.default`, `playwright-bridge/`) - compare your copy of the
-  bridge with the new one.
-- `Testing/Behat` needs the SUT's cache storage and `applicationIdentifier` and its persistent resource storage/target
-  ([Setup step 2](#2-two-flow-contexts-two-ports)).
-- Behat must run with `FLOW_CONTEXT=Testing/Behat` (or a sub context) - Neos.Behat 9.1 refuses other contexts, e.g. a
-  container-wide `Development/...` or the SUT context of a CI job.
-- Symfony projects are no longer supported - stay on 8.x there.
-
-In the feature files ([Fixtures](#fixtures) shows the result):
-
-| Neos 8 | Neos 9 |
-|---|---|
-| tag `@fixtures` | `@flowEntities`: Neos.Behat resets the database on this tag now (`FlowEntitiesTrait`; the old `FlowContextTrait` with `@fixtures` is deprecated) |
-| `I have/create the following nodes:` | `I have/create the following nodes in site "site":` |
-| columns `Identifier \| Path \| Node Type \| Properties \| Language` | `NodeAggregateId \| Parent \| NodeType \| Properties \| DimensionSpacePoint`, optional `Hidden` |
-| `Path` (`/sites/site/main/foo`), a `/sites` row | `Parent`: empty = site node, `homepage/main` = tethered child, otherwise the parent's `NodeAggregateId`; no `/sites` row |
-| `Language`: `de` | `DimensionSpacePoint`: `{"language":"de"}` |
-| `HiddenInIndex` column | `"hiddenInMenu": true` in `Properties` |
-| reference properties with node identifiers in `Properties` | `And the following node references:` |
-| `I get a node by path "/sites/site" with the following context:` + table | `I get the node "homepage" in dimension '{"language":"de"}'` |
-| `I have the following nodes from file "x.yaml" [with overwrites]` | `... from file "x.yaml" in site "site" [with overwrites:]` |
-| overwrite columns `identifier \| property \| value` | `nodeAggregateId \| property \| value` |
-| YAML exported with the Neos 8 button (nodes keyed by identifier, nested `children`) | rejected - export again ([Exporting existing content](#exporting-existing-content)) |
 
 # Troubleshooting
 
@@ -667,3 +764,16 @@ In the feature files ([Fixtures](#fixtures) shows the result):
 
    `Testing/Behat` stores and publishes them somewhere else than the SUT looks - use the SUT's resource storage and
    target there ([Setup step 2](#2-two-flow-contexts-two-ports)).
+
+5. **`RuntimeException: broken` in a `BeforeScenario` hook (`setupContentRepository()`), with Neos 9.2 or later.**
+
+   Neos 9.2 wires the `FakeClock` of `neos/contentrepository-testsuite` in every `Testing` context - a dev dependency
+   that projects usually don't install. The package switches it back to the real clock for `Testing/Behat`
+   (`Configuration/Testing/Behat/Objects.yaml`); if Behat runs in another `Testing` sub context, copy that file into
+   your configuration for that context.
+
+6. **`Could not resolve ini file` when Flow starts (Flow 9.2 or later).**
+
+   Flow passes the loaded php.ini to its CLI sub-requests and fails if PHP loaded none - as in the official PHP and
+   FrankenPHP images, which only ship `php.ini-production`/`php.ini-development`. Copy one of them to `php.ini` in the
+   image (see `Tests/SystemUnderTest/Dockerfile`).

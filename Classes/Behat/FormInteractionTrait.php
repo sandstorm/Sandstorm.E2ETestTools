@@ -8,11 +8,9 @@ use Behat\Behat\Hook\Scope\BeforeScenarioScope;
 use Behat\Hook\BeforeScenario;
 use Behat\Step\Then;
 use Behat\Step\When;
-use PHPUnit\Framework\Assert;
-use Sandstorm\E2ETestTools\Playwright\JsValue;
 
 /**
- * Clicks, form fields and keys in the visitor's words: buttons and links by their caption, fields by their label.
+ * Clicks, form fields, focus and keys in the visitor's words: buttons and links by their caption, fields by their label.
  * Locating by label also checks that the field has one.
  *
  * Needs {@see PlaywrightTrait}. Opt-in: use it in your FeatureContext; remove project steps with the same wording first,
@@ -31,16 +29,16 @@ trait FormInteractionTrait
         $this->formInteraction_currentFeatureFile = $scope->getFeature()->getFile() ?? '';
     }
 
-    #[When('I click the button :caption')]
-    public function iClickTheButton(string $caption): void
+    #[When('I click the button :name')]
+    public function iClickTheButton(string $name): void
     {
-        $this->formInteraction_run('getByRole("button", {name: %s, exact: true}).click()', $caption);
+        $this->formInteraction_run('getByRole("button", {name: %s, exact: true}).click()', $name);
     }
 
-    #[When('I click the link :caption')]
-    public function iClickTheLink(string $caption): void
+    #[When('I click the link :name')]
+    public function iClickTheLink(string $name): void
     {
-        $this->formInteraction_run('getByRole("link", {name: %s, exact: true}).click()', $caption);
+        $this->formInteraction_run('getByRole("link", {name: %s, exact: true}).click()', $name);
     }
 
     #[When('I click the element with test id :testId')]
@@ -58,7 +56,7 @@ trait FormInteractionTrait
     #[Then('the field :label should have the value :value')]
     public function theFieldShouldHaveTheValue(string $label, string $value): void
     {
-        Assert::assertSame($value, $this->formInteraction_run('getByLabel(%s, {exact: true}).inputValue()', $label), sprintf('Unexpected value of the field "%s".', $label));
+        $this->formInteraction_expect('getByLabel(%s, {exact: true})', 'toHaveValue(%s, %s)', $label, $value);
     }
 
     #[When('I check the checkbox :label')]
@@ -76,13 +74,13 @@ trait FormInteractionTrait
     #[Then('the checkbox :label should be checked')]
     public function theCheckboxShouldBeChecked(string $label): void
     {
-        Assert::assertTrue($this->formInteraction_run('getByLabel(%s, {exact: true}).isChecked()', $label), sprintf('The checkbox "%s" is not checked.', $label));
+        $this->formInteraction_expect('getByLabel(%s, {exact: true})', 'toBeChecked(%s)', $label);
     }
 
     #[Then('the checkbox :label should not be checked')]
     public function theCheckboxShouldNotBeChecked(string $label): void
     {
-        Assert::assertFalse($this->formInteraction_run('getByLabel(%s, {exact: true}).isChecked()', $label), sprintf('The checkbox "%s" is checked.', $label));
+        $this->formInteraction_expect('getByLabel(%s, {exact: true})', 'not.toBeChecked(%s)', $label);
     }
 
     #[When('I choose the radio button :label')]
@@ -100,8 +98,28 @@ trait FormInteractionTrait
     #[Then('the field :label should have :option selected')]
     public function theFieldShouldHaveSelected(string $label, string $option): void
     {
-        $selected = $this->formInteraction_run('getByLabel(%s, {exact: true}).evaluate((select) => Array.from(select.selectedOptions).map((option) => option.label))', $label);
-        Assert::assertContains($option, (array)$selected, sprintf('"%s" is not selected in the field "%s" (selected: %s).', $option, $label, implode(', ', (array)$selected)));
+        $this->playwrightRun(
+            'await expect.poll(() => vars.page.getByLabel(%s, {exact: true}).evaluate((select) => Array.from(select.selectedOptions).map((option) => option.label)), {message: %s, timeout: %s}).toContain(%s);',
+            $label,
+            sprintf('selected options of the field "%s"', $label),
+            $this->playwrightTimeout,
+            $option
+        );
+    }
+
+    /**
+     * The browser's own validation (required, type="email", pattern, ...) - it blocks the submit before the server
+     * sees it.
+     */
+    #[Then('the field :label should be invalid')]
+    public function theFieldShouldBeInvalid(string $label): void
+    {
+        $this->playwrightRun(
+            'await expect.poll(() => vars.page.getByLabel(%s, {exact: true}).evaluate((field) => field.validity.valid), {message: %s, timeout: %s}).toBe(false);',
+            $label,
+            sprintf('The field "%s" is invalid', $label),
+            $this->playwrightTimeout
+        );
     }
 
     /**
@@ -117,13 +135,13 @@ trait FormInteractionTrait
             throw new \RuntimeException(sprintf('File to upload not found: %s', $path));
         }
         $mimeType = mime_content_type($path);
-        $this->playwrightConnector->execute($this->requirePlaywrightContext(), sprintf(
+        $this->playwrightRun(
             'await vars.page.getByLabel(%s, {exact: true}).setInputFiles({name: %s, mimeType: %s, buffer: Buffer.from(%s, "base64")});',
-            JsValue::of($label),
-            JsValue::of(basename($path)),
-            JsValue::of($mimeType !== false ? $mimeType : 'application/octet-stream'),
-            JsValue::of(base64_encode((string)file_get_contents($path)))
-        ));
+            $label,
+            basename($path),
+            $mimeType !== false ? $mimeType : 'application/octet-stream',
+            base64_encode((string)file_get_contents($path))
+        );
     }
 
     /**
@@ -132,7 +150,30 @@ trait FormInteractionTrait
     #[When('I press the key :key')]
     public function iPressTheKey(string $key): void
     {
-        $this->playwrightConnector->execute($this->requirePlaywrightContext(), sprintf('await vars.page.keyboard.press(%s);', JsValue::of($key)));
+        $this->playwrightRun('await vars.page.keyboard.press(%s);', $key);
+    }
+
+    /**
+     * Like reaching the element with Tab - without pressing Tab through the whole page. :role is an ARIA role
+     * (button, link, textbox, ...), :name the accessible name.
+     */
+    #[When('I focus the :role :name')]
+    public function iFocusThe(string $role, string $name): void
+    {
+        $this->formInteraction_run('getByRole(%s, {name: %s, exact: true}).first().focus()', $role, $name);
+    }
+
+    /**
+     * A web-first assertion: `await expect(vars.page.<locator>).<matcher>` waits for the expected state and fails with
+     * Playwright's message. %s in $locator and $matcher are replaced by the arguments as JS literals, in this order -
+     * the last %s of $matcher by the options with the timeout.
+     */
+    private function formInteraction_expect(string $locator, string $matcher, string ...$arguments): void
+    {
+        $this->playwrightRun(
+            'await expect(vars.page.' . $locator . ').' . $matcher . ';',
+            ...[...$arguments, ['timeout' => $this->playwrightTimeout]]
+        );
     }
 
     /**
@@ -141,9 +182,6 @@ trait FormInteractionTrait
      */
     private function formInteraction_run(string $call, string ...$arguments): mixed
     {
-        return $this->playwrightConnector->execute(
-            $this->requirePlaywrightContext(),
-            'return await vars.page.' . sprintf($call, ...array_map(JsValue::of(...), $arguments)) . ';'
-        );
+        return $this->playwrightRun('return await vars.page.' . $call . ';', ...$arguments);
     }
 }

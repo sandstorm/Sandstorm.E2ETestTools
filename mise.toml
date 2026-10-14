@@ -7,6 +7,8 @@
 #
 # SUT selects the distribution in Tests/SystemUnderTest/<SUT>/ (default: neos9), e.g. `SUT=neos9 mise run start`.
 # Extra arguments are appended to the last command, e.g. `mise run tests:e2e --tags @playwright` or `--name "navigates the backend"`.
+# E2E_TRACE=on-error|always|off sets the tracing mode of the E2E run, e.g. `E2E_TRACE=always mise run tests:e2e`.
+# E2E_TIMINGS=1 writes the duration of every step to Tests/SystemUnderTest/e2e-results/step-timings.jsonl.
 
 [vars]
 compose = "docker compose -f {{config_root}}/Tests/SystemUnderTest/{{ get_env(name='SUT', default='neos9') }}/docker-compose.yml"
@@ -77,7 +79,7 @@ run = '''
 # the system under test runs in a Production context, which doesn't notice code changes - start from fresh caches
 {{vars.compose}} exec -T neos ./flow flow:cache:flush
 {{vars.compose}} exec -T neos ./flow flow:cache:warmup
-{{vars.compose}} exec -T -e FLOW_CONTEXT=Testing/Behat neos ./bin/behat --strict -c {{vars.package}}/Tests/E2E/behat.yml.dist
+{{vars.compose}} exec -T -e FLOW_CONTEXT=Testing/Behat -e E2E_TRACE -e E2E_TIMINGS neos ./bin/behat --strict -c {{vars.package}}/Tests/E2E/behat.yml.dist
 '''
 
 [tasks.tests]

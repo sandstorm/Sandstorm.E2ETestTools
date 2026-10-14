@@ -7,7 +7,7 @@ Feature: Default dimension space point
 
   @playwright
   Scenario: tables without the DimensionSpacePoint column
-    Given I have a site for Site Node "site" with name "TestSite"
+    Given I have a site for the site node "site" with name "TestSite"
     And the default dimension space point is '{"language":"de"}'
     And I have the following nodes in site "site":
       | NodeAggregateId | Parent        | NodeType                                           | Properties                                   |
@@ -24,13 +24,13 @@ Feature: Default dimension space point
       """
       testcase = ${Json.stringify(node.dimensionSpacePoint.coordinates) + ' ' + q(node).referenceNodes('privacyPage').property('title')}
       """
-    Then the Fusion output should equal to '{"language":"de"} Nested'
+    Then the Fusion output should be '{"language":"de"} Nested'
     When I access the URI path "/"
     Then there should be the text "German headline" on the page
 
   @playwright
   Scenario: mixed - the default plus rows of another dimension
-    Given I have a site for Site Node "site" with name "TestSite"
+    Given I have a site for the site node "site" with name "TestSite"
     And the default dimension space point is '{"language":"de"}'
     And I have the following nodes in site "site":
       | NodeAggregateId | Parent        | NodeType                                           | Properties                                       | DimensionSpacePoint |
@@ -55,11 +55,11 @@ Feature: Default dimension space point
       """
       testcase = ${q(node).referenceNodes('relatedPage').property('title')}
       """
-    Then the Fusion output should equal to "Nested"
+    Then the Fusion output should be "Nested"
 
   @playwright
   Scenario: YAML file without dimensionSpacePoint
-    Given I have a site for Site Node "site" with name "TestSite"
+    Given I have a site for the site node "site" with name "TestSite"
     And the default dimension space point is '{"language":"de"}'
     And I have the following nodes from file "homepage-without-dimension.yaml" in site "site"
     When I access the URI path "/"
@@ -67,7 +67,7 @@ Feature: Default dimension space point
 
   @playwright
   Scenario: another default for this scenario
-    Given I have a site for Site Node "site" with name "TestSite"
+    Given I have a site for the site node "site" with name "TestSite"
     And the default dimension space point is '{"language":"en"}'
     And I have the following nodes in site "site":
       | NodeAggregateId | Parent        | NodeType                                           | Properties                                   |
@@ -79,6 +79,6 @@ Feature: Default dimension space point
       """
       testcase = ${Json.stringify(node.dimensionSpacePoint.coordinates)}
       """
-    Then the Fusion output should equal to '{"language":"en"}'
+    Then the Fusion output should be '{"language":"en"}'
     When I access the URI path "/en"
     Then there should be the text "English headline" on the page

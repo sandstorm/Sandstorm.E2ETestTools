@@ -117,13 +117,14 @@ trait InMemorySubgraphTrait
             return null;
         });
         $subgraph->method('findChildNodes')->willReturnCallback(function (NodeAggregateId $id, FindChildNodesFilter $filter) {
-            // only the explicitly allowed NodeTypes of the filter (incl. sub types) are supported
+            // only the explicitly allowed NodeTypes of the filter (incl. sub types) and the pagination are supported
             $allowed = $filter->nodeTypes !== null ? iterator_to_array($filter->nodeTypes->explicitlyAllowedNodeTypeNames) : [];
             $children = array_map(fn (string $childId) => $this->nodes[$childId], array_keys($this->parents, $id->value, true));
-            return Nodes::fromArray(array_values(array_filter($children, fn (Node $child) => $allowed === [] || array_filter(
+            $matching = array_values(array_filter($children, fn (Node $child) => $allowed === [] || array_filter(
                 $allowed,
                 fn (NodeTypeName $nodeTypeName) => $this->nodeTypeManager->getNodeType($child->nodeTypeName)?->isOfType($nodeTypeName->value) ?? false
-            ) !== [])));
+            ) !== []));
+            return Nodes::fromArray(array_slice($matching, $filter->pagination->offset ?? 0, $filter->pagination?->limit));
         });
         $subgraph->method('findClosestNode')->willReturnCallback(function (NodeAggregateId $id, FindClosestNodeFilter $filter) {
             $nodeTypeNames = iterator_to_array($filter->nodeTypes->explicitlyAllowedNodeTypeNames);

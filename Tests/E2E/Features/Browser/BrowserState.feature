@@ -4,7 +4,7 @@
 Feature: Cookies and web storage
 
   Background:
-    Given I have a site for Site Node "site" with name "TestSite"
+    Given I have a site for the site node "site" with name "TestSite"
     And I have the following nodes in site "site":
       | NodeAggregateId | Parent        | NodeType                                           | Properties                                | DimensionSpacePoint |
       | homepage        |               | Sandstorm.E2ETestTools.TestSite:Document.StartPage | {"uriPathSegment":"site","title":"State"} | {"language":"de"}   |
@@ -40,5 +40,5 @@ Feature: Cookies and web storage
     When I click the button "Remember settings"
     Then the session storage key "tab" should have the value "details"
     And the local storage key "theme" should have the value "dark"
-    When I remove the session storage key "tab"
+    When I delete the session storage key "tab"
     Then the session storage key "tab" should not be set

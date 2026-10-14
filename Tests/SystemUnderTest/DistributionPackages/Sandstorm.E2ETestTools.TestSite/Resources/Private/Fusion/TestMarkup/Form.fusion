@@ -1,4 +1,5 @@
-// FormInteractionTrait: fields by label, buttons and links by caption, an element by test id, upload, keys
+// FormInteractionTrait: fields by label, buttons and links by caption, an element by test id, upload, keys, focus,
+// the browser's validation
 prototype(Sandstorm.E2ETestTools.TestSite:TestMarkup.Form) < prototype(Neos.Fusion:Component) {
     renderer = afx`
         <form id="contact" onsubmit="return false">
@@ -24,6 +25,9 @@ prototype(Sandstorm.E2ETestTools.TestSite:TestMarkup.Form) < prototype(Neos.Fusi
                 <option value="de">Germany</option>
                 <option value="at">Austria</option>
             </select>
+
+            <label for="email">Email</label>
+            <input id="email" type="email" value="not-an-email" />
 
             <label for="attachment">Attachment</label>
             <input id="attachment" type="file" />

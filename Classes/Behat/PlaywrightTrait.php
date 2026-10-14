@@ -12,11 +12,13 @@ use Behat\Hook\AfterScenario;
 use Behat\Hook\AfterStep;
 use Behat\Hook\BeforeScenario;
 use Behat\Hook\BeforeStep;
-use Behat\Step\Then;
+use Behat\Step\When;
 use Behat\Testwork\Tester\Result\TestResult;
 use Closure;
 use Neos\Utility\Files;
 use Sandstorm\E2ETestTools\Debugging\LogDirectory;
+use Sandstorm\E2ETestTools\Playwright\JsCode;
+use Sandstorm\E2ETestTools\Playwright\JsValue;
 
 /**
  * This trait should be included in your `FeatureContext` for integration with Playwright.
@@ -37,22 +39,24 @@ use Sandstorm\E2ETestTools\Debugging\LogDirectory;
  *
  * USAGE:
  *
- * You can use $this->playwrightConnector->execute($this->requirePlaywrightContext(), 'your-playwright-script-here')
- * in your custom steps. Pass step parameters into the script with JsValue::of() (escaped JS literal).
+ * In your custom steps, run scripts with $this->playwrightRun('your-playwright-script-here', ...$values) - every %s
+ * becomes the next value as escaped JS literal (JsValue), so step parameters can't break the script. Wrap JavaScript
+ * the step builds itself (a locator, a matcher) in JsCode::of(). playwrightArray() and playwrightStrings() check the
+ * type of what the script returned.
  *
  *
  * EXAMPLE:
  *
- * $this->playwrightConnector->execute($this->requirePlaywrightContext(), "
+ * $this->playwrightRun('
  *     vars.page = await context.newPage();
- *     await vars.page.goto('BASEURL');
- * ");
+ *     await vars.page.goto("BASEURL" + %s);
+ * ', $uriPath);
  *
  *
- * $actualHeadlineContent = $this->playwrightConnector->execute($this->requirePlaywrightContext(), "
- *     return await vars.page.textContent('h2');
- * ");
- * Assert::assertEquals($headlineName, $actualHeadlineContent, 'Headlines do not match');
+ * Assertions: Playwright's web-first assertions (`expect`) wait until the page is in the expected state and fail with
+ * a readable message - read values into PHP only for what expect can't check:
+ *
+ * $this->playwrightRun('await expect(vars.page.getByRole("heading", {level: 2})).toHaveText(%s, {timeout: %s});', $headline, $this->playwrightTimeout);
  */
 trait PlaywrightTrait
 {
@@ -92,7 +96,24 @@ trait PlaywrightTrait
 
     protected string $resultsDir = 'e2e-results';
 
+    /**
+     * How long the assertions of the steps wait for the expected state, in milliseconds - see setPlaywrightTimeout().
+     */
+    protected int $playwrightTimeout = 5000;
+
     private int $playwrightTracingMode = self::PLAYWRIGHT_TRACING_MODE_ON_ERROR;
+
+    /**
+     * Whether the current scenario records a trace - each step then opens a group in it.
+     */
+    private bool $playwrightTracing = false;
+
+    private bool $playwrightStepGroupOpen = false;
+
+    /**
+     * The bridge is checked once per Behat run.
+     */
+    private static bool $playwrightBridgeChecked = false;
 
     /**
      * Data/Logs by default; null in projects without Flow.
@@ -113,11 +134,39 @@ trait PlaywrightTrait
     }
 
     /**
+     * How long the assertions of the shipped steps wait for the expected state (default: 5000 ms). Raise it for a slow
+     * system under test, e.g. in CI.
+     */
+    protected final function setPlaywrightTimeout(int $milliseconds): void
+    {
+        $this->playwrightTimeout = $milliseconds;
+    }
+
+    /**
      * When traces are written: self::PLAYWRIGHT_TRACING_MODE_ON_ERROR (default), _ALWAYS or _OFF.
+     * The environment variable E2E_TRACE=on-error|always|off overrides it for a single run.
      */
     protected final function setPlaywrightTracingMode(int $mode): void
     {
         $this->playwrightTracingMode = $mode;
+    }
+
+    /**
+     * The tracing mode of this run: E2E_TRACE if set, otherwise the one from setPlaywrightTracingMode().
+     */
+    protected final function getPlaywrightTracingMode(): int
+    {
+        $mode = getenv('E2E_TRACE');
+        return match ($mode) {
+            false, '' => $this->playwrightTracingMode,
+            'on-error' => self::PLAYWRIGHT_TRACING_MODE_ON_ERROR,
+            'always' => self::PLAYWRIGHT_TRACING_MODE_ALWAYS,
+            'off' => self::PLAYWRIGHT_TRACING_MODE_OFF,
+            default => throw new \RuntimeException(
+                sprintf('E2E_TRACE must be "on-error", "always" or "off" - got "%s".', $mode),
+                1728000001
+            ),
+        };
     }
 
     /**
@@ -176,7 +225,19 @@ trait PlaywrightTrait
         $this->playwrightContext = (string)preg_replace('/[^a-zA-Z0-9_]/', '', basename($event->getFeature()->getFile()) . '_' . $event->getScenario()->getTitle());
         $this->playwrightConnector->stopContext($this->playwrightContext);
         $this->playwrightConnector->setSystemUnderTestUrlModifier(null);
-        if ($this->playwrightTracingMode !== self::PLAYWRIGHT_TRACING_MODE_OFF) {
+        $this->playwrightStepGroupOpen = false;
+        if (!self::$playwrightBridgeChecked) {
+            // older copies of the bridge hand the scripts only "context" and "vars" - the steps need "expect"
+            if ($this->playwrightConnector->execute($this->playwrightContext, 'return typeof expect;') !== 'function') {
+                throw new \RuntimeException(
+                    'The playwright-bridge is too old: its scripts get no "expect". Update your copy from Sandstorm.E2ETestTools/Templates/playwright-bridge - see the CHANGELOG of Sandstorm.E2ETestTools.',
+                    1728000002
+                );
+            }
+            self::$playwrightBridgeChecked = true;
+        }
+        $this->playwrightTracing = $this->getPlaywrightTracingMode() !== self::PLAYWRIGHT_TRACING_MODE_OFF;
+        if ($this->playwrightTracing) {
             $this->playwrightConnector->startTracing(
                 $this->playwrightContext,
                 $event->getFeature()->getFile(),
@@ -188,9 +249,10 @@ trait PlaywrightTrait
     #[AfterScenario('@playwright')]
     public function playwrightAfterScenario(AfterScenarioScope $event): void
     {
-        if ($this->playwrightContext && $this->playwrightTracingMode !== self::PLAYWRIGHT_TRACING_MODE_OFF) {
-            $keepTrace = ($this->playwrightTracingMode === self::PLAYWRIGHT_TRACING_MODE_ON_ERROR && $event->getTestResult()->getResultCode() === TestResult::FAILED)
-                || $this->playwrightTracingMode === self::PLAYWRIGHT_TRACING_MODE_ALWAYS;
+        if ($this->playwrightContext && $this->playwrightTracing) {
+            $mode = $this->getPlaywrightTracingMode();
+            $keepTrace = ($mode === self::PLAYWRIGHT_TRACING_MODE_ON_ERROR && $event->getTestResult()->getResultCode() === TestResult::FAILED)
+                || $mode === self::PLAYWRIGHT_TRACING_MODE_ALWAYS;
             $this->playwrightConnector->finishTracing(
                 $this->playwrightContext,
                 $event->getFeature()->getFile(),
@@ -232,13 +294,33 @@ trait PlaywrightTrait
     #[BeforeStep]
     public function playwrightBeforeStep(BeforeStepScope $event): void
     {
-        if ($this->playwrightContext) {
-            $this->playwrightConnector->setStepForDebugging($this->playwrightContext, $event->getStep()->getText());
+        if (!$this->playwrightContext) {
+            return;
+        }
+        $stepText = $event->getStep()->getKeyword() . ' ' . $event->getStep()->getText();
+        if ($this->playwrightTracing) {
+            $this->playwrightConnector->startStepGroup($this->playwrightContext, $stepText);
+            $this->playwrightStepGroupOpen = true;
+        } else {
+            $this->playwrightConnector->setStepForDebugging($this->playwrightContext, $stepText);
         }
     }
 
     #[AfterStep]
     public function playwrightAfterStep(AfterStepScope $event): void
+    {
+        try {
+            $this->takeErrorScreenshotOfFailedStep($event);
+        } finally {
+            // after the error screenshot, so it's part of the step's group
+            if ($this->playwrightContext && $this->playwrightStepGroupOpen) {
+                $this->playwrightStepGroupOpen = false;
+                $this->playwrightConnector->endStepGroup($this->playwrightContext);
+            }
+        }
+    }
+
+    private function takeErrorScreenshotOfFailedStep(AfterStepScope $event): void
     {
         if ($this->playwrightContext && $event->getTestResult()->getResultCode() === TestResult::FAILED) {
             $errorScreenshotFileName = (string)preg_replace('/[^a-zA-Z0-9_]/', '', basename($event->getFeature()->getFile()) . '_' . $event->getStep()->getText());
@@ -272,6 +354,69 @@ trait PlaywrightTrait
     }
 
     /**
+     * Runs the script in the browser context of the scenario and returns what it returned. Every %s (or %1$s, ...) in
+     * $script is replaced by the next value as JS literal - a {@see JsCode} as it is. Without values, the script is
+     * sent unchanged (a % in it needs no escaping then).
+     */
+    protected function playwrightRun(string $script, mixed ...$values): mixed
+    {
+        return $this->playwrightConnector->execute($this->requirePlaywrightContext(), self::playwrightScript($script, ...$values));
+    }
+
+    /**
+     * Like {@see playwrightRun()}, for scripts that return an object or array, e.g. `return {page: "...", notice: "..."};`
+     *
+     * @return array<mixed>
+     */
+    protected function playwrightArray(string $script, mixed ...$values): array
+    {
+        $result = $this->playwrightRun($script, ...$values);
+        if (!is_array($result)) {
+            throw new \UnexpectedValueException(sprintf('The Playwright script returned %s instead of an array.', get_debug_type($result)));
+        }
+        return $result;
+    }
+
+    /**
+     * Like {@see playwrightRun()}, for scripts that return a list, e.g. `return [...new Set(hosts)];` - the entries as
+     * strings.
+     *
+     * @return list<string>
+     */
+    protected function playwrightStrings(string $script, mixed ...$values): array
+    {
+        return array_values(array_map(static fn (mixed $value): string => self::playwrightString($value), $this->playwrightArray($script, ...$values)));
+    }
+
+    /**
+     * A value of a script result as string - for assertions and failure messages.
+     */
+    protected static function playwrightString(mixed $value): string
+    {
+        if (is_string($value)) {
+            return $value;
+        }
+        if (is_scalar($value) || $value === null) {
+            return var_export($value, true);
+        }
+        return (string)json_encode($value);
+    }
+
+    /**
+     * The script {@see playwrightRun()} sends.
+     */
+    protected static function playwrightScript(string $script, mixed ...$values): string
+    {
+        if ($values === []) {
+            return $script;
+        }
+        return sprintf($script, ...array_map(
+            static fn (mixed $value): string => $value instanceof JsCode ? $value->code : JsValue::of($value),
+            $values
+        ));
+    }
+
+    /**
      * Closes the scenario's browser context (after the trace was written).
      */
     #[AfterScenario('@playwright')]
@@ -286,7 +431,7 @@ trait PlaywrightTrait
     /**
      * Prints the Playwright script of the scenario so far.
      */
-    #[Then('I debug the playwright script')]
+    #[When('I debug the Playwright script')]
     public function iDebugThePlaywrightScript(): void
     {
         $js = $this->playwrightConnector->getCurrentJsCode($this->requirePlaywrightContext());
@@ -301,8 +446,8 @@ trait PlaywrightTrait
     /**
      * The file name is relative to the results directory.
      */
-    #[Then('I do a screenshot :filename')]
-    public function iDoAScreenshot(string $filename): void
+    #[When('I take a screenshot :filename')]
+    public function iTakeAScreenshot(string $filename): void
     {
         // NOTE: intentionally no "path" option here - see the comment in playwrightAfterStep().
         $base64Image = $this->playwrightConnector->execute($this->requirePlaywrightContext(), '

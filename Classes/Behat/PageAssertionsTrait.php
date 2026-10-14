@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace Sandstorm\E2ETestTools\Behat;
 
 use Behat\Step\Then;
-use PHPUnit\Framework\Assert;
-use Sandstorm\E2ETestTools\Playwright\JsValue;
+use Sandstorm\E2ETestTools\Playwright\JsCode;
 
 /**
- * Assertions on the page in the browser: title, texts, elements by test id (`data-testid`).
+ * Assertions on the page in the browser: title, texts, focus, elements by role and accessible name or by test id
+ * (`data-testid`).
+ *
+ * Elements found by role and accessible name are found like a screen reader user finds them - an element hidden from
+ * assistive technology (inert, aria-hidden) counts as missing.
  *
  * Needs {@see PlaywrightTrait}. Opt-in: use it in your FeatureContext; remove project steps with the same wording first,
  * otherwise Behat reports them as ambiguous.
@@ -17,43 +20,119 @@ use Sandstorm\E2ETestTools\Playwright\JsValue;
 trait PageAssertionsTrait
 {
     /**
-     * How long element state assertions wait for the state, in milliseconds.
+     * @deprecated use setPlaywrightTimeout() in the constructor of your FeatureContext
      */
-    private int $pageAssertions_timeout = 5000;
+    private ?int $pageAssertions_timeout = null;
 
     #[Then('the page title should be :title')]
     public function thePageTitleShouldBe(string $title): void
     {
-        $actual = $this->playwrightConnector->execute($this->requirePlaywrightContext(), <<<'JS'
-            await vars.page.waitForLoadState();
-            return await vars.page.title();
-        JS);
-        Assert::assertSame($title, $actual, 'Unexpected page title.');
+        $this->pageAssertions_expect('vars.page', 'toHaveTitle(%s, %s)', $title);
     }
 
     /**
-     * Checks the rendered text (`innerText`) - text in hidden elements counts as absent.
+     * Checks the rendered text (`innerText`, case-sensitive) - text in hidden elements counts as absent.
+     */
+    #[Then('there should be the text :text on the page')]
+    public function thereShouldBeTheTextOnThePage(string $text): void
+    {
+        $this->pageAssertions_expect('vars.page.locator("body")', 'toContainText(%s, {useInnerText: true, ...%s})', $text);
+    }
+
+    /**
+     * Checks the rendered text (`innerText`, case-sensitive) - text in hidden elements counts as absent.
      */
     #[Then('there should not be the text :text on the page')]
     public function thereShouldNotBeTheTextOnThePage(string $text): void
     {
-        $pageText = $this->playwrightConnector->execute($this->requirePlaywrightContext(), <<<'JS'
-            await vars.page.waitForLoadState();
-            return await vars.page.evaluate(() => document.body.innerText);
-        JS);
-        Assert::assertStringNotContainsString($text, (string)$pageText, sprintf('The text "%s" is on the page.', $text));
+        $this->pageAssertions_expect('vars.page.locator("body")', 'not.toContainText(%s, {useInnerText: true, ...%s})', $text);
     }
 
     #[Then('there should be the text :text in :selector')]
     public function thereShouldBeTheTextIn(string $text, string $selector): void
     {
-        Assert::assertStringContainsString($text, $this->innerTextOf($selector), sprintf('The text "%s" is not in "%s".', $text, $selector));
+        $this->pageAssertions_expect($this->pageAssertions_css($selector), 'toContainText(%s, {useInnerText: true, ...%s})', $text);
     }
 
     #[Then('there should not be the text :text in :selector')]
     public function thereShouldNotBeTheTextIn(string $text, string $selector): void
     {
-        Assert::assertStringNotContainsString($text, $this->innerTextOf($selector), sprintf('The text "%s" is in "%s".', $text, $selector));
+        $this->pageAssertions_expect($this->pageAssertions_css($selector), 'not.toContainText(%s, {useInnerText: true, ...%s})', $text);
+    }
+
+    /**
+     * :role is an ARIA role (button, link, heading, textbox, ...), :name the accessible name - the exact caption or
+     * label. Fails with the element that has the focus instead.
+     */
+    #[Then('the :role :name should be focused')]
+    public function theShouldBeFocused(string $role, string $name): void
+    {
+        $this->pageAssertions_expectFocused(
+            $this->pageAssertions_role($role, $name),
+            sprintf(
+                'await %s.count() === 0 && await %s.count() > 0',
+                $this->pageAssertions_role($role, $name),
+                $this->pageAssertions_role($role, $name, true)
+            ),
+            sprintf('The %s "%s" is hidden from assistive technology (inert or aria-hidden), so it can\'t be focused.', $role, $name)
+        );
+    }
+
+    /**
+     * The element is focused or contains the focused element (`:focus-within`).
+     */
+    #[Then('the focus should be inside :selector')]
+    public function theFocusShouldBeInside(string $selector): void
+    {
+        $this->pageAssertions_expectFocused(
+            sprintf('%s.and(vars.page.locator(":focus-within"))', $this->pageAssertions_css($selector)),
+            'false',
+            '',
+            'toHaveCount(1, %s)'
+        );
+    }
+
+    #[Then('the :role :name should be visible')]
+    public function theShouldBeVisible(string $role, string $name): void
+    {
+        $this->pageAssertions_expect($this->pageAssertions_role($role, $name), 'toBeVisible(%s)');
+    }
+
+    /**
+     * Finds elements hidden from assistive technology too. Like Playwright's toBeHidden() it also passes if there is no
+     * such element - check the element is visible before the action that should hide it.
+     */
+    #[Then('the :role :name should be hidden')]
+    public function theShouldBeHidden(string $role, string $name): void
+    {
+        $this->pageAssertions_expect($this->pageAssertions_role($role, $name, true), 'toBeHidden(%s)');
+    }
+
+    #[Then('the :role :name should be enabled')]
+    public function theShouldBeEnabled(string $role, string $name): void
+    {
+        $this->pageAssertions_expect($this->pageAssertions_role($role, $name), 'toBeEnabled(%s)');
+    }
+
+    /**
+     * Also passes for aria-disabled="true".
+     */
+    #[Then('the :role :name should be disabled')]
+    public function theShouldBeDisabled(string $role, string $name): void
+    {
+        $this->pageAssertions_expect($this->pageAssertions_role($role, $name), 'toBeDisabled(%s)');
+    }
+
+    #[Then('the :role :name should be in the viewport')]
+    public function theShouldBeInTheViewport(string $role, string $name): void
+    {
+        $this->pageAssertions_expect($this->pageAssertions_role($role, $name), 'toBeInViewport(%s)');
+    }
+
+    #[Then('the :role :name should not be in the viewport')]
+    public function theShouldNotBeInTheViewport(string $role, string $name): void
+    {
+        $this->pageAssertions_expect($this->pageAssertions_role($role, $name), 'not.toBeInViewport(%s)');
     }
 
     /**
@@ -62,79 +141,95 @@ trait PageAssertionsTrait
     #[Then('the element with test id :testId should be :state')]
     public function theElementWithTestIdShouldBe(string $testId, string $state): void
     {
-        $predicates = [
-            'visible' => null,
-            'hidden' => null,
-            'focused' => 'element === document.activeElement',
-            'enabled' => "!element.disabled && element.getAttribute('aria-disabled') !== 'true'",
-            'disabled' => "element.disabled || element.getAttribute('aria-disabled') === 'true'",
+        $matchers = [
+            'visible' => 'toBeVisible',
+            'hidden' => 'toBeHidden',
+            'focused' => 'toBeFocused',
+            'enabled' => 'toBeEnabled',
+            'disabled' => 'toBeDisabled',
         ];
-        if (!array_key_exists($state, $predicates)) {
-            throw new \InvalidArgumentException(sprintf('Unknown state "%s" - use one of: %s.', $state, implode(', ', array_keys($predicates))));
+        if (!array_key_exists($state, $matchers)) {
+            throw new \InvalidArgumentException(sprintf('Unknown state "%s" - use one of: %s.', $state, implode(', ', array_keys($matchers))));
         }
-        Assert::assertTrue(
-            $this->waitForTestIdState($testId, $state, $predicates[$state]),
-            sprintf('The element with test id "%s" is not %s (waited %d ms).', $testId, $state, $this->pageAssertions_timeout)
-        );
+        if ($state === 'focused') {
+            $this->pageAssertions_expectFocused($this->pageAssertions_testId($testId), 'false', '');
+            return;
+        }
+        $this->pageAssertions_expect($this->pageAssertions_testId($testId), $matchers[$state] . '(%s)');
     }
 
     #[Then('the element with test id :testId should be in the viewport')]
     public function theElementWithTestIdShouldBeInTheViewport(string $testId): void
     {
-        Assert::assertTrue(
-            $this->waitForTestIdState($testId, 'in the viewport', 'pageAssertionsInViewport(element)'),
-            sprintf('The element with test id "%s" is not in the viewport (waited %d ms).', $testId, $this->pageAssertions_timeout)
-        );
+        $this->pageAssertions_expect($this->pageAssertions_testId($testId), 'toBeInViewport(%s)');
     }
 
     #[Then('the element with test id :testId should not be in the viewport')]
     public function theElementWithTestIdShouldNotBeInTheViewport(string $testId): void
     {
-        Assert::assertTrue(
-            $this->waitForTestIdState($testId, 'not in the viewport', '!pageAssertionsInViewport(element)'),
-            sprintf('The element with test id "%s" is in the viewport (waited %d ms).', $testId, $this->pageAssertions_timeout)
+        $this->pageAssertions_expect($this->pageAssertions_testId($testId), 'not.toBeInViewport(%s)');
+    }
+
+    private function pageAssertions_testId(string $testId): string
+    {
+        return self::playwrightScript('vars.page.getByTestId(%s).first()', $testId);
+    }
+
+    private function pageAssertions_css(string $selector): string
+    {
+        return self::playwrightScript('vars.page.locator(%s).first()', $selector);
+    }
+
+    private function pageAssertions_role(string $role, string $name, bool $includeHidden = false): string
+    {
+        return self::playwrightScript(
+            'vars.page.getByRole(%s, %s).first()',
+            $role,
+            ['name' => $name, 'exact' => true] + ($includeHidden ? ['includeHidden' => true] : [])
         );
     }
 
-    private function innerTextOf(string $selector): string
+    private function pageAssertions_timeoutOptions(): string
     {
-        return (string)$this->playwrightConnector->execute($this->requirePlaywrightContext(), sprintf(<<<'JS'
-            return await vars.page.locator(%s).first().innerText();
-        JS, JsValue::of($selector)));
+        return self::playwrightScript('%s', ['timeout' => $this->pageAssertions_timeout ?? $this->playwrightTimeout]);
     }
 
     /**
-     * Waits until the element is in the state - visible/hidden via Playwright, everything else via a predicate on the
-     * element evaluated in the page. Returns false instead of throwing, so the step can fail with a readable message.
+     * Runs a web-first assertion: `await expect(<subject>).<matcher>` - it waits up to the timeout for the expected
+     * state and fails with Playwright's message (expected and received value, call log). In $matcher the last %s is
+     * the options with the timeout, a %s before it the expected value.
      */
-    private function waitForTestIdState(string $testId, string $state, ?string $predicate): bool
+    private function pageAssertions_expect(string $subject, string $matcher, ?string $expected = null): void
     {
-        if ($predicate === null) {
-            $script = sprintf(<<<'JS'
-                try {
-                    await vars.page.getByTestId(%s).first().waitFor({state: %s, timeout: %d});
-                    return true;
-                } catch (e) {
-                    return false;
+        $options = JsCode::of($this->pageAssertions_timeoutOptions());
+        $this->playwrightRun(
+            'await expect(%s).' . $matcher . ';',
+            JsCode::of($subject),
+            ...($expected === null ? [$options] : [$expected, $options])
+        );
+    }
+
+    /**
+     * Like {@see pageAssertions_expect()} (default matcher: toBeFocused), but the failure also tells which element has
+     * the focus instead - or $hiddenMessage, if $hiddenCheck (a JS condition) is true.
+     */
+    private function pageAssertions_expectFocused(string $subject, string $hiddenCheck, string $hiddenMessage, string $matcher = 'toBeFocused(%s)'): void
+    {
+        $this->playwrightRun(<<<'JS'
+            try {
+                await expect(%1$s).%2$s;
+            } catch (error) {
+                if (%3$s) {
+                    throw new Error(%4$s);
                 }
-            JS, JsValue::of($testId), JsValue::of($state), $this->pageAssertions_timeout);
-        } else {
-            $script = sprintf(<<<'JS'
-                try {
-                    await vars.page.waitForFunction((testId) => {
-                        const pageAssertionsInViewport = (el) => {
-                            const rect = el.getBoundingClientRect();
-                            return rect.bottom > 0 && rect.right > 0 && rect.top < window.innerHeight && rect.left < window.innerWidth;
-                        };
-                        const element = document.querySelector('[data-testid="' + CSS.escape(testId) + '"]');
-                        return element !== null && (%s);
-                    }, %s, {timeout: %d});
-                    return true;
-                } catch (e) {
-                    return false;
-                }
-            JS, $predicate, JsValue::of($testId), $this->pageAssertions_timeout);
-        }
-        return $this->playwrightConnector->execute($this->requirePlaywrightContext(), $script) === true;
+                const focused = await vars.page.evaluate(() => document.activeElement?.outerHTML.slice(0, 150) ?? 'nothing');
+                throw new Error(`${error.message}\nFocused instead: ${focused}`);
+            }
+        JS,
+            JsCode::of($subject),
+            JsCode::of(sprintf($matcher, $this->pageAssertions_timeoutOptions())),
+            JsCode::of($hiddenCheck),
+            $hiddenMessage
+        );
     }
 }
