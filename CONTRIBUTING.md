@@ -48,7 +48,7 @@ project:
   test, port 9090 in the container, `127.0.0.1:19090` on the host), `Testing/Behat` and `Testing` (functional tests);
 - `DistributionPackages/Sandstorm.E2ETestTools.TestSite/` - the minimal site the E2E suite runs against;
 - services: neos (SUT + Behat), maria-db, redis-cache, playwright-bridge (built from `Templates/playwright-bridge`),
-  wiremock.
+  wiremock, mailpit.
 
 The package code is mounted into the container, so changes need no rebuild - only a changed `composer.json` or
 `Dockerfile` does.
@@ -78,9 +78,10 @@ Dockerfile steps and an export to the GitHub Actions cache without error.
 
 - **Unit and functional (PHPUnit, `Tests/Unit`, `Tests/Functional`):** the fixture tooling (YAML format, export/import
   contract, Gherkin escaping, node tree collection, URI path lookup, export endpoint security), the WireMock admin
-  client, script escaping (`JsValue`), the log copying (`LogDirectory`) and the guard of the pause step.
-- **E2E (Behat, [`Tests/E2E/`](Tests/E2E/README.md)):** every shipped step, against the test site. The features double
-  as the examples the README links to.
+  client, script escaping (`JsValue`, `JsCode`, `CssValue`), the typed script results, the log copying
+  (`LogDirectory`), the step timings and the guard of the pause step.
+- **E2E (Behat, [`Tests/E2E/`](Tests/E2E/README.md)):** every shipped step, against the test site, and the failure
+  messages of the browser steps (`StepFailureTrait`). The features double as the examples the README links to.
 
 ## Fixture tooling
 
@@ -106,3 +107,22 @@ Export and import share one model, so whatever an export writes, the import crea
 - Each format (YAML, Gherkin tables) lives in one class, writing and reading - format changes happen in one place and
   are pinned by round-trip tests (`Tests/Unit/Fixture`).
 - Classes in `Classes/` hold the logic; the Behat traits only map steps to it.
+
+## Releasing
+
+**Why the version numbers jump to 10.0.0:** 1.x had its own numbers, 8.2.0–9.1.0 followed the Neos version. That
+left no way to signal a breaking change of the package - those don't come with Neos releases (the step renames would
+have been "9.2.0" and broken every `^9.1` project). So since 10.0.0 the package follows SemVer; 10, because Composer
+has to rank it above 9.1.0. The supported Neos versions are in `composer.json` and the
+[version table](README.md#versions).
+
+- **Major:** a step renamed, removed or with changed behaviour, a trait a project has to add, a bridge version that
+  needs a new copy or image, a raised Neos/PHP minimum.
+- **Minor:** a new step or trait, a new option.
+- **Patch:** a fix.
+
+1. Add a section `## X.Y.Z - <date>` to [CHANGELOG.md](CHANGELOG.md) when releasing - there's no "unreleased" section.
+2. Group it as the 10.0.0 section: `### Upgrading the steps to X.0` and `### Upgrading the playwright-bridge to X.0`
+   (majors only), `### New in X.Y`.
+3. For a changed Neos range: the README's version table.
+4. Tag `X.Y.Z` (no `v`, as before) and create a GitHub release with the CHANGELOG section.

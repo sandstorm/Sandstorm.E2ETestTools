@@ -230,7 +230,7 @@ trait PlaywrightTrait
             // older copies of the bridge hand the scripts only "context" and "vars" - the steps need "expect"
             if ($this->playwrightConnector->execute($this->playwrightContext, 'return typeof expect;') !== 'function') {
                 throw new \RuntimeException(
-                    'The playwright-bridge is too old: its scripts get no "expect". Update your copy from Sandstorm.E2ETestTools/Templates/playwright-bridge - see "Upgrading the playwright-bridge" in the README of Sandstorm.E2ETestTools.',
+                    'The playwright-bridge is too old: its scripts get no "expect". Update your copy from Sandstorm.E2ETestTools/Templates/playwright-bridge - see the CHANGELOG of Sandstorm.E2ETestTools.',
                     1728000002
                 );
             }
