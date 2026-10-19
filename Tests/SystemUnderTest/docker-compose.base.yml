@@ -28,7 +28,6 @@ services:
       WEATHER_API_URL: 'http://wiremock:8080/weather-api'
       # MailpitTrait (see Tests/E2E/Features/Mail/)
       MAILPIT_API_URL: 'http://mailpit:8025'
-      PAUSE_FOR_DEBUGGING: '${PAUSE_FOR_DEBUGGING:-false}'
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:

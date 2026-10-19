@@ -235,7 +235,8 @@ Your copy doesn't update with the package. After an update, compare it with
 ## 6. Project tasks (recommended)
 
 Wrap the recurring commands in your task runner (mise, make, npm scripts, ...). The Neos-on-Docker kickstart, for
-example, has `mise run tests:e2e:start-bridge` and `mise run tests:e2e [path]`, which roughly does:
+example, has `mise run tests:e2e:runAll` and `mise run tests:e2e:runSingle [path]`: they start the bridge, then roughly
+do the following and stop the bridge again:
 
 ```bash
 docker compose exec maria-db /createTestingDB.sh
@@ -712,13 +713,13 @@ IDE "run" buttons usually don't work when Behat runs in a container - use the CL
 - **Narrow it down**: `--stop-on-failure` stops at the first error, so you can inspect the E2E database; `-vvv` prints
   full stack traces; tag scenarios (e.g. `@debug`) and run them with `--tags=debug`.
 - **Pause the browser**: `And I pause for debugging` opens the Playwright inspector (`page.pause()`) on the bridge
-  side. It needs a visible browser (`HEADLESS=false`) and Behat run with `PAUSE_FOR_DEBUGGING=true`, otherwise the step
-  fails right away. The SUT and its database keep the scenario's state, so you can click around.
+  side and waits without timeout until you resume there. It needs a visible browser (`HEADLESS=false`), otherwise the
+  step fails right away. The SUT and its database keep the scenario's state, so you can click around.
 - **Slow steps**: use `StepTimingTrait` in your `FeatureContext` and run Behat with `E2E_TIMINGS=1` (with
   `docker compose exec`: `-e E2E_TIMINGS`). `step-timings.jsonl` in the results directory then has one line per step
   and scenario: feature, line, step text, duration (`ms`), result, and the number of requests to the bridge with their
   time (`bridgeCalls`, `bridgeMs`) - the rest is PHP (fixtures, cache, database). The kickstart sums it up with
-  `mise run tests:e2e:timings <label>` and compares two labels with `mise run tests:e2e:timings:compare <a> <b>`.
+  `mise run tests:e2e:runAll --timings <label>` and compares two labels with `mise run tests:e2e:compareTimings <a> <b>`.
   It's a local dev tool for measuring the suite - don't set `E2E_TIMINGS` in the pipeline.
 - **Let an agent analyse failures**: the results directory holds screenshots, traces, server logs and - with
   `--format junit --out <dir>` - the JUnit report. Tell a coding agent like Claude where it is.

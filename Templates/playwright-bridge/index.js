@@ -56,6 +56,9 @@
  * - POST /stop/[contextName]
  *   - Removes the context, i.e. the allocated `BrowserContext` and variable bag; effectively closing the browser window associated.
  *
+ * - GET /status
+ *   - `{"headless": true|false}` - whether the browser is invisible (then page.pause() does nothing).
+ *
  * EXAMPLE usage:
  *
  * curl http://127.0.0.1:3000/exec/t1 --data-raw 'vars.page = await context.newPage();'
@@ -159,6 +162,12 @@ const init = async () => {
 
             return h.response("Deleted").code(200);
         }
+    });
+
+    server.route({
+        method: 'GET',
+        path: '/status',
+        handler: () => ({headless})
     });
 
     await server.start();

@@ -3,6 +3,15 @@
 What changed for projects using the package, the newest version first. Versions follow SemVer since 10.0.0 - see
 [Versions](README.md#versions). A major version comes with upgrade notes for the steps and the playwright-bridge.
 
+## Unreleased
+
+- `I pause for debugging` no longer needs `PAUSE_FOR_DEBUGGING=true` - the pause request waits without timeout, every
+  other request to the bridge keeps its 30 seconds. With a headless bridge the step fails right away (#1728120002).
+  `PAUSE_FOR_DEBUGGING` is ignored now; drop it from your scripts and `docker compose exec -e` lists.
+- `PlaywrightConnector::execute()` takes an optional timeout in seconds (`0` = none).
+- playwright-bridge: `GET /status` answers `{"headless": true|false}` - update your copy to get the headless check
+  (an older copy pauses as before, without it).
+
 ## 10.0.0 - 2026-10-14
 
 ### Upgrading the steps to 10.0
