@@ -3,7 +3,7 @@
 What changed for projects using the package, the newest version first. Versions follow SemVer since 10.0.0 - see
 [Versions](README.md#versions). A major version comes with upgrade notes for the steps and the playwright-bridge.
 
-## Unreleased
+## 10.1.0 - 2026-10-20
 
 - New `ResponsiveImageTrait` (see README): checks that `sizes` makes the browser load the fitting srcset image, with
   generated test images (php-vips or ext-gd). Images may be expected to load `one larger` (new) or `one smaller` per
@@ -11,7 +11,9 @@ What changed for projects using the package, the newest version first. Versions 
   use `ResponsiveImageTrait` - same steps, otherwise Behat reports them as ambiguous.
 - `I pause for debugging` no longer needs `PAUSE_FOR_DEBUGGING=true` - the pause request waits without timeout, every
   other request to the bridge keeps its 30 seconds. With a headless bridge the step fails right away (#1728120002).
-  `PAUSE_FOR_DEBUGGING` is ignored now; drop it from your scripts and `docker compose exec -e` lists.
+  `PAUSE_FOR_DEBUGGING` is ignored now and no longer lifts the 30 seconds of the other requests - a step that only
+  passed with it (a request to the bridge longer than 30 seconds) fails now. Drop it from your scripts and
+  `docker compose exec -e` lists.
 - `PlaywrightConnector::execute()` takes an optional timeout in seconds (`0` = none).
 - playwright-bridge: `GET /status` answers `{"headless": true|false}` - update your copy to get the headless check
   (an older copy pauses as before, without it).
