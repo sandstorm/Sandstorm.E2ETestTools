@@ -9,7 +9,8 @@ Run it from the package root (see [Development distribution](../../CONTRIBUTING.
 
 ```bash
 mise run start
-mise run tests:e2e
+mise run tests:e2e:runAll
+mise run tests:e2e:runSingle    # one feature - choose it from a list
 ```
 
 | Feature | Shows |

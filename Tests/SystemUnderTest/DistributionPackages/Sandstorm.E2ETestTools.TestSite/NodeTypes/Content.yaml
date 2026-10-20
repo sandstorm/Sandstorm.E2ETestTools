@@ -71,6 +71,24 @@
     alternativeText:
       type: string
 
+# An image with srcset 200w ... 1000w for ResponsiveImageTrait: `sizes` and the shown width (CSS px) come from the
+# node, so a test can make `sizes` right or wrong on purpose.
+'Sandstorm.E2ETestTools.TestSite:Content.ResponsiveImage':
+  superTypes:
+    'Neos.Neos:Content': true
+  ui:
+    label: 'Responsive image'
+    icon: icon-image
+  properties:
+    image:
+      type: Neos\Media\Domain\Model\ImageInterface
+    alternativeText:
+      type: string
+    sizes:
+      type: string
+    width:
+      type: integer
+
 # Renders one of the Fusion fixtures in Resources/Private/Fusion/TestMarkup/ - a test page for the browser steps without
 # a NodeType per page: {"markup":"Form"} renders Sandstorm.E2ETestTools.TestSite:TestMarkup.Form
 'Sandstorm.E2ETestTools.TestSite:Content.TestMarkup':

@@ -17,6 +17,11 @@ use Sandstorm\E2ETestTools\Playwright\JsValue;
 class PlaywrightConnector
 {
 
+    /**
+     * Seconds a request to the bridge may take - {@see execute()} with 0 waits without limit.
+     */
+    public const DEFAULT_TIMEOUT_SECONDS = 30;
+
     private string $playwrightApiUrl;
     private string $systemUnderTestUrl;
     private string $resultsDir;
@@ -81,12 +86,26 @@ class PlaywrightConnector
      *
      * @param string $contextName
      * @param string $playwrightJsCode
+     * @param int $timeoutSeconds 0 waits without limit, e.g. for page.pause()
      * @return mixed
      */
-    public function execute(string $contextName, string $playwrightJsCode)
+    public function execute(string $contextName, string $playwrightJsCode, int $timeoutSeconds = self::DEFAULT_TIMEOUT_SECONDS)
     {
-        $successResponse = $this->executeInternal($contextName, $playwrightJsCode);
+        $successResponse = $this->executeInternal($contextName, $playwrightJsCode, $timeoutSeconds);
         return $successResponse['returnValue'] ?? null;
+    }
+
+    /**
+     * Whether the bridge runs its browser headless - null for an older copy of the bridge without GET /status.
+     */
+    public function isBridgeHeadless(): ?bool
+    {
+        $response = $this->sendRequest('GET', $this->playwrightApiUrl . '/status');
+        if ($response->getStatusCode() !== 200) {
+            return null;
+        }
+        $status = json_decode($response->getBody()->getContents(), true);
+        return is_array($status) && is_bool($status['headless'] ?? null) ? $status['headless'] : null;
     }
 
     public function getCurrentJsCode(string $contextName)
@@ -191,7 +210,7 @@ class PlaywrightConnector
         }
     }
 
-    private function executeInternal(string $contextName, string $playwrightJsCode)
+    private function executeInternal(string $contextName, string $playwrightJsCode, int $timeoutSeconds = self::DEFAULT_TIMEOUT_SECONDS)
     {
         $systemUnderTestUrl = $this->systemUnderTestUrl;
         $modifier = $this->systemUnderTestUrlModifier;
@@ -200,7 +219,7 @@ class PlaywrightConnector
         }
 
         $playwrightJsCode = str_replace('BASEURL', $systemUnderTestUrl, $playwrightJsCode);
-        $response = $this->sendRequest('POST', $this->playwrightApiUrl . '/exec/' . $contextName, $playwrightJsCode);
+        $response = $this->sendRequest('POST', $this->playwrightApiUrl . '/exec/' . $contextName, $playwrightJsCode, $timeoutSeconds);
         $statusCode = $response->getStatusCode();
         if ($statusCode === 500) {
             $bodyContents = $response->getBody()->getContents();
@@ -237,7 +256,7 @@ class PlaywrightConnector
         }
     }
 
-    private function sendRequest(string $method, string $requestUri, string $content = '')
+    private function sendRequest(string $method, string $requestUri, string $content = '', int $timeoutSeconds = self::DEFAULT_TIMEOUT_SECONDS)
     {
         if (!extension_loaded('curl')) {
             throw new \RuntimeException(
@@ -248,20 +267,13 @@ class PlaywrightConnector
 
         $curlHandle = curl_init($requestUri);
 
-        $pauseEnv = getenv('PAUSE_FOR_DEBUGGING');
-        if ($pauseEnv !== 'true') {
-            $timeout = 30;
-        } else {
-            $timeout = 100000;
-        }
-
         $options = [
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_HEADER => true,
             CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
             CURLOPT_FRESH_CONNECT => true,
             CURLOPT_FORBID_REUSE => true,
-            CURLOPT_TIMEOUT => $timeout,
+            CURLOPT_TIMEOUT => $timeoutSeconds,
         ];
         curl_setopt_array($curlHandle, $options);
 
@@ -272,7 +284,7 @@ class PlaywrightConnector
         if ($method === 'POST') {
             curl_setopt($curlHandle, CURLOPT_POST, true);
             curl_setopt($curlHandle, CURLOPT_POSTFIELDS, $content);
-        } else {
+        } elseif ($method !== 'GET') {
             throw new \RuntimeException('Not supported');
         }
 

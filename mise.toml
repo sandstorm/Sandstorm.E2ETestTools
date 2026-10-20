@@ -1,18 +1,33 @@
 # Development distribution of Sandstorm.E2ETestTools (see "Development distribution" in CONTRIBUTING.md).
 #
-# mise trust            # once
-# mise run build        # build the images (again after changing a composer.json or the Dockerfile)
-# mise run start        # start the distribution and wait until the system under test answers
-# mise run tests        # unit, functional and E2E tests
+# mise trust                      # once
+# mise install                    # the tools below (node for the trace viewer, gum for the choosers)
+# mise run build                  # build the images (again after changing a composer.json or the Dockerfile)
+# mise run start                  # start the distribution and wait until the system under test answers
+# mise run tests:run              # unit, functional and E2E tests
+# mise run tests:e2e:runSingle    # one feature or scenario - without a path, choose the feature
+# mise run tests:e2e:openTrace    # open a trace - without a file, choose one
 #
 # SUT selects the distribution in Tests/SystemUnderTest/<SUT>/ (default: neos9), e.g. `SUT=neos9 mise run start`.
-# Extra arguments are appended to the last command, e.g. `mise run tests:e2e --tags @playwright` or `--name "navigates the backend"`.
-# E2E_TRACE=on-error|always|off sets the tracing mode of the E2E run, e.g. `E2E_TRACE=always mise run tests:e2e`.
-# E2E_TIMINGS=1 writes the duration of every step to Tests/SystemUnderTest/e2e-results/step-timings.jsonl.
+#
+# TASK STRUCTURE (`mise tasks` lists all, `mise run <task> --help` shows the flags)
+# - managing the distribution (build, start, stop, down, logs, enter) lives here
+# - tests are file tasks in mise/tasks/tests/ - the folders are the table of contents: mise/tasks/tests/e2e/runAll.sh
+#   is tests:e2e:runAll. mise/scripts/ holds helpers that are no tasks (e2e-lib.sh)
+# - NEVER define a task here whose name or group clashes with mise/tasks/ - a group lives here or in its folder
+# - names: group:verbObject, group:run is the main task of a group, no aliases - like the Neos kickstart
+# - inside a project (package as submodule) mise also lists the project's tasks; ours win on the same name
+
+[tools]
+node = "24.21.0"
+gum = "2.0.1"
+
+[settings]
+# quiet: mise would otherwise echo the first script line of every task as "[task] $ ..." header
+quiet = true
 
 [vars]
 compose = "docker compose -f {{config_root}}/Tests/SystemUnderTest/{{ get_env(name='SUT', default='neos9') }}/docker-compose.yml"
-package = "/app/DistributionPackages/Sandstorm.E2ETestTools"
 
 ######################## Docker Management ########################
 
@@ -56,32 +71,6 @@ run = "{{vars.compose}} logs -f"
 description = "Open a shell in the neos container"
 run = "{{vars.compose}} exec neos bash"
 
-[tasks."open:site-e2e"]
-description = "Open the system under test"
-run = '''
-open http://127.0.0.1:19090
-open http://127.0.0.1:19090/neos
-'''
-
 ######################## Testing ########################
 
-[tasks."tests:unit"]
-description = "Run the package's unit tests"
-run = "{{vars.compose}} exec -T neos bash -c 'FLOW_CONTEXT=Testing ./bin/phpunit -c Build/BuildEssentials/PhpUnit/UnitTests.xml {{vars.package}}/Tests/Unit'"
-
-[tasks."tests:functional"]
-description = "Run the package's functional tests"
-run = "{{vars.compose}} exec -T neos bash -c 'FLOW_CONTEXT=Testing ./bin/phpunit -c Build/BuildEssentials/PhpUnit/FunctionalTests.xml {{vars.package}}/Tests/Functional'"
-
-[tasks."tests:e2e"]
-description = "Run the package's E2E suite (optionally pass --tags or --name)"
-run = '''
-# the system under test runs in a Production context, which doesn't notice code changes - start from fresh caches
-{{vars.compose}} exec -T neos ./flow flow:cache:flush
-{{vars.compose}} exec -T neos ./flow flow:cache:warmup
-{{vars.compose}} exec -T -e FLOW_CONTEXT=Testing/Behat -e E2E_TRACE -e E2E_TIMINGS neos ./bin/behat --strict -c {{vars.package}}/Tests/E2E/behat.yml.dist
-'''
-
-[tasks.tests]
-description = "Run unit, functional and E2E tests"
-run = ["mise run tests:unit", "mise run tests:functional", "mise run tests:e2e"]
+# tests:run, tests:unit, tests:functional and tests:e2e:* are file tasks in mise/tasks/tests/

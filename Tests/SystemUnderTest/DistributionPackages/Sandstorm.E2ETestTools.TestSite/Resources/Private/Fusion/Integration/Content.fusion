@@ -48,6 +48,24 @@ prototype(Sandstorm.E2ETestTools.TestSite:Content.Image) < prototype(Neos.Neos:C
     `
 }
 
+// the width attribute sets the shown width - no CSS needed
+prototype(Sandstorm.E2ETestTools.TestSite:Content.ResponsiveImage) < prototype(Neos.Neos:ContentComponent) {
+    srcset = Neos.Fusion:Map {
+        items = ${[200, 400, 600, 800, 1000]}
+        itemRenderer = Neos.Fusion:Join {
+            uri = Neos.Neos:ImageUri {
+                asset = ${node.properties.image}
+                maximumWidth = ${item}
+            }
+            descriptor = ${' ' + item + 'w'}
+        }
+        @process.join = ${Array.join(value, ', ')}
+    }
+    renderer = afx`
+        <img srcset={props.srcset} sizes={node.properties.sizes} width={node.properties.width} alt={node.properties.alternativeText} />
+    `
+}
+
 prototype(Sandstorm.E2ETestTools.TestSite:Content.TestMarkup) < prototype(Neos.Neos:ContentComponent) {
     renderer = Neos.Fusion:Renderer {
         type = ${'Sandstorm.E2ETestTools.TestSite:TestMarkup.' + node.properties.markup}

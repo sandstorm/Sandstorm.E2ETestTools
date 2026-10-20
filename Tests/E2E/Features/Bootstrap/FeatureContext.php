@@ -19,6 +19,7 @@ use Sandstorm\E2ETestTools\Behat\NodeImportTrait;
 use Sandstorm\E2ETestTools\Behat\PageAssertionsTrait;
 use Sandstorm\E2ETestTools\Behat\PageHealthTrait;
 use Sandstorm\E2ETestTools\Behat\PlaywrightTrait;
+use Sandstorm\E2ETestTools\Behat\ResponsiveImageTrait;
 use Sandstorm\E2ETestTools\Behat\StepTimingTrait;
 use Sandstorm\E2ETestTools\Behat\WireMockTrait;
 
@@ -44,6 +45,7 @@ class FeatureContext implements Context
     use StepTimingTrait;
     use WireMockTrait;
     use MailpitTrait;
+    use ResponsiveImageTrait;
 
     // only for testing this package: the fixture export, mails without a mailer, failure messages
     use FixtureExportTrait;

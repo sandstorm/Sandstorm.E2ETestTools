@@ -17,15 +17,16 @@ trait DebuggingTrait
 {
     /**
      * Opens the Playwright inspector and stops until you resume there - the site under test and its database keep the
-     * scenario's state meanwhile. Needs a bridge with a visible browser (HEADLESS=false) and Behat started with
-     * PAUSE_FOR_DEBUGGING=true; otherwise the request to the bridge times out after 30 seconds.
+     * scenario's state meanwhile. Needs a bridge with a visible browser (HEADLESS=false); the request to the bridge
+     * waits without timeout until you resume.
      */
     #[When('I pause for debugging')]
     public function iPauseForDebugging(): void
     {
-        if (getenv('PAUSE_FOR_DEBUGGING') !== 'true') {
-            throw new \RuntimeException('"I pause for debugging" needs Behat started with PAUSE_FOR_DEBUGGING=true - otherwise the bridge request times out after 30 seconds.', 1728120002);
+        // a headless browser ignores page.pause() - the step would pass without stopping
+        if ($this->playwrightConnector->isBridgeHeadless() === true) {
+            throw new \RuntimeException('"I pause for debugging" needs a visible browser - start the playwright-bridge with HEADLESS=false.', 1728120002);
         }
-        $this->playwrightRun('await vars.page.pause();');
+        $this->playwrightConnector->execute($this->requirePlaywrightContext(), 'await vars.page.pause();', 0);
     }
 }

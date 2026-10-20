@@ -31,7 +31,8 @@ Feature: Headline integration
 - **Neos backend steps** - create users, log in, use the menu, the dashboard and the document tree.
 - **Generic browser steps** - texts, titles, buttons, links, form fields, focus and keyboard, screen size and
   scrolling, cookies and web storage (e.g. a preset cookie consent), requests to third parties, sent mails (Mailpit),
-  and a smoke test per page (JavaScript errors, failed requests, images).
+  a smoke test per page (JavaScript errors, failed requests, images), and whether `sizes` makes the browser load the
+  fitting srcset image.
 - **Content fixtures** - nodes, references, hidden state and assets as Gherkin tables or YAML files, created through
   the content repository API.
 - **Fixture export** - turn existing pages into fixtures (backend button or CLI) instead of writing tables by hand.
@@ -235,13 +236,21 @@ Your copy doesn't update with the package. After an update, compare it with
 ## 6. Project tasks (recommended)
 
 Wrap the recurring commands in your task runner (mise, make, npm scripts, ...). The Neos-on-Docker kickstart, for
-example, has `mise run tests:e2e:start-bridge` and `mise run tests:e2e [path]`, which roughly does:
+example, has `mise run tests:e2e:runAll` and `mise run tests:e2e:runSingle [path[:line]]` (without a path: choose the
+feature from a list; any line of a scenario runs that scenario) with flags like `--headed` and `--trace`, and
+`mise run tests:e2e:openTrace` to choose a trace. Every run starts its own bridge - no state of an earlier run, headed
+or headless per run - then roughly does the following and stops the bridge again:
 
 ```bash
 docker compose exec maria-db /createTestingDB.sh
-docker compose exec neos bash -c "FLOW_CONTEXT=Production/E2E-SUT ./flow doctrine:migrate"
-docker compose exec -e FLOW_CONTEXT=Testing/Behat neos bin/behat -c DistributionPackages/Your.SitePackageKey/Tests/Behavior/behat.yml.dist $1
+# the SUT runs in a Production context, which doesn't notice changed Fusion or configuration - flush and warm up
+docker compose exec -u www-data neos bash -c "FLOW_CONTEXT=Production/E2E-SUT ./flow flow:cache:flush && FLOW_CONTEXT=Production/E2E-SUT ./flow flow:cache:warmup"
+docker compose exec -u www-data neos bash -c "FLOW_CONTEXT=Production/E2E-SUT ./flow doctrine:migrate"
+docker compose exec -u www-data -e FLOW_CONTEXT=Testing/Behat neos bin/behat -c DistributionPackages/Your.SitePackageKey/Tests/Behavior/behat.yml.dist "$@"
 ```
+
+Run `./flow` and Behat as the web server user (`-u www-data`, or whatever your SUT runs as): as root they write cache
+files the SUT can't change afterwards.
 
 ## 7. CI Pipeline (optional)
 
@@ -409,11 +418,11 @@ build an example page in the backend, export it by URI path into the feature's f
 ## Steps
 
 All traits are in `Sandstorm\E2ETestTools\Behat`. `FeatureContext.php.default` uses all but `WireMockTrait` and
-`MailpitTrait` (they need a WireMock or Mailpit service); the browser traits need `PlaywrightTrait`, but not each other -
-use the ones you need. Delete project steps with the same wording before using them, otherwise Behat reports the steps
-as ambiguous. Elements are found by their role and accessible name (`the button "Send"`, `the link "Next page"` -
-:role is an [ARIA role](https://www.w3.org/TR/wai-aria-1.2/#role_definitions)), fields by their label, otherwise by
-`data-testid`.
+`MailpitTrait` (they need a WireMock or Mailpit service) and `ResponsiveImageTrait` (needs php-vips or ext-gd); the
+browser traits need `PlaywrightTrait`, but not each other - use the ones you need. Delete project steps with the same
+wording before using them, otherwise Behat reports the steps as ambiguous. Elements are found by their role and
+accessible name (`the button "Send"`, `the link "Next page"` - :role is an
+[ARIA role](https://www.w3.org/TR/wai-aria-1.2/#role_definitions)), fields by their label, otherwise by `data-testid`.
 
 ### FusionRenderingTrait
 
@@ -535,6 +544,60 @@ Scenario: the homepage is healthy
   And every image should be loaded
   And every image should have an alt attribute
 ```
+
+### ResponsiveImageTrait
+
+Checks that every image loads the **fitting srcset image** - i.e. that `sizes` tells the browser the width the image is
+really shown with. Chromium only (like `the screen is ... with pixel ratio ...`). Needs `FusionRenderingTrait` (for the
+assets) and php-vips (`jcupitt/vips` with ext-ffi) or ext-gd to generate the test images.
+
+- `I have :count generated test images` - 1600 x 1000 JPEGs with the ids `image-1` ... `image-n`, each showing its id
+  (also the asset title). Every image has different content: identical files would share their thumbnails, and the
+  browser could reuse an already loaded larger image of another slot - give every slot its own image.
+- `I have a generated test image with id :id and aspect ratio :ratio` - e.g. `"3:4"`, the longer side 1600 px
+- `the asset collection :id contains the images :ids` - comma-separated asset ids
+- `I load all images of the page` - lazy images eager, waits until all are loaded (up to 15 seconds)
+- `every image should load the fitting srcset image [, except:]`
+- `I mark the image sizes on the page`, `I scroll to the image :alt` - for debugging: a badge with the result on every
+  image (also on the error screenshot)
+
+**The rule:** *needed width* = width the image is shown with (CSS px, with `object-fit: cover`/`contain` the shown
+image, not the box) x device pixel ratio. *Fitting* = the smallest srcset width at least the needed width.
+
+| loaded srcset image | result | verdict |
+|---|---|---|
+| fitting | fitting | OK (green badge) |
+| needed > largest, loaded the largest | capped | OK, listed (grey) - limit of the srcset, not a `sizes` bug |
+| right below fitting | one smaller | error, unless the table expects it (lime) |
+| right above fitting | one larger | error, unless the table expects it (amber) |
+| anything else | too small / too large | always an error (red) |
+
+If `sizes` differs from the shown width by at most 2 % (rem rounding, scrollbar), the result is fitting - otherwise a
+1 px deviation crossing a srcset step would be an error. Example: shown 358 px at ratio 1 -> 400w fitting, 300w one
+smaller, 500w one larger, 600w too large.
+
+Where an image leans smaller (e.g. previews) or larger (a simpler `sizes`, e.g. `50vw` ignoring the padding) **on
+purpose**, the table says so per image, by alt text - it replaces the default (fitting or capped), so list `capped` too
+if it can happen there. Words: `fitting`, `one smaller`, `one larger`, `capped`, combined with `or`:
+
+```gherkin
+Scenario: images on a phone
+  When I access the URI path "/images"
+  And the screen is 390 x 844 px with pixel ratio 3
+  And I load all images of the page
+  Then every image should load the fitting srcset image, except:
+    | image     | expected               |
+    | gallery-1 | fitting or one smaller |
+    | teaser    | fitting or one larger  |
+```
+
+A failure says what to compare, e.g. `ERROR · news entry · too large, not expected here (expected: fitting or capped) ·
+needs 384 px (shown 384 px × ratio 1) · sizes says 1248 px -> too wide · loaded 1000w, expected 400w -> too large`.
+
+- Give the images unique alt texts in the fixtures - the table finds them by alt text.
+- Switch `sizes="auto"` off in the context of the system under test: Chromium then uses the real width and ignores the
+  rest of `sizes` (which Firefox and Safari use) - the step fails for such images.
+- Only pixels are compared, not bytes.
 
 ### MailpitTrait
 
@@ -680,7 +743,8 @@ to the real API, so you see which calls happen - never in CI. `/__admin/mappings
 2. Make sure your application runs and the E2E database is migrated ([Setup step 2](#2-two-flow-contexts-two-ports)).
 3. Run Behat where your application runs. Neos.Behat boots Flow in `FLOW_CONTEXT` and accepts only `Testing/Behat` or a
    sub context - set it when your container has another one. A folder, feature file or `file:line` after the config
-   runs only those scenarios:
+   runs only those scenarios - `:line` must be the line of the `Scenario:` (or of an `Examples` row), Behat runs nothing
+   for the line of a step:
 
    ```bash
    FLOW_CONTEXT=Testing/Behat bin/behat -c DistributionPackages/Your.SitePackageKey/Tests/Behavior/behat.yml.dist
@@ -693,17 +757,17 @@ IDE "run" buttons usually don't work when Behat runs in a container - use the CL
 
 ## Debugging
 
-- **Watch the tests**: start the bridge with `HEADLESS=false node index.js` - worth a project task next to the
-  headless one.
+- **Watch the tests**: start the bridge with `HEADLESS=false node index.js` - worth a project task or flag next to the
+  headless one (the kickstart: `mise run tests:e2e:runSingle --headed`).
 - **Screenshots**: `And I take a screenshot "name.png"` in a `@playwright` scenario; failed steps get an `error_*.png`
   automatically. Both go to the results directory: `e2e-results/` where Behat runs, or what you pass to
   `setupPlaywright($resultsDir)`.
 - **Traces**: failed `@playwright` scenarios write `report_<feature>_<scenario>.zip` to the results directory - open it
-  with `npx playwright show-trace <file>`. Each Behat step is a group in the trace, so the Trace Viewer shows the
-  actions per step. For traces of every scenario (or none), call
-  `$this->setPlaywrightTracingMode(self::PLAYWRIGHT_TRACING_MODE_ALWAYS)` (or `..._OFF`; default `..._ON_ERROR`) in
-  the `FeatureContext` constructor. For a single run, set `E2E_TRACE=on-error|always|off` where Behat runs - it wins
-  over `setPlaywrightTracingMode()` (with `docker compose exec`, pass it on with `-e E2E_TRACE`).
+  with `npx playwright show-trace <file>` (the kickstart chooses one: `mise run tests:e2e:openTrace`). Each Behat step
+  is a group in the trace, so the Trace Viewer shows the actions per step. For traces of every scenario (or none), call
+  `$this->setPlaywrightTracingMode(self::PLAYWRIGHT_TRACING_MODE_ALWAYS)` (or `..._OFF`; default `..._ON_ERROR`) in the
+  `FeatureContext` constructor. For a single run, set `E2E_TRACE=on-error|always|off` where Behat runs - it wins over
+  `setPlaywrightTracingMode()` (with `docker compose exec`, pass it on with `-e E2E_TRACE`).
 - **Server logs**: an exception in the SUT only shows up as error page, the stack trace is in the logs. The Flow logs
   (`Data/Logs`) are cleared before every scenario, and a failed scenario gets its log and exception files copied to
   `logs_<feature>_<line>_<scenario>/` in the results directory. If the SUT logs elsewhere, call
@@ -712,13 +776,13 @@ IDE "run" buttons usually don't work when Behat runs in a container - use the CL
 - **Narrow it down**: `--stop-on-failure` stops at the first error, so you can inspect the E2E database; `-vvv` prints
   full stack traces; tag scenarios (e.g. `@debug`) and run them with `--tags=debug`.
 - **Pause the browser**: `And I pause for debugging` opens the Playwright inspector (`page.pause()`) on the bridge
-  side. It needs a visible browser (`HEADLESS=false`) and Behat run with `PAUSE_FOR_DEBUGGING=true`, otherwise the step
-  fails right away. The SUT and its database keep the scenario's state, so you can click around.
+  side and waits without timeout until you resume there. It needs a visible browser (`HEADLESS=false`), otherwise the
+  step fails right away. The SUT and its database keep the scenario's state, so you can click around.
 - **Slow steps**: use `StepTimingTrait` in your `FeatureContext` and run Behat with `E2E_TIMINGS=1` (with
   `docker compose exec`: `-e E2E_TIMINGS`). `step-timings.jsonl` in the results directory then has one line per step
   and scenario: feature, line, step text, duration (`ms`), result, and the number of requests to the bridge with their
   time (`bridgeCalls`, `bridgeMs`) - the rest is PHP (fixtures, cache, database). The kickstart sums it up with
-  `mise run tests:e2e:timings <label>` and compares two labels with `mise run tests:e2e:timings:compare <a> <b>`.
+  `mise run tests:e2e:runAll --timings <label>` and compares two labels with `mise run tests:e2e:compareTimings <a> <b>`.
   It's a local dev tool for measuring the suite - don't set `E2E_TIMINGS` in the pipeline.
 - **Let an agent analyse failures**: the results directory holds screenshots, traces, server logs and - with
   `--format junit --out <dir>` - the JUnit report. Tell a coding agent like Claude where it is.
