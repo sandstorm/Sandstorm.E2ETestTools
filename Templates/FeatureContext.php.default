@@ -65,6 +65,8 @@ class FeatureContext implements Context
 
     // Sent mails: use MailpitTrait with a Mailpit service as SMTP server of the system under test (see README)
 
+    // srcset/sizes checks with generated test images: use ResponsiveImageTrait, needs php-vips or ext-gd (see README)
+
     public function __construct()
     {
         self::bootstrapFlow();

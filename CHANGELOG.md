@@ -5,6 +5,10 @@ What changed for projects using the package, the newest version first. Versions 
 
 ## Unreleased
 
+- New `ResponsiveImageTrait` (see README): checks that `sizes` makes the browser load the fitting srcset image, with
+  generated test images (php-vips or ext-gd). Images may be expected to load `one larger` (new) or `one smaller` per
+  image; `sizes="auto"` fails the check. Copied an `ImageSizeTrait` from the kickstart into your project? Delete it and
+  use `ResponsiveImageTrait` - same steps, otherwise Behat reports them as ambiguous.
 - `I pause for debugging` no longer needs `PAUSE_FOR_DEBUGGING=true` - the pause request waits without timeout, every
   other request to the bridge keeps its 30 seconds. With a headless bridge the step fails right away (#1728120002).
   `PAUSE_FOR_DEBUGGING` is ignored now; drop it from your scripts and `docker compose exec -e` lists.

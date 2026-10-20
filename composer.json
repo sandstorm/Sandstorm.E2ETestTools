@@ -24,6 +24,10 @@
         "symfony/dom-crawler": "^5.2 || ^6.0",
         "symfony/css-selector": "^5.2 || ^6.0"
     },
+    "suggest": {
+        "jcupitt/vips": "ResponsiveImageTrait: generates the test images with php-vips (needs ext-ffi), else with ext-gd",
+        "ext-gd": "ResponsiveImageTrait: generates the test images without php-vips"
+    },
     "autoload": {
         "psr-4": {
             "Sandstorm\\E2ETestTools\\": "Classes/",

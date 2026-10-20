@@ -31,7 +31,8 @@ Feature: Headline integration
 - **Neos backend steps** - create users, log in, use the menu, the dashboard and the document tree.
 - **Generic browser steps** - texts, titles, buttons, links, form fields, focus and keyboard, screen size and
   scrolling, cookies and web storage (e.g. a preset cookie consent), requests to third parties, sent mails (Mailpit),
-  and a smoke test per page (JavaScript errors, failed requests, images).
+  a smoke test per page (JavaScript errors, failed requests, images), and whether `sizes` makes the browser load the
+  fitting srcset image.
 - **Content fixtures** - nodes, references, hidden state and assets as Gherkin tables or YAML files, created through
   the content repository API.
 - **Fixture export** - turn existing pages into fixtures (backend button or CLI) instead of writing tables by hand.
@@ -410,11 +411,11 @@ build an example page in the backend, export it by URI path into the feature's f
 ## Steps
 
 All traits are in `Sandstorm\E2ETestTools\Behat`. `FeatureContext.php.default` uses all but `WireMockTrait` and
-`MailpitTrait` (they need a WireMock or Mailpit service); the browser traits need `PlaywrightTrait`, but not each other -
-use the ones you need. Delete project steps with the same wording before using them, otherwise Behat reports the steps
-as ambiguous. Elements are found by their role and accessible name (`the button "Send"`, `the link "Next page"` -
-:role is an [ARIA role](https://www.w3.org/TR/wai-aria-1.2/#role_definitions)), fields by their label, otherwise by
-`data-testid`.
+`MailpitTrait` (they need a WireMock or Mailpit service) and `ResponsiveImageTrait` (needs php-vips or ext-gd); the
+browser traits need `PlaywrightTrait`, but not each other - use the ones you need. Delete project steps with the same
+wording before using them, otherwise Behat reports the steps as ambiguous. Elements are found by their role and
+accessible name (`the button "Send"`, `the link "Next page"` - :role is an
+[ARIA role](https://www.w3.org/TR/wai-aria-1.2/#role_definitions)), fields by their label, otherwise by `data-testid`.
 
 ### FusionRenderingTrait
 
@@ -536,6 +537,60 @@ Scenario: the homepage is healthy
   And every image should be loaded
   And every image should have an alt attribute
 ```
+
+### ResponsiveImageTrait
+
+Checks that every image loads the **fitting srcset image** - i.e. that `sizes` tells the browser the width the image is
+really shown with. Chromium only (like `the screen is ... with pixel ratio ...`). Needs `FusionRenderingTrait` (for the
+assets) and php-vips (`jcupitt/vips` with ext-ffi) or ext-gd to generate the test images.
+
+- `I have :count generated test images` - 1600 x 1000 JPEGs with the ids `image-1` ... `image-n`, each showing its id
+  (also the asset title). Every image has different content: identical files would share their thumbnails, and the
+  browser could reuse an already loaded larger image of another slot - give every slot its own image.
+- `I have a generated test image with id :id and aspect ratio :ratio` - e.g. `"3:4"`, the longer side 1600 px
+- `the asset collection :id contains the images :ids` - comma-separated asset ids
+- `I load all images of the page` - lazy images eager, waits until all are loaded (up to 15 seconds)
+- `every image should load the fitting srcset image [, except:]`
+- `I mark the image sizes on the page`, `I scroll to the image :alt` - for debugging: a badge with the result on every
+  image (also on the error screenshot)
+
+**The rule:** *needed width* = width the image is shown with (CSS px, with `object-fit: cover`/`contain` the shown
+image, not the box) x device pixel ratio. *Fitting* = the smallest srcset width at least the needed width.
+
+| loaded srcset image | result | verdict |
+|---|---|---|
+| fitting | fitting | OK (green badge) |
+| needed > largest, loaded the largest | capped | OK, listed (grey) - limit of the srcset, not a `sizes` bug |
+| right below fitting | one smaller | error, unless the table expects it (lime) |
+| right above fitting | one larger | error, unless the table expects it (amber) |
+| anything else | too small / too large | always an error (red) |
+
+If `sizes` differs from the shown width by at most 2 % (rem rounding, scrollbar), the result is fitting - otherwise a
+1 px deviation crossing a srcset step would be an error. Example: shown 358 px at ratio 1 -> 400w fitting, 300w one
+smaller, 500w one larger, 600w too large.
+
+Where an image leans smaller (e.g. previews) or larger (a simpler `sizes`, e.g. `50vw` ignoring the padding) **on
+purpose**, the table says so per image, by alt text - it replaces the default (fitting or capped), so list `capped` too
+if it can happen there. Words: `fitting`, `one smaller`, `one larger`, `capped`, combined with `or`:
+
+```gherkin
+Scenario: images on a phone
+  When I access the URI path "/images"
+  And the screen is 390 x 844 px with pixel ratio 3
+  And I load all images of the page
+  Then every image should load the fitting srcset image, except:
+    | image     | expected               |
+    | gallery-1 | fitting or one smaller |
+    | teaser    | fitting or one larger  |
+```
+
+A failure says what to compare, e.g. `ERROR · news entry · too large, not expected here (expected: fitting or capped) ·
+needs 384 px (shown 384 px × ratio 1) · sizes says 1248 px -> too wide · loaded 1000w, expected 400w -> too large`.
+
+- Give the images unique alt texts in the fixtures - the table finds them by alt text.
+- Switch `sizes="auto"` off in the context of the system under test: Chromium then uses the real width and ignores the
+  rest of `sizes` (which Firefox and Safari use) - the step fails for such images.
+- Only pixels are compared, not bytes.
 
 ### MailpitTrait
 
