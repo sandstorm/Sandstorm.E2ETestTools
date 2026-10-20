@@ -236,14 +236,21 @@ Your copy doesn't update with the package. After an update, compare it with
 ## 6. Project tasks (recommended)
 
 Wrap the recurring commands in your task runner (mise, make, npm scripts, ...). The Neos-on-Docker kickstart, for
-example, has `mise run tests:e2e:runAll` and `mise run tests:e2e:runSingle [path]`: they start the bridge, then roughly
-do the following and stop the bridge again:
+example, has `mise run tests:e2e:runAll` and `mise run tests:e2e:runSingle [path[:line]]` (without a path: choose the
+feature from a list; any line of a scenario runs that scenario) with flags like `--headed` and `--trace`, and
+`mise run tests:e2e:openTrace` to choose a trace. Every run starts its own bridge - no state of an earlier run, headed
+or headless per run - then roughly does the following and stops the bridge again:
 
 ```bash
 docker compose exec maria-db /createTestingDB.sh
-docker compose exec neos bash -c "FLOW_CONTEXT=Production/E2E-SUT ./flow doctrine:migrate"
-docker compose exec -e FLOW_CONTEXT=Testing/Behat neos bin/behat -c DistributionPackages/Your.SitePackageKey/Tests/Behavior/behat.yml.dist $1
+# the SUT runs in a Production context, which doesn't notice changed Fusion or configuration - flush and warm up
+docker compose exec -u www-data neos bash -c "FLOW_CONTEXT=Production/E2E-SUT ./flow flow:cache:flush && FLOW_CONTEXT=Production/E2E-SUT ./flow flow:cache:warmup"
+docker compose exec -u www-data neos bash -c "FLOW_CONTEXT=Production/E2E-SUT ./flow doctrine:migrate"
+docker compose exec -u www-data -e FLOW_CONTEXT=Testing/Behat neos bin/behat -c DistributionPackages/Your.SitePackageKey/Tests/Behavior/behat.yml.dist "$@"
 ```
+
+Run `./flow` and Behat as the web server user (`-u www-data`, or whatever your SUT runs as): as root they write cache
+files the SUT can't change afterwards.
 
 ## 7. CI Pipeline (optional)
 
@@ -736,7 +743,8 @@ to the real API, so you see which calls happen - never in CI. `/__admin/mappings
 2. Make sure your application runs and the E2E database is migrated ([Setup step 2](#2-two-flow-contexts-two-ports)).
 3. Run Behat where your application runs. Neos.Behat boots Flow in `FLOW_CONTEXT` and accepts only `Testing/Behat` or a
    sub context - set it when your container has another one. A folder, feature file or `file:line` after the config
-   runs only those scenarios:
+   runs only those scenarios - `:line` must be the line of the `Scenario:` (or of an `Examples` row), Behat runs nothing
+   for the line of a step:
 
    ```bash
    FLOW_CONTEXT=Testing/Behat bin/behat -c DistributionPackages/Your.SitePackageKey/Tests/Behavior/behat.yml.dist
@@ -749,17 +757,17 @@ IDE "run" buttons usually don't work when Behat runs in a container - use the CL
 
 ## Debugging
 
-- **Watch the tests**: start the bridge with `HEADLESS=false node index.js` - worth a project task next to the
-  headless one.
+- **Watch the tests**: start the bridge with `HEADLESS=false node index.js` - worth a project task or flag next to the
+  headless one (the kickstart: `mise run tests:e2e:runSingle --headed`).
 - **Screenshots**: `And I take a screenshot "name.png"` in a `@playwright` scenario; failed steps get an `error_*.png`
   automatically. Both go to the results directory: `e2e-results/` where Behat runs, or what you pass to
   `setupPlaywright($resultsDir)`.
 - **Traces**: failed `@playwright` scenarios write `report_<feature>_<scenario>.zip` to the results directory - open it
-  with `npx playwright show-trace <file>`. Each Behat step is a group in the trace, so the Trace Viewer shows the
-  actions per step. For traces of every scenario (or none), call
-  `$this->setPlaywrightTracingMode(self::PLAYWRIGHT_TRACING_MODE_ALWAYS)` (or `..._OFF`; default `..._ON_ERROR`) in
-  the `FeatureContext` constructor. For a single run, set `E2E_TRACE=on-error|always|off` where Behat runs - it wins
-  over `setPlaywrightTracingMode()` (with `docker compose exec`, pass it on with `-e E2E_TRACE`).
+  with `npx playwright show-trace <file>` (the kickstart chooses one: `mise run tests:e2e:openTrace`). Each Behat step
+  is a group in the trace, so the Trace Viewer shows the actions per step. For traces of every scenario (or none), call
+  `$this->setPlaywrightTracingMode(self::PLAYWRIGHT_TRACING_MODE_ALWAYS)` (or `..._OFF`; default `..._ON_ERROR`) in the
+  `FeatureContext` constructor. For a single run, set `E2E_TRACE=on-error|always|off` where Behat runs - it wins over
+  `setPlaywrightTracingMode()` (with `docker compose exec`, pass it on with `-e E2E_TRACE`).
 - **Server logs**: an exception in the SUT only shows up as error page, the stack trace is in the logs. The Flow logs
   (`Data/Logs`) are cleared before every scenario, and a failed scenario gets its log and exception files copied to
   `logs_<feature>_<line>_<scenario>/` in the results directory. If the SUT logs elsewhere, call

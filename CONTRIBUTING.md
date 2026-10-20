@@ -54,13 +54,22 @@ The package code is mounted into the container, so changes need no rebuild - onl
 `Dockerfile` does.
 
 ```bash
-mise trust              # once
-mise run build          # build the images
-mise run start          # start and wait until the system under test answers
-mise run tests          # unit, functional and E2E tests
-mise run tests:e2e --tags @playwright   # only some scenarios
-mise run down           # remove containers and volumes
+mise trust                          # once
+mise install                        # node (trace viewer) and gum (choosers)
+mise run build                      # build the images
+mise run start                      # start and wait until the system under test answers
+mise run tests:run                  # unit, functional and E2E tests
+mise run tests:e2e:runAll --tag playwright         # only some scenarios
+mise run tests:e2e:runSingle                       # choose a feature from a list
+mise run tests:e2e:runSingle Browser/Navigation.feature:21   # one scenario (any line in it)
+mise run tests:e2e:openTrace                       # choose a trace, open it in the Trace Viewer
+mise run down                       # remove containers and volumes
 ```
+
+`mise tasks` lists all tasks, `mise run <task> --help` their flags (`--trace`, `--timings`, `--no-prepare`, Behat
+arguments after `--`). The tests are file tasks in `mise/tasks/tests/` - same structure and names as in the Neos
+kickstart. Inside a project (the package as submodule), `mise tasks` also lists the project's tasks; the package's win on
+the same name.
 
 `SUT=<version>` selects another distribution. Screenshots, traces and the logs of failed scenarios land in
 `Tests/SystemUnderTest/e2e-results/`. To watch the browser, start the bridge on the host (`HEADLESS=false node index.js`

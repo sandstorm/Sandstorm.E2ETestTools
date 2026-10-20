@@ -76,7 +76,7 @@ jobs:
 
       - name: E2E tests
         if: ${{ !cancelled() && steps.start.outcome == 'success' }}
-        run: mise run tests:e2e
+        run: mise run tests:e2e:runAll
 
       # the neos container exists once the start step ran, even if the system under test didn't come up
       - name: Collect the Flow logs
