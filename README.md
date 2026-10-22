@@ -459,6 +459,8 @@ Comes with `FusionRenderingTrait`.
 - `I access the URI path :uriPath` - opens a new page
 - `I reload the page`
 - `the URI path should be :uriPath` - waits for the navigation
+- `the page URL should start with :url` - the full URL, e.g. where a link to a payment provider led; a prefix, so a
+  token at the end doesn't matter
 - `the response status code should be :status`
 - `the viewport is :width x :height px` - reloads the page
 - `the screen is :width x :height px with pixel ratio :ratio` - clears the browser cache and reloads; Chromium only
@@ -519,7 +521,12 @@ Comes with `FusionRenderingTrait`.
 
 ### NetworkTrait
 
-- `requests to other hosts are recorded and blocked` - before the first visit; the site under test is not blocked
+- `requests to other hosts are recorded and blocked` - before the first visit; the site under test is not blocked. A
+  navigation to another host (link, form, JavaScript, iframe) gets an empty page, so it arrives - check it with `the
+  page URL should start with`. Not covered: a server redirect (302/303) to another host - Playwright doesn't route the
+  redirect target, the browser really requests it; make the target configurable for the tests. Also not covered:
+  contexts your own steps open (`browser.newContext()`) - the route is on the scenario's context. Own steps find the
+  full URLs in `vars.externalRequests`.
 - `I forget the recorded requests`
 - `there should (not) be a request to :host` - part of the host name, e.g. `youtube`
 - `all links in :selector should respond with 200` - follows redirects

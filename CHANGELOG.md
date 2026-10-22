@@ -19,6 +19,11 @@ What changed for projects using the package, the newest version first. Versions 
   10.0 it failed with Playwright's plain message.
 - Failures say when only hidden matches were found, or when one of several visible matches is hidden by `opacity: 0`,
   off-screen positioning or sr-only (Playwright counts these as visible).
+- `requests to other hosts are recorded and blocked`: a navigation to another host (link, form, JavaScript, iframe)
+  gets an empty page instead of failing with `net::ERR_FAILED` - other requests stay blocked. New step `the page URL
+  should start with :url` (NavigationTrait) checks where it led. A server redirect to another host isn't covered (see
+  README). The recorded requests are full URLs now: own steps that read `vars.externalHosts` use
+  `vars.externalRequests` (map them with `new URL(url).host`).
 - `playwrightRunOnVisible()` for own steps: runs a script on the visible copy of a locator, with the same failure hints.
 
 ## 10.1.0 - 2026-10-20

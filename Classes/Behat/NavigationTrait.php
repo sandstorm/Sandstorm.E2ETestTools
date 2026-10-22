@@ -52,6 +52,20 @@ trait NavigationTrait
         );
     }
 
+    /**
+     * The full URL, e.g. where a redirect to another host led (with NetworkTrait, the other host answers with an empty
+     * page). Waits for the URL first. A prefix, so a token or session id at the end doesn't matter.
+     */
+    #[Then('the page URL should start with :url')]
+    public function thePageUrlShouldStartWith(string $url): void
+    {
+        $this->playwrightRun(
+            'await expect.poll(() => vars.page.url(), {message: "page URL", timeout: %s}).toMatch(new RegExp("^" + %s.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")));',
+            $this->playwrightTimeout,
+            $url
+        );
+    }
+
     #[Then('the response status code should be :status')]
     public function theResponseStatusCodeShouldBe(string $status): void
     {
