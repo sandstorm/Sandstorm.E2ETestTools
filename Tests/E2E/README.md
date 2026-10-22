@@ -27,6 +27,7 @@ mise run tests:e2e:runSingle    # one feature - choose it from a list
 | [PersistentResources/Images.feature](Features/PersistentResources/Images.feature) | create an image asset fixture and render it |
 | [Browser/FormInteraction.feature](Features/Browser/FormInteraction.feature) | fill, check, choose and select fields by label, click buttons/links/test ids, upload a file, press keys |
 | [Browser/PageAssertions.feature](Features/Browser/PageAssertions.feature) | page title, texts on the page and in elements, element states by test id, viewport |
+| [Browser/VisibleCopies.feature](Features/Browser/VisibleCopies.feature) | controls rendered twice (desktop and mobile): the steps use the visible copy, failures for two visible copies |
 | [Browser/BrowserState.feature](Features/Browser/BrowserState.feature) | check and preset cookies and web storage (e.g. a consent decision) |
 | [WireMock/Weather.feature](Features/WireMock/Weather.feature) | answer a server-side API call of the site with WireMock: base stubs, per-scenario responses, tapes, call counts |
 | [Export/Button.feature](Features/Export/Button.feature) | *package-internal:* the "Export Node" button - download as admin, round trip through the import, disabled for editors |

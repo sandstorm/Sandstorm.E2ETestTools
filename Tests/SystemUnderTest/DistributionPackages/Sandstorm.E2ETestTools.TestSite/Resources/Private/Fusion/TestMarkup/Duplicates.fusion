@@ -1,0 +1,45 @@
+// FormInteractionTrait, PageAssertionsTrait: controls rendered twice - the steps use the copy the visitor sees
+prototype(Sandstorm.E2ETestTools.TestSite:TestMarkup.Duplicates) < prototype(Neos.Fusion:Component) {
+    renderer = afx`
+        <div class="desktop" style="display: none">
+            <label for="city-desktop">City</label>
+            <input id="city-desktop" type="text" value="hidden copy" />
+            <input id="terms-desktop" type="checkbox" />
+            <label for="terms-desktop">Terms</label>
+            <button type="button" data-testid="order">Order</button>
+        </div>
+        <div class="mobile">
+            <label for="city-mobile">City</label>
+            <input id="city-mobile" type="text" value="visible copy" />
+            <input id="terms-mobile" type="checkbox" />
+            <label for="terms-mobile">Terms</label>
+            <button type="button" data-testid="order" id="order-mobile">Order</button>
+        </div>
+        <p data-testid="order-result"></p>
+
+        <button type="button">Delete</button>
+        <button type="button">Delete</button>
+
+        <div style="opacity: 0"><button type="button">Subscribe</button></div>
+        <button type="button">Subscribe</button>
+
+        <div style="display: none">
+            <input id="hidden-only" type="checkbox" />
+            <label for="hidden-only">Hidden only</label>
+        </div>
+
+        <label for="upload">Upload</label>
+        <input id="upload" type="file" style="position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0" />
+        <p data-testid="upload-result"></p>
+        <script>{props.script}</script>
+    `
+    script = '
+        document.getElementById("order-mobile").addEventListener("click", () => {
+            document.querySelector("[data-testid=order-result]").textContent = "Ordered: " + document.getElementById("city-mobile").value
+                + ", terms " + (document.getElementById("terms-mobile").checked ? "yes" : "no");
+        });
+        document.getElementById("upload").addEventListener("change", (event) => {
+            document.querySelector("[data-testid=upload-result]").textContent = "Uploaded " + event.target.files[0].name;
+        });
+    '
+}

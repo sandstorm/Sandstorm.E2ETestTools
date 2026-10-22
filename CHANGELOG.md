@@ -3,6 +3,22 @@
 What changed for projects using the package, the newest version first. Versions follow SemVer since 10.0.0 - see
 [Versions](README.md#versions). A major version comes with upgrade notes for the steps and the playwright-bridge.
 
+## 10.2.0 - unreleased
+
+- `PageAssertionsTrait` and `FormInteractionTrait` use the copy of an element the visitor sees: a hidden copy (e.g. the
+  desktop variant on a mobile viewport) is ignored instead of failing in Playwright's strict mode. **Changed
+  behaviour:** the element assertions no longer check the first match - two visible matches fail now (`the button
+  "Delete" should be visible` with a button per row), `should be hidden` fails when any copy is visible, and
+  `I focus the :role :name` no longer focuses the first of several. Scope those steps to one element (test id) or fix
+  the markup.
+- `there should not be the text :text in :selector` passes when no element matches visibly (it failed with "element(s)
+  not found" before).
+- `the focus should be inside :selector` passes when any match contains the focus (nested matches are fine) - it
+  checked only the first match before.
+- Failures say when only hidden matches were found, or when one of several visible matches is hidden by `opacity: 0`,
+  off-screen positioning or sr-only (Playwright counts these as visible).
+- `playwrightRunOnVisible()` for own steps: runs a script on the visible copy of a locator, with the same failure hints.
+
 ## 10.1.0 - 2026-10-20
 
 - New `ResponsiveImageTrait` (see README): checks that `sizes` makes the browser load the fitting srcset image, with

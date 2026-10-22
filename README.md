@@ -478,13 +478,14 @@ Comes with `FusionRenderingTrait`.
 
 - `the page title should be :title`
 - `there should (not) be the text :text on the page` - rendered text: hidden text counts as absent
-- `there should (not) be the text :text in :selector`
+- `there should (not) be the text :text in :selector` - the `not` variant also passes when no element matches
+  visibly - check the element is visible first, if that matters
 - `the :role :name should be focused` - fails with the focused element, or if the element is hidden from assistive
   technology
 - `the focus should be inside :selector`
 - `the :role :name should (not) be in the viewport`
-- `the :role :name should be visible/hidden/enabled/disabled` - `hidden` also finds elements hidden from assistive
-  technology, and passes if there is no such element
+- `the :role :name should be visible/hidden/enabled/disabled` - `hidden`: no visible copy; it also finds elements
+  hidden from assistive technology, and passes if there is no such element
 - `the element with test id :testId should be visible/hidden/focused/enabled/disabled`
 - `the element with test id :testId should (not) be in the viewport`
 
@@ -637,6 +638,13 @@ Setup and details: [Mocked third-party APIs](#mocked-third-party-apis-wiremock).
   [web-first assertions](https://playwright.dev/docs/test-assertions)): up to 5 seconds - change it with
   `$this->setPlaywrightTimeout(10000)` in the `FeatureContext` constructor. A negative check (`should not`, `hidden`)
   passes as soon as the state is reached.
+- The steps of `PageAssertionsTrait` and `FormInteractionTrait` use the copy of an element the visitor sees: markup
+  that renders a control twice (desktop and mobile, one of them hidden) works. Two visible matches are an error -
+  "the button" is one button. Playwright also counts `opacity: 0`, off-screen and sr-only elements as visible; the
+  failure says so when one of the matches is hidden that way, and says when only hidden matches were found. A control
+  hidden with `display: none` (e.g. a native checkbox replaced by a styled label) can't be used - the step fails, and
+  keyboard users can't reach it either. Own steps get the same with `$this->playwrightRunOnVisible($locator, $script,
+  ...$values)` - `visible` in the script is the visible copy.
 - Screenshots document a result, they don't check it.
 - Project-specific steps go into your `FeatureContext` or a trait of your project. Drive the browser with
   `$this->playwrightRun($script, ...$values)`: every `%s` in the script becomes the next value as JS literal, so

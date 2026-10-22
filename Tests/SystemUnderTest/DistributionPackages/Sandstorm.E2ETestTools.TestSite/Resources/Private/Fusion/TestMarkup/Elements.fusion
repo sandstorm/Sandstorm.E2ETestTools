@@ -15,7 +15,7 @@ prototype(Sandstorm.E2ETestTools.TestSite:TestMarkup.Elements) < prototype(Neos.
             <a href="/">Start</a>
         </nav>
         <nav class="broken-links" aria-label="Broken links">
-            <a href="/">Start</a>
+            <a href="/">Home</a>
             <a href="/does-not-exist">Gone</a>
         </nav>
         <div style="display: none"><button type="button">Hidden button</button></div>

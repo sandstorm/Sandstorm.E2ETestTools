@@ -76,6 +76,38 @@ trait PlaywrightTrait
     final public const PLAYWRIGHT_TRACING_MODE_ON_ERROR = 2;
 
     /**
+     * The failure hint of {@see playwrightRunOnVisible()} - an async JS function (matches, visible, error) returning
+     * the text to append, or "". Counted only when a step fails.
+     */
+    private const PLAYWRIGHT_VISIBILITY_HINT = <<<'JS'
+        async (matches, visible, error) => {
+            if (error.message.includes('strict mode violation')) {
+                // opacity: 0 on the element or a parent, sr-only (1 x 1 px) or positioned outside the page
+                const unseen = await visible.evaluateAll((elements) => elements.some((element) => {
+                    for (let current = element; current; current = current.parentElement) {
+                        const style = getComputedStyle(current);
+                        const box = current.getBoundingClientRect();
+                        if (style.opacity === '0' || (box.width <= 1 && box.height <= 1 && style.overflow !== 'visible')) {
+                            return true;
+                        }
+                    }
+                    const box = element.getBoundingClientRect();
+                    return box.right + scrollX <= 0 || box.bottom + scrollY <= 0
+                        || box.left + scrollX >= document.documentElement.scrollWidth;
+                }));
+                return unseen
+                    ? '\nSeveral visible matches - at least one is hidden by opacity: 0, off-screen positioning or sr-only (on itself or a parent); Playwright counts these as visible.'
+                    : '';
+            }
+            const visibleCount = await visible.count();
+            const hiddenCount = await matches.count() - visibleCount;
+            return visibleCount === 0 && hiddenCount > 0
+                ? `\nNo visible match - found ${hiddenCount} hidden match${hiddenCount === 1 ? '' : 'es'}.`
+                : '';
+        }
+    JS;
+
+    /**
      * @deprecated use the constant self::PLAYWRIGHT_TRACING_MODE_OFF
      */
     protected static $PLAYWRIGHT_TRACING_MODE_OFF = self::PLAYWRIGHT_TRACING_MODE_OFF;
@@ -386,6 +418,31 @@ trait PlaywrightTrait
     protected function playwrightStrings(string $script, mixed ...$values): array
     {
         return array_values(array_map(static fn (mixed $value): string => self::playwrightString($value), $this->playwrightArray($script, ...$values)));
+    }
+
+    /**
+     * Like {@see playwrightRun()}, on the copy of an element the visitor sees: in $script, `visible` is $locator (JS,
+     * e.g. `vars.page.getByLabel("Name", {exact: true})`) filtered to visible elements. Markup that renders a control
+     * twice (desktop and mobile, one of them hidden) works; two visible matches still fail in Playwright's strict mode.
+     *
+     * A failure says why nothing or too much matched: hidden matches, or visible matches the visitor doesn't see
+     * (Playwright counts opacity: 0, off-screen and sr-only elements as visible).
+     */
+    protected function playwrightRunOnVisible(string $locator, string $script, mixed ...$values): mixed
+    {
+        return $this->playwrightRun(<<<'JS'
+            const matches = %1$s;
+            const visible = matches.filter({visible: true});
+            try {
+                %2$s
+            } catch (error) {
+                throw new Error(error.message + await (%3$s)(matches, visible, error));
+            }
+        JS,
+            JsCode::of($locator),
+            JsCode::of(self::playwrightScript($script, ...$values)),
+            JsCode::of(self::PLAYWRIGHT_VISIBILITY_HINT)
+        );
     }
 
     /**
