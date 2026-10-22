@@ -15,6 +15,8 @@ What changed for projects using the package, the newest version first. Versions 
   not found" before).
 - `the focus should be inside :selector` passes when any match contains the focus (nested matches are fine) - it
   checked only the first match before.
+- `the :role :name should be focused` reports an element inside `inert` as "hidden from assistive technology" - since
+  10.0 it failed with Playwright's plain message.
 - Failures say when only hidden matches were found, or when one of several visible matches is hidden by `opacity: 0`,
   off-screen positioning or sr-only (Playwright counts these as visible).
 - `playwrightRunOnVisible()` for own steps: runs a script on the visible copy of a locator, with the same failure hints.

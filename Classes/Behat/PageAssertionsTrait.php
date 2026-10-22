@@ -81,9 +81,9 @@ trait PageAssertionsTrait
     {
         $this->pageAssertions_expectFocused(
             $this->pageAssertions_role($role, $name) . '.filter({visible: true})',
+            // getByRole() finds inert elements too - so check the ancestors
             sprintf(
-                'await %s.count() === 0 && await %s.count() > 0',
-                $this->pageAssertions_role($role, $name),
+                'await %s.evaluateAll((elements) => elements.length > 0 && elements.every((element) => element.closest("[inert], [aria-hidden=true]") !== null))',
                 $this->pageAssertions_role($role, $name, true)
             ),
             sprintf('The %s "%s" is hidden from assistive technology (inert or aria-hidden), so it can\'t be focused.', $role, $name)
