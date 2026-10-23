@@ -18,6 +18,9 @@ What changed for projects using the package, the newest version first. Versions 
   gets an empty page instead of failing with `net::ERR_FAILED` - other requests stay blocked. A server redirect to
   another host isn't covered (see README). The recorded requests are full URLs now: own steps that read
   `vars.externalHosts` use `vars.externalRequests` (map them with `new URL(url).host`).
+- `the mail to :recipient should contain :text` checks the HTML part too (as visible text), not only the plain text -
+  the part most mail clients show. A mail whose HTML part lacks the text fails now - e.g. "Label: value" in the text
+  part, but a table without colons in the HTML part: write the labels the same way in both templates.
 
 **playwright-bridge** - update your copy: contexts and pages a script opens itself (`browser.newContext()`,
 `browser.newPage()`) wait up to 15 seconds per action or navigation, like the scenario's context. With Playwright's
@@ -27,6 +30,8 @@ older copy keeps working, without this.
 ### New in 11.0
 
 - New step `the page URL should start with :url` (NavigationTrait) - e.g. where a link to a payment provider led.
+- New MailpitTrait steps: `the mail to :recipient should not contain :text`, `... should be from :address`,
+  `... should have no attachments` and `... should have the attachment :fileName of type :contentType`.
 - Failures say when only hidden matches were found, or when one of several visible matches is hidden by `opacity: 0`,
   off-screen positioning or sr-only (Playwright counts these as visible).
 - A request to the bridge that takes too long fails with an explanation (#1761200001) instead of the bare cURL error.

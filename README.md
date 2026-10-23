@@ -615,9 +615,15 @@ Needs [Mailpit](https://mailpit.axllent.org) as SMTP server of the SUT; Behat re
 
 - `exactly :count mail(s) should have been sent to :recipient` - waits up to 5 seconds (`0 mails` always waits)
 - `the mail to :recipient should have the subject :subject`
-- `the mail to :recipient should contain :text` - the plain text part
+- `the mail to :recipient should (not) contain :text` - in the plain text and the HTML part (each part the mail has;
+  `not`: in none). The HTML part counts as visible text: tags removed (table cells and paragraphs separate words),
+  entities decoded; whitespace doesn't matter. The failure names the part.
+- `the mail to :recipient should be from :address` - the address, not the display name
 - `the mail to :recipient should reply to :address`
 - `the mail to :recipient should have the attachment :fileName`
+- `the mail to :recipient should have the attachment :fileName of type :contentType` - the type the mail declares
+  (e.g. `application/pdf`); also fails for an empty file
+- `the mail to :recipient should have no attachments`
 
 ### DebuggingTrait
 

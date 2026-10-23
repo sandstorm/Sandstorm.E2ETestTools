@@ -55,13 +55,49 @@ trait MailpitTrait
     }
 
     /**
-     * Checks the plain text part of the mail.
+     * Checks every part the mail has - the plain text and the HTML part, so the text is there whichever the mail client
+     * shows. The HTML part is compared as visible text: without tags, entities decoded. Whitespace doesn't matter
+     * (line breaks of long lines, indentation, table cells).
      */
     #[Then('the mail to :recipient should contain :text')]
     public function theMailToShouldContain(string $recipient, string $text): void
     {
-        $body = $this->mailpit_mailTo($recipient)['Text'] ?? '';
-        Assert::assertStringContainsString($text, is_string($body) ? $body : '');
+        $parts = $this->mailpit_parts($recipient);
+        $missing = array_keys(array_filter($parts, static fn (string $part) => !str_contains($part, self::mailpit_normalized($text))));
+        Assert::assertSame([], $missing, sprintf(
+            '"%s" is missing in the %s of the mail to "%s". %s',
+            $text,
+            implode(' and the ', $missing),
+            $recipient,
+            self::mailpit_partsSummary($parts)
+        ));
+    }
+
+    /**
+     * In none of the parts - see "should contain".
+     */
+    #[Then('the mail to :recipient should not contain :text')]
+    public function theMailToShouldNotContain(string $recipient, string $text): void
+    {
+        $parts = $this->mailpit_parts($recipient);
+        $found = array_keys(array_filter($parts, static fn (string $part) => str_contains($part, self::mailpit_normalized($text))));
+        Assert::assertSame([], $found, sprintf(
+            '"%s" is in the %s of the mail to "%s". %s',
+            $text,
+            implode(' and the ', $found),
+            $recipient,
+            self::mailpit_partsSummary($parts)
+        ));
+    }
+
+    /**
+     * The address only, not the display name.
+     */
+    #[Then('the mail to :recipient should be from :address')]
+    public function theMailToShouldBeFrom(string $recipient, string $address): void
+    {
+        $from = $this->mailpit_mailTo($recipient)['From'] ?? [];
+        Assert::assertSame($address, is_array($from) ? $from['Address'] ?? null : null, sprintf('Unexpected sender of the mail to "%s".', $recipient));
     }
 
     #[Then('the mail to :recipient should reply to :address')]
@@ -76,6 +112,83 @@ trait MailpitTrait
     {
         $attachments = self::mailpit_values($this->mailpit_mailTo($recipient)['Attachments'] ?? [], 'FileName');
         Assert::assertContains($fileName, $attachments, sprintf('Attachments of the mail to "%s": %s', $recipient, $attachments === [] ? 'none' : implode(', ', $attachments)));
+    }
+
+    #[Then('the mail to :recipient should have no attachments')]
+    public function theMailToShouldHaveNoAttachments(string $recipient): void
+    {
+        $attachments = self::mailpit_values($this->mailpit_mailTo($recipient)['Attachments'] ?? [], 'FileName');
+        Assert::assertSame([], $attachments, sprintf('Attachments of the mail to "%s": %s', $recipient, implode(', ', $attachments)));
+    }
+
+    /**
+     * :contentType is the type the mail declares (e.g. application/pdf) - the file content isn't checked, except that
+     * it isn't empty.
+     */
+    #[Then('the mail to :recipient should have the attachment :fileName of type :contentType')]
+    public function theMailToShouldHaveTheAttachmentOfType(string $recipient, string $fileName, string $contentType): void
+    {
+        $attachments = $this->mailpit_mailTo($recipient)['Attachments'] ?? [];
+        $attachment = null;
+        foreach (is_array($attachments) ? $attachments : [] as $candidate) {
+            if (is_array($candidate) && ($candidate['FileName'] ?? null) === $fileName) {
+                $attachment = $candidate;
+            }
+        }
+        $names = self::mailpit_values($attachments, 'FileName');
+        Assert::assertNotNull($attachment, sprintf('Attachments of the mail to "%s": %s', $recipient, $names === [] ? 'none' : implode(', ', $names)));
+        Assert::assertSame($contentType, $attachment['ContentType'] ?? null, sprintf('Unexpected type of the attachment "%s".', $fileName));
+        Assert::assertGreaterThan(0, $attachment['Size'] ?? 0, sprintf('The attachment "%s" is empty.', $fileName));
+    }
+
+    /**
+     * The parts the mail to the recipient has, as normalized text: "text part" and/or "HTML part" (as visible text).
+     *
+     * @return array<string, string>
+     */
+    private function mailpit_parts(string $recipient): array
+    {
+        $mail = $this->mailpit_mailTo($recipient);
+        $parts = [];
+        if (is_string($mail['Text'] ?? null) && trim($mail['Text']) !== '') {
+            $parts['text part'] = self::mailpit_normalized($mail['Text']);
+        }
+        if (is_string($mail['HTML'] ?? null) && trim($mail['HTML']) !== '') {
+            $parts['HTML part'] = self::mailpit_visibleText($mail['HTML']);
+        }
+        Assert::assertNotSame([], $parts, sprintf('The mail to "%s" has no text.', $recipient));
+        return $parts;
+    }
+
+    /**
+     * @param array<string, string> $parts
+     */
+    private static function mailpit_partsSummary(array $parts): string
+    {
+        return implode(' ', array_map(
+            static fn (string $name, string $text) => sprintf('%s: "%s"', ucfirst($name), mb_strimwidth($text, 0, 300, '...')),
+            array_keys($parts),
+            $parts
+        ));
+    }
+
+    /**
+     * The text of an HTML mail as it's read: without head, styles and scripts; block elements (paragraphs, table cells,
+     * line breaks, ...) separate words, inline elements (strong, a, span, ...) don't.
+     */
+    private static function mailpit_visibleText(string $html): string
+    {
+        $html = preg_replace('#<(head|style|script)\b.*?</\1\s*>#is', ' ', $html) ?? $html;
+        $html = preg_replace('#</?(?:p|div|br|hr|td|th|tr|table|thead|tbody|tfoot|li|ul|ol|dl|dt|dd|h[1-6]|blockquote|section|article|header|footer|center)\b[^>]*>#i', ' ', $html) ?? $html;
+        return self::mailpit_normalized(html_entity_decode(strip_tags($html), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+    }
+
+    /**
+     * Whitespace (also non-breaking spaces) collapsed to single spaces.
+     */
+    private static function mailpit_normalized(string $text): string
+    {
+        return trim(preg_replace('/[\s\x{00A0}]+/u', ' ', $text) ?? $text);
     }
 
     /**
