@@ -50,7 +50,7 @@ What changed for projects using the package, the newest version first. Versions 
    (`visible`, `hidden`, `focused`, `enabled`, `disabled`); an unknown state is an undefined step instead of an error.
 9. The [new steps](#new-in-110) can have the same wording as steps of your project (e.g. `the mail to :recipient
    should be from :address`, `the radio button :name should be visible`) - Behat reports both as ambiguous. Delete
-   yours.
+   yours - the package's steps match names exactly (see [Notes on the steps](README.md#notes-on-the-steps)).
 
 ### Upgrading the playwright-bridge to 11.0
 
@@ -105,7 +105,9 @@ first, and the step failed with a bare cURL timeout. Without the update everythi
   undefined.
 - `there should be the text ... on the page` moved to `PageAssertionsTrait`.
 - The [new steps](#new-in-100) can have the same wording as steps of your project (e.g. `the button :caption should be
-  disabled`) - Behat reports both as ambiguous. Delete yours, or don't use the trait.
+  disabled`) - Behat reports both as ambiguous. Delete yours, or don't use the trait. Mind: the package's steps find
+  buttons, links and fields by their **exact** name - texts your steps found as a part (a partial label, a missing
+  trailing period) fail now; copy the exact texts from the page.
 
 **Changed behaviour:**
 
@@ -115,7 +117,9 @@ first, and the step failed with a bare cURL timeout. Without the update everythi
   log) instead of PHPUnit. `$pageAssertions_timeout` still works, but is deprecated.
 - `there should be the text ... on the page` checks the rendered text, like its `not` variant: text in hidden elements
   counts as absent, the case matters, and it waits 5 seconds instead of 15. A step that found hidden text before fails
-  now - check the element that shows the text, or wait for it with another step first.
+  now - check the element that shows the text, or wait for it with another step first. Rendered text also means:
+  `text-transform` applies, line breaks between block and flex items, and form values aren't part of it - see
+  [Notes on the steps](README.md#notes-on-the-steps).
 - `I delete the cookie` keeps the other cookies (before, all were removed and added again).
 - `E2E_TRACE` wins over `setPlaywrightTracingMode()`; an unknown value fails the run.
 
