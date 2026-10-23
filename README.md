@@ -74,6 +74,7 @@ changes can be released independent of Neos. What changed and how to upgrade: [C
 
 | Package | Neos / Flow | Note |
 |---|---|---|
+| 11.x | 9.1+ | [upgrading from 10.x](CHANGELOG.md#upgrading-to-110) |
 | 10.x | 9.1+ | [upgrading from 9.1](CHANGELOG.md#upgrading-the-steps-to-100) |
 | 9.1.x | 9.1+ | [migrating from Neos 8](CHANGELOG.md#migrating-tests-from-neos-8) |
 | 8.x | 8 | latest 8.3.2 |

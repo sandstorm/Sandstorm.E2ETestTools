@@ -3,32 +3,40 @@
 What changed for projects using the package, the newest version first. Versions follow SemVer since 10.0.0 - see
 [Versions](README.md#versions). A major version comes with upgrade notes for the steps and the playwright-bridge.
 
-## 10.2.0 - unreleased
+## 11.0.0 - unreleased
+
+### Upgrading to 11.0
+
+**Changed behaviour** - a test that passed can fail now:
 
 - `PageAssertionsTrait` and `FormInteractionTrait` use the copy of an element the visitor sees: a hidden copy (e.g. the
-  desktop variant on a mobile viewport) is ignored instead of failing in Playwright's strict mode. **Changed
-  behaviour:** the element assertions no longer check the first match - two visible matches fail now (`the button
-  "Delete" should be visible` with a button per row), `should be hidden` fails when any copy is visible, and
-  `I focus the :role :name` no longer focuses the first of several. Scope those steps to one element (test id) or fix
-  the markup.
+  desktop variant on a mobile viewport) is ignored instead of failing in Playwright's strict mode. The element
+  assertions no longer check the first match - two visible matches fail now (`the button "Delete" should be visible`
+  with a button per row), `should be hidden` fails when any copy is visible, and `I focus the :role :name` no longer
+  focuses the first of several. Scope those steps to one element (test id) or fix the markup.
+- `requests to other hosts are recorded and blocked`: a navigation to another host (link, form, JavaScript, iframe)
+  gets an empty page instead of failing with `net::ERR_FAILED` - other requests stay blocked. A server redirect to
+  another host isn't covered (see README). The recorded requests are full URLs now: own steps that read
+  `vars.externalHosts` use `vars.externalRequests` (map them with `new URL(url).host`).
+
+**playwright-bridge** - update your copy: contexts and pages a script opens itself (`browser.newContext()`,
+`browser.newPage()`) wait up to 15 seconds per action or navigation, like the scenario's context. With Playwright's
+30 s default they hit the 30 s of the request to the bridge first, and the step failed with a bare cURL timeout. An
+older copy keeps working, without this.
+
+### New in 11.0
+
+- New step `the page URL should start with :url` (NavigationTrait) - e.g. where a link to a payment provider led.
+- Failures say when only hidden matches were found, or when one of several visible matches is hidden by `opacity: 0`,
+  off-screen positioning or sr-only (Playwright counts these as visible).
+- A request to the bridge that takes too long fails with an explanation (#1761200001) instead of the bare cURL error.
+- `playwrightRunOnVisible()` for own steps: runs a script on the visible copy of a locator, with the same failure hints.
 - `there should not be the text :text in :selector` passes when no element matches visibly (it failed with "element(s)
   not found" before).
 - `the focus should be inside :selector` passes when any match contains the focus (nested matches are fine) - it
   checked only the first match before.
 - `the :role :name should be focused` reports an element inside `inert` as "hidden from assistive technology" - since
   10.0 it failed with Playwright's plain message.
-- Failures say when only hidden matches were found, or when one of several visible matches is hidden by `opacity: 0`,
-  off-screen positioning or sr-only (Playwright counts these as visible).
-- `requests to other hosts are recorded and blocked`: a navigation to another host (link, form, JavaScript, iframe)
-  gets an empty page instead of failing with `net::ERR_FAILED` - other requests stay blocked. New step `the page URL
-  should start with :url` (NavigationTrait) checks where it led. A server redirect to another host isn't covered (see
-  README). The recorded requests are full URLs now: own steps that read `vars.externalHosts` use
-  `vars.externalRequests` (map them with `new URL(url).host`).
-- playwright-bridge: contexts and pages a script opens itself (`browser.newContext()`, `browser.newPage()`) wait up to
-  15 seconds per action or navigation, like the scenario's context - with Playwright's 30 s default they hit the 30 s
-  of the request to the bridge first, and the step failed with a bare cURL timeout. Update your copy of the bridge.
-- A request to the bridge that takes too long fails with an explanation (#1761200001) instead of the bare cURL error.
-- `playwrightRunOnVisible()` for own steps: runs a script on the visible copy of a locator, with the same failure hints.
 
 ## 10.1.0 - 2026-10-20
 
