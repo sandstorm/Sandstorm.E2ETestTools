@@ -644,7 +644,9 @@ Setup and details: [Mocked third-party APIs](#mocked-third-party-apis-wiremock).
 - The assertions on the page wait for the expected state (Playwright's
   [web-first assertions](https://playwright.dev/docs/test-assertions)): up to 5 seconds - change it with
   `$this->setPlaywrightTimeout(10000)` in the `FeatureContext` constructor. A negative check (`should not`, `hidden`)
-  passes as soon as the state is reached.
+  passes as soon as the state is reached. Actions and navigations (click, `goto`, `waitForLoadState`) wait up to 15
+  seconds - in every browser context, also one your own step opens. A request to the bridge may take 30 seconds: a
+  script whose waits add up to more fails with a timeout of that request - give the waits shorter timeouts.
 - The steps of `PageAssertionsTrait` and `FormInteractionTrait` use the copy of an element the visitor sees: markup
   that renders a control twice (desktop and mobile, one of them hidden) works. Two visible matches are an error -
   "the button" is one button. Playwright also counts `opacity: 0`, off-screen and sr-only elements as visible; the

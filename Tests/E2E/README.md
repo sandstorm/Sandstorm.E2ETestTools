@@ -31,6 +31,7 @@ mise run tests:e2e:runSingle    # one feature - choose it from a list
 | [Browser/BrowserState.feature](Features/Browser/BrowserState.feature) | check and preset cookies and web storage (e.g. a consent decision) |
 | [WireMock/Weather.feature](Features/WireMock/Weather.feature) | answer a server-side API call of the site with WireMock: base stubs, per-scenario responses, tapes, call counts |
 | [Export/Button.feature](Features/Export/Button.feature) | *package-internal:* the "Export Node" button - download as admin, round trip through the import, disabled for editors |
+| [Browser/BridgeTimeouts.feature](Features/Browser/BridgeTimeouts.feature) | *package-internal:* contexts a script opens wait 15 s, a too long bridge request explains itself |
 | [Export/Command.feature](Features/Export/Command.feature) | *package-internal:* `./flow e2efixture:export` - by id, by URI path, as Gherkin, round trip, errors |
 
 The [FeatureContext](Features/Bootstrap/FeatureContext.php) uses every shipped trait - a new feature can use any step

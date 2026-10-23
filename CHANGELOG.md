@@ -24,6 +24,10 @@ What changed for projects using the package, the newest version first. Versions 
   should start with :url` (NavigationTrait) checks where it led. A server redirect to another host isn't covered (see
   README). The recorded requests are full URLs now: own steps that read `vars.externalHosts` use
   `vars.externalRequests` (map them with `new URL(url).host`).
+- playwright-bridge: contexts and pages a script opens itself (`browser.newContext()`, `browser.newPage()`) wait up to
+  15 seconds per action or navigation, like the scenario's context - with Playwright's 30 s default they hit the 30 s
+  of the request to the bridge first, and the step failed with a bare cURL timeout. Update your copy of the bridge.
+- A request to the bridge that takes too long fails with an explanation (#1761200001) instead of the bare cURL error.
 - `playwrightRunOnVisible()` for own steps: runs a script on the visible copy of a locator, with the same failure hints.
 
 ## 10.1.0 - 2026-10-20

@@ -296,6 +296,17 @@ class PlaywrightConnector
             $errorCode = curl_errno($curlHandle);
             $error = curl_error($curlHandle);
             curl_close($curlHandle);
+            if ($errorCode === CURLE_OPERATION_TIMEDOUT && $timeoutSeconds > 0) {
+                throw new \RuntimeException(
+                    sprintf(
+                        'The playwright-bridge didn\'t answer within %d seconds - a wait in the script took longer: a timeout of %d seconds or more (Playwright\'s default is 30 s - a bridge copy older than 10.2 keeps it for contexts your own steps open), or several waits that add up. Give the wait a shorter timeout, e.g. {timeout: 10000}, to get Playwright\'s message and call log. Last requested URL was "%s" (%s).',
+                        $timeoutSeconds,
+                        $timeoutSeconds,
+                        $requestUri,
+                        $method
+                    ), 1761200001
+                );
+            }
             throw new \RuntimeException(
                 sprintf(
                     'cURL reported error code %s with message "%s". Last requested URL was "%s" (%s).',
