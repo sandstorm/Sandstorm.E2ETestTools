@@ -74,6 +74,7 @@ changes can be released independent of Neos. What changed and how to upgrade: [C
 
 | Package | Neos / Flow | Note |
 |---|---|---|
+| 11.x | 9.1+ | [upgrading from 10.x](CHANGELOG.md#upgrading-the-steps-to-110) |
 | 10.x | 9.1+ | [upgrading from 9.1](CHANGELOG.md#upgrading-the-steps-to-100) |
 | 9.1.x | 9.1+ | [migrating from Neos 8](CHANGELOG.md#migrating-tests-from-neos-8) |
 | 8.x | 8 | latest 8.3.2 |
@@ -459,6 +460,8 @@ Comes with `FusionRenderingTrait`.
 - `I access the URI path :uriPath` - opens a new page
 - `I reload the page`
 - `the URI path should be :uriPath` - waits for the navigation
+- `the URL should start with :url` - the full URL, e.g. where a link to a payment provider led; a prefix, so a
+  token at the end doesn't matter
 - `the response status code should be :status`
 - `the viewport is :width x :height px` - reloads the page
 - `the screen is :width x :height px with pixel ratio :ratio` - clears the browser cache and reloads; Chromium only
@@ -469,7 +472,7 @@ Comes with `FusionRenderingTrait`.
 ### NeosBackendControlTrait
 
 - `I have a Neos backend user :username with password :password and role :role`
-- `I log into the backend using credentials :username :password [with username placeholder ... and password placeholder ...]`
+- `I log into the backend as :username with password :password[, with username placeholder ... and password placeholder ...]`
 - `I click the main menu item :menuItem`
 - `I click the overview dashboard tile :tileTitle`
 - `I click the document tree entry :documentTitle`
@@ -478,13 +481,16 @@ Comes with `FusionRenderingTrait`.
 
 - `the page title should be :title`
 - `there should (not) be the text :text on the page` - rendered text: hidden text counts as absent
-- `there should (not) be the text :text in :selector`
+- `there should (not) be the text :text in :selector` - the `not` variant also passes when no element matches
+  visibly - check the element is visible first, if that matters
 - `the :role :name should be focused` - fails with the focused element, or if the element is hidden from assistive
   technology
 - `the focus should be inside :selector`
 - `the :role :name should (not) be in the viewport`
-- `the :role :name should be visible/hidden/enabled/disabled` - `hidden` also finds elements hidden from assistive
-  technology, and passes if there is no such element
+- `the :role :name should be visible/hidden/enabled/disabled` - `hidden`: no visible copy; it also finds elements
+  hidden from assistive technology, and passes if there is no such element
+- :role is an ARIA role (`button`, `link`, `heading`, `textbox`, `checkbox`, ...) or a word of the form steps: `field`
+  (a form field by its label), `radio button`
 - `the element with test id :testId should be visible/hidden/focused/enabled/disabled`
 - `the element with test id :testId should (not) be in the viewport`
 
@@ -518,7 +524,12 @@ Comes with `FusionRenderingTrait`.
 
 ### NetworkTrait
 
-- `requests to other hosts are recorded and blocked` - before the first visit; the site under test is not blocked
+- `requests to other hosts are recorded and blocked` - before the first visit; the site under test is not blocked. A
+  navigation to another host (link, form, JavaScript, iframe) gets an empty page, so it arrives - check it with `the URL
+  should start with`. Not covered: a server redirect (302/303) to another host - Playwright doesn't route the
+  redirect target, the browser really requests it; make the target configurable for the tests. Also not covered:
+  contexts your own steps open (`browser.newContext()`) - the route is on the scenario's context. Own steps find the
+  full URLs in `vars.externalRequests`.
 - `I forget the recorded requests`
 - `there should (not) be a request to :host` - part of the host name, e.g. `youtube`
 - `all links in :selector should respond with 200` - follows redirects
@@ -532,8 +543,9 @@ messages, the last 100 requests).
 - `there should be no JavaScript errors` - uncaught errors and `console.error()`
 - `there should be no failed requests [except:]` - requests to the site under test that failed or got 4xx/5xx (other
   hosts are ignored - see `NetworkTrait`); the table's column `URI path` lists known gaps (part of the path)
-- `every image should be loaded` - loads lazy images right away, waits up to 15 seconds (thumbnails are generated on
-  their first request)
+- `I load all images of the page` - lazy images eager, waits until all are loaded (up to 15 seconds)
+- `every image should be loaded` - waits up to 15 seconds (thumbnails are generated on their first request); lazy
+  images outside the viewport don't load by themselves - `I load all images of the page` first
 - `every image should have an alt attribute` - `alt=""` and images hidden from assistive technology pass
 
 ```gherkin
@@ -541,23 +553,25 @@ Scenario: the homepage is healthy
   When I access the URI path "/"
   Then there should be no JavaScript errors
   And there should be no failed requests
-  And every image should be loaded
+  When I load all images of the page
+  Then every image should be loaded
   And every image should have an alt attribute
 ```
 
 ### ResponsiveImageTrait
 
 Checks that every image loads the **fitting srcset image** - i.e. that `sizes` tells the browser the width the image is
-really shown with. Chromium only (like `the screen is ... with pixel ratio ...`). Needs `FusionRenderingTrait` (for the
-assets) and php-vips (`jcupitt/vips` with ext-ffi) or ext-gd to generate the test images.
+really shown with. Chromium only (like `the screen is ... with pixel ratio ...`). Needs `PageHealthTrait` (`I load all
+images of the page`), `FusionRenderingTrait` (for the assets) and php-vips (`jcupitt/vips` with ext-ffi) or ext-gd to
+generate the test images.
 
 - `I have :count generated test images` - 1600 x 1000 JPEGs with the ids `image-1` ... `image-n`, each showing its id
   (also the asset title). Every image has different content: identical files would share their thumbnails, and the
   browser could reuse an already loaded larger image of another slot - give every slot its own image.
 - `I have a generated test image with id :id and aspect ratio :ratio` - e.g. `"3:4"`, the longer side 1600 px
 - `the asset collection :id contains the images :ids` - comma-separated asset ids
-- `I load all images of the page` - lazy images eager, waits until all are loaded (up to 15 seconds)
-- `every image should load the fitting srcset image [, except:]`
+- `every image should load the fitting srcset image [except:]` - load the images first with `I load all images of the
+  page` (PageHealthTrait)
 - `I mark the image sizes on the page`, `I scroll to the image :alt` - for debugging: a badge with the result on every
   image (also on the error screenshot)
 
@@ -585,7 +599,7 @@ Scenario: images on a phone
   When I access the URI path "/images"
   And the screen is 390 x 844 px with pixel ratio 3
   And I load all images of the page
-  Then every image should load the fitting srcset image, except:
+  Then every image should load the fitting srcset image except:
     | image     | expected               |
     | gallery-1 | fitting or one smaller |
     | teaser    | fitting or one larger  |
@@ -606,9 +620,15 @@ Needs [Mailpit](https://mailpit.axllent.org) as SMTP server of the SUT; Behat re
 
 - `exactly :count mail(s) should have been sent to :recipient` - waits up to 5 seconds (`0 mails` always waits)
 - `the mail to :recipient should have the subject :subject`
-- `the mail to :recipient should contain :text` - the plain text part
+- `the mail to :recipient should (not) contain :text` - in the plain text and the HTML part (each part the mail has;
+  `not`: in none). The HTML part counts as visible text: tags removed (table cells and paragraphs separate words),
+  entities decoded; whitespace doesn't matter. The failure names the part.
+- `the mail to :recipient should be from :address` - the address, not the display name
 - `the mail to :recipient should reply to :address`
 - `the mail to :recipient should have the attachment :fileName`
+- `the mail to :recipient should have the attachment :fileName of type :contentType` - the type the mail declares
+  (e.g. `application/pdf`); also fails for an empty file
+- `the mail to :recipient should have no attachments`
 
 ### DebuggingTrait
 
@@ -623,12 +643,28 @@ No steps - measures the duration of every step and scenario, see "Slow steps" in
 - `the API :api serves :file for :method :path [with status :status]`
 - `I load the stubs :tape of the API :api`
 - `I clear all API stubs`
-- `the API :api should have received :method :path [:count times]`
+- `the API :api should have received :method :path [exactly :count time(s)]`
 
 Setup and details: [Mocked third-party APIs](#mocked-third-party-apis-wiremock).
 
 ### Notes on the steps
 
+- **Exact names:** buttons, links, fields and roles are found by their exact caption, label or accessible name - the
+  whole text, case and punctuation included: `I click the button "Send"` doesn't find "Send now", a missing trailing
+  period fails. The text steps (`there should be the text ...`, `the mail to ... should contain ...`) look for a part
+  of the text. Own steps you replace with the package's often matched parts - copy the exact texts from the page.
+- **Rendered text:** `there should be the text ...` compares the text as the browser renders it (`innerText`) - what
+  the visitor sees, which isn't always what the HTML says:
+  - text in hidden elements counts as absent, the case matters;
+  - CSS `text-transform` applies - with `uppercase`, "Your order" is "YOUR ORDER": assert what the visitor sees;
+  - block and flex items and `<br>` become line breaks - `Pre-<br>order` or "Pre-" and "order" in two flex items is
+    "Pre- order" (whitespace counts as one space): assert the visible text, or check the element in an own step with
+    `toHaveText()` - it reads the text content, without the breaks the layout adds;
+  - values of form fields (`input`, `textarea`) aren't part of it - use `the field :label should have the value
+    :value`, or `toHaveValue()` in an own step for a field without a label.
+- **Icons in the name:** the accessible name includes text generated by CSS - an icon font glyph (`<i class="fa
+  fa-filter">`, drawn with `::before`) without `aria-hidden="true"` becomes part of the button's name, so `I click the
+  button "Filter"` fails. Fix the markup: put `aria-hidden="true"` on the icon - a screen reader reads the glyph too.
 - `the Fusion output should be` compares the whole HTML and breaks with every changed space or class - prefer
   the CSS selector steps. `the inner HTML of ... should be` compares for equality, not as regular expression.
 - Escaped quotes (`\"`) inside a `"..."` parameter don't match the step - put values with double quotes in single
@@ -636,7 +672,16 @@ Setup and details: [Mocked third-party APIs](#mocked-third-party-apis-wiremock).
 - The assertions on the page wait for the expected state (Playwright's
   [web-first assertions](https://playwright.dev/docs/test-assertions)): up to 5 seconds - change it with
   `$this->setPlaywrightTimeout(10000)` in the `FeatureContext` constructor. A negative check (`should not`, `hidden`)
-  passes as soon as the state is reached.
+  passes as soon as the state is reached. Actions and navigations (click, `goto`, `waitForLoadState`) wait up to 15
+  seconds - in every browser context, also one your own step opens. A request to the bridge may take 30 seconds: a
+  script whose waits add up to more fails with a timeout of that request - give the waits shorter timeouts.
+- The steps of `PageAssertionsTrait` and `FormInteractionTrait` use the copy of an element the visitor sees: markup
+  that renders a control twice (desktop and mobile, one of them hidden) works. Two visible matches are an error -
+  "the button" is one button. Playwright also counts `opacity: 0`, off-screen and sr-only elements as visible; the
+  failure says so when one of the matches is hidden that way, and says when only hidden matches were found. A control
+  hidden with `display: none` (e.g. a native checkbox replaced by a styled label) can't be used - the step fails, and
+  keyboard users can't reach it either. Own steps get the same with `$this->playwrightRunOnVisible($locator, $script,
+  ...$values)` - `visible` in the script is the visible copy.
 - Screenshots document a result, they don't check it.
 - Project-specific steps go into your `FeatureContext` or a trait of your project. Drive the browser with
   `$this->playwrightRun($script, ...$values)`: every `%s` in the script becomes the next value as JS literal, so
@@ -725,7 +770,7 @@ one directory of mapping files per "tape":
   (`.json` may be omitted); wins over base stubs; a path with query string must match exactly
 - `I load the stubs :tape of the API :api` - imports all mapping files of the tape directory
 - `I clear all API stubs` - back to the base stubs, e.g. when the API's answer changes after an action
-- `the API :api should have received :method :path [:count times]` - asserts an outgoing call, when the call is the
+- `the API :api should have received :method :path [exactly :count time(s)]` - asserts an outgoing call, when the call is the
   feature
 
 While writing a test, `'proxyBaseUrl' => 'https://real.api.example.com'` in the API config forwards unmatched requests
@@ -761,7 +806,24 @@ IDE "run" buttons usually don't work when Behat runs in a container - use the CL
   headless one (the kickstart: `mise run tests:e2e:runSingle --headed`).
 - **Screenshots**: `And I take a screenshot "name.png"` in a `@playwright` scenario; failed steps get an `error_*.png`
   automatically. Both go to the results directory: `e2e-results/` where Behat runs, or what you pass to
-  `setupPlaywright($resultsDir)`.
+  `setupPlaywright($resultsDir)`. When Behat runs in a docker compose container, mount the directory to the host, so
+  you can open the files there:
+
+  ```yaml
+  # docker-compose.yml
+  services:
+    neos:
+      volumes:
+        - ./app/Data/e2e-results/:/app/Data/e2e-results/
+  ```
+
+  ```php
+  // FeatureContext constructor - relative to where Behat runs (/app)
+  $this->setupPlaywright('Data/e2e-results');
+  ```
+
+  On Linux the container writes as `www-data`: create the directory on the host and make it writable
+  (`mkdir -p app/Data/e2e-results && chmod a+rwx app/Data/e2e-results`).
 - **Traces**: failed `@playwright` scenarios write `report_<feature>_<scenario>.zip` to the results directory - open it
   with `npx playwright show-trace <file>` (the kickstart chooses one: `mise run tests:e2e:openTrace`). Each Behat step
   is a group in the trace, so the Trace Viewer shows the actions per step. For traces of every scenario (or none), call

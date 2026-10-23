@@ -31,9 +31,9 @@ trait NeosBackendControlTrait
     /**
      * Fills the login form by the placeholders of its fields - pass them for a non-English backend.
      */
-    #[When('I log into the backend using credentials :username :password')]
-    #[When('I log into the backend using credentials :username :password with username placeholder :usernamePlaceholder and password placeholder :passwordPlaceholder')]
-    public function iLogIntoTheBackendUsingCredentials(
+    #[When('I log into the backend as :username with password :password')]
+    #[When('I log into the backend as :username with password :password, with username placeholder :usernamePlaceholder and password placeholder :passwordPlaceholder')]
+    public function iLogIntoTheBackendAs(
         string $username,
         string $password,
         string $usernamePlaceholder = 'Username',

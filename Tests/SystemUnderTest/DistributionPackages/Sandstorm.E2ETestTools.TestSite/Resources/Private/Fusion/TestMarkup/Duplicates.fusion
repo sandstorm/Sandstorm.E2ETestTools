@@ -1,0 +1,76 @@
+// FormInteractionTrait, PageAssertionsTrait: controls rendered twice - the steps use the copy the visitor sees. The
+// hidden copies hold other values (checked, selected, valid), so a step that used them would fail.
+prototype(Sandstorm.E2ETestTools.TestSite:TestMarkup.Duplicates) < prototype(Neos.Fusion:Component) {
+    renderer = afx`
+        <div class="desktop" style="display: none">
+            <label for="city-desktop">City</label>
+            <input id="city-desktop" type="text" value="hidden copy" />
+            <input id="terms-desktop" type="checkbox" />
+            <label for="terms-desktop">Terms</label>
+            <input id="express-desktop" type="radio" name="speed-desktop" checked />
+            <label for="express-desktop">Express</label>
+            <label for="size-desktop">Size</label>
+            <select id="size-desktop">
+                <option>S</option>
+                <option selected>M</option>
+            </select>
+            <label for="email-desktop">Email</label>
+            <input id="email-desktop" type="email" value="jane@example.com" />
+            <button type="button" data-testid="order">Order</button>
+        </div>
+        <div class="mobile">
+            <label for="city-mobile">City</label>
+            <input id="city-mobile" type="text" value="visible copy" />
+            <input id="terms-mobile" type="checkbox" />
+            <label for="terms-mobile">Terms</label>
+            <input id="express-mobile" type="radio" name="speed-mobile" />
+            <label for="express-mobile">Express</label>
+            <label for="size-mobile">Size</label>
+            <select id="size-mobile">
+                <option>S</option>
+                <option>M</option>
+            </select>
+            <label for="email-mobile">Email</label>
+            <input id="email-mobile" type="email" value="not-an-email" />
+            <button type="button" data-testid="order" id="order-mobile">Order</button>
+        </div>
+        <p data-testid="order-result"></p>
+
+        <button type="button">Delete</button>
+        <button type="button">Delete</button>
+
+        <div style="opacity: 0"><button type="button">Subscribe</button></div>
+        <button type="button">Subscribe</button>
+
+        <div style="position: absolute; left: -9999px"><button type="button">Search</button></div>
+        <button type="button">Search</button>
+
+        <span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0)"><button type="button">Close</button></span>
+        <button type="button">Close</button>
+
+        <section class="panel">
+            <div class="panel"><button type="button">Panel button</button></div>
+        </section>
+
+        <div style="display: none">
+            <input id="hidden-only" type="checkbox" />
+            <label for="hidden-only">Hidden only</label>
+        </div>
+
+        <label for="upload">Upload</label>
+        <input id="upload" type="file" style="position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0" />
+        <p data-testid="upload-result"></p>
+        <script>{props.script}</script>
+    `
+    script = '
+        document.getElementById("order-mobile").addEventListener("click", () => {
+            document.querySelector("[data-testid=order-result]").textContent = "Ordered: " + document.getElementById("city-mobile").value
+                + ", terms " + (document.getElementById("terms-mobile").checked ? "yes" : "no")
+                + ", express " + (document.getElementById("express-mobile").checked ? "yes" : "no")
+                + ", size " + document.getElementById("size-mobile").value;
+        });
+        document.getElementById("upload").addEventListener("change", (event) => {
+            document.querySelector("[data-testid=upload-result]").textContent = "Uploaded " + event.target.files[0].name;
+        });
+    '
+}

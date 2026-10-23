@@ -14,7 +14,7 @@ Feature: Fixture export button
 
   Scenario: an administrator downloads the selected page - and the import creates it again
     Given I have a Neos backend user "admin" with password "password-for-e2e" and role "Neos.Neos:Administrator"
-    When I log into the backend using credentials "admin" "password-for-e2e"
+    When I log into the backend as "admin" with password "password-for-e2e"
     And I click the document tree entry "Nested"
     And I open the inspector tab "Metadata"
     And I download the file of the button "Export Node"
@@ -25,7 +25,7 @@ Feature: Fixture export button
 
   Scenario: an editor can't export
     Given I have a Neos backend user "editor" with password "password-for-e2e" and role "Neos.Neos:Editor"
-    When I log into the backend using credentials "editor" "password-for-e2e"
+    When I log into the backend as "editor" with password "password-for-e2e"
     And I click the document tree entry "Nested"
     And I open the inspector tab "Metadata"
     Then the button "Export Node" should be disabled

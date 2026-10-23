@@ -540,8 +540,8 @@ changes. The package's `WireMockTrait` (see the [README](README.md#mocked-third-
   after the step has already failed or returned, it's an unhandled rejection in the bridge, the bridge process exits,
   and every following scenario fails. If there is nothing visible to wait for, the user gets no feedback either - add
   a loading state to the page.
-- **Know the steps' quirks** - exact matching, escaping in step parameters: see the notes below the steps table in
-  the [README](README.md#steps).
+- **Know the steps' quirks** - exact names, rendered text, icons in names, escaping in step parameters: see
+  [Notes on the steps](README.md#notes-on-the-steps) in the README.
 
 ## Keeping the suite fast
 

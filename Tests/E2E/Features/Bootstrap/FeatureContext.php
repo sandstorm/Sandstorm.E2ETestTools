@@ -47,10 +47,11 @@ class FeatureContext implements Context
     use MailpitTrait;
     use ResponsiveImageTrait;
 
-    // only for testing this package: the fixture export, mails without a mailer, failure messages
+    // only for testing this package: the fixture export, mails without a mailer, failure messages, bridge timeouts
     use FixtureExportTrait;
     use MailFixtureTrait;
     use StepFailureTrait;
+    use BridgeTimeoutTrait;
 
     public function __construct()
     {

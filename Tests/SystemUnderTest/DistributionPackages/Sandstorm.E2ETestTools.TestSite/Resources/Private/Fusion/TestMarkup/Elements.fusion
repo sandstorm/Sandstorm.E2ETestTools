@@ -15,12 +15,18 @@ prototype(Sandstorm.E2ETestTools.TestSite:TestMarkup.Elements) < prototype(Neos.
             <a href="/">Start</a>
         </nav>
         <nav class="broken-links" aria-label="Broken links">
-            <a href="/">Start</a>
+            <a href="/">Home</a>
             <a href="/does-not-exist">Gone</a>
         </nav>
         <div style="display: none"><button type="button">Hidden button</button></div>
         <div inert><button type="button">Behind the dialog</button></div>
         <img src="https://example.invalid/pixel.png" alt="" />
+        <a href="https://example.invalid/pay?amount=10&token=abc">Pay</a>
+        <button type="button" id="pay-by-script">Pay by script</button>
+        <form action="https://example.invalid/pay" method="get">
+            <input type="hidden" name="amount" value="30" />
+            <button type="submit">Pay by form</button>
+        </form>
         <div style="height: 3000px"></div>
         <div data-testid="far-below"><h2>Far below</h2></div>
         <button type="button" id="back-to-top">Back to top</button>
@@ -28,6 +34,7 @@ prototype(Sandstorm.E2ETestTools.TestSite:TestMarkup.Elements) < prototype(Neos.
     `
     script = '
         document.querySelector("[data-testid=screen]").textContent = window.innerWidth + " px, ratio " + window.devicePixelRatio;
+        document.getElementById("pay-by-script").addEventListener("click", () => { window.location.href = "https://example.invalid/pay?amount=20&token=def"; });
         document.getElementById("back-to-top").addEventListener("click", () => window.scrollTo({top: 0, behavior: "smooth"}));
     '
 }

@@ -12,6 +12,7 @@ use PHPUnit\Framework\Assert;
  *
  * Write the step in single quotes when it contains double quotes:
  *   Then the step 'the button "Send" should be focused' should fail with "Focused instead"
+ *   Then the step 'the button "Delete" should be visible' should fail without "at least one is hidden"
  */
 trait StepFailureTrait
 {
@@ -21,18 +22,35 @@ trait StepFailureTrait
     #[Then('the step :step should fail with :message')]
     public function theStepShouldFailWith(string $step, string $message): void
     {
+        Assert::assertStringContainsString($message, $this->stepFailure_message($step), sprintf('The step "%s" failed with another message.', $step));
+    }
+
+    /**
+     * For a hint that must not show up - the step still has to fail.
+     */
+    #[Then('the step :step should fail without :message')]
+    public function theStepShouldFailWithout(string $step, string $message): void
+    {
+        Assert::assertStringNotContainsString($message, $this->stepFailure_message($step), sprintf('The step "%s" failed with an unexpected message.', $step));
+    }
+
+    /**
+     * The failure message of $step, run with a timeout of 500 ms - fails if the step passes. Without the script the
+     * connector appends ("Full script: ..."): it contains the hints' texts, so they would always match.
+     */
+    private function stepFailure_message(string $step): string
+    {
         [$method, $arguments] = $this->stepFailure_find($step);
         $timeout = $this->playwrightTimeout;
         $this->setPlaywrightTimeout(500);
         try {
             $this->$method(...$arguments);
         } catch (\Throwable $error) {
-            Assert::assertStringContainsString($message, $error->getMessage(), sprintf('The step "%s" failed with another message.', $step));
-            return;
+            return explode("\n\n Full script:", $error->getMessage())[0];
         } finally {
             $this->setPlaywrightTimeout($timeout);
         }
-        Assert::fail(sprintf('The step "%s" passed, but should fail with "%s".', $step, $message));
+        Assert::fail(sprintf('The step "%s" passed, but should fail.', $step));
     }
 
     /**

@@ -80,6 +80,23 @@ const init = async () => {
     const headless = process.env.HEADLESS !== 'false' && !process.argv.slice(2).includes('--no-headless');
     const browser = await chromium.launch({headless});
 
+    // Every context and page waits at most 15 s per action or navigation - also the ones a script opens itself
+    // (browser.newContext(), browser.newPage()): Playwright's default of 30 s equals the 30 s a request to the bridge may
+    // take, so the step would fail with a bare cURL timeout instead of Playwright's message and call log.
+    const actionTimeout = 15000;
+    const newContext = browser.newContext.bind(browser);
+    browser.newContext = async (...args) => {
+        const context = await newContext(...args);
+        context.setDefaultTimeout(actionTimeout);
+        return context;
+    };
+    const newPage = browser.newPage.bind(browser);
+    browser.newPage = async (...args) => {
+        const page = await newPage(...args);
+        page.setDefaultTimeout(actionTimeout);
+        return page;
+    };
+
     // the "key" is the context identifier (from the URL)
     // the "value" is an object: {
     //   playwrightContext: the playwright context object
@@ -106,7 +123,6 @@ const init = async () => {
             if (!currentlyKnownContexts[contextName]) {
                 console.log(`Creating ${contextName}`);
                 const playwrightContext = await browser.newContext();
-                playwrightContext.setDefaultTimeout(15000); // 15 s
                 currentlyKnownContexts[contextName] = {
                     playwrightContext,
                     vars: {},

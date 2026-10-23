@@ -20,18 +20,25 @@ trait NetworkTrait
 {
     /**
      * Before the first visit. Registered on the browser context, so it also covers the pages opened later by
-     * `I access the URI path`. Requests to other hosts than the system under test are aborted: the scenarios check
-     * whether the site *tries* to load a third party - without real traffic, so they also run without internet access.
+     * `I access the URI path` - not a context your own steps open with `browser.newContext()`. Requests to other hosts
+     * than the system under test are aborted: the scenarios check whether the site *tries* to load a third party -
+     * without real traffic, so they also run without internet access. A navigation to another host (link, redirect,
+     * iframe) gets an empty page instead, so it arrives - check where with `the URL should start with`.
+     *
+     * The full URLs are in `vars.externalRequests`, for own steps.
      */
     #[Given('requests to other hosts are recorded and blocked')]
     public function requestsToOtherHostsAreRecordedAndBlocked(): void
     {
         $this->playwrightRun(<<<'JS'
             const siteUnderTest = new URL("BASEURL").host;
-            vars.externalHosts = [];
+            vars.externalRequests = [];
             await context.route((url) => url.host !== siteUnderTest, (route) => {
-                vars.externalHosts.push(new URL(route.request().url()).host);
-                return route.abort();
+                vars.externalRequests.push(route.request().url());
+                // an aborted navigation fails with net::ERR_FAILED
+                return route.request().isNavigationRequest()
+                    ? route.fulfill({status: 200, contentType: 'text/html', body: ''})
+                    : route.abort();
             });
         JS);
     }
@@ -42,7 +49,7 @@ trait NetworkTrait
     #[When('I forget the recorded requests')]
     public function iForgetTheRecordedRequests(): void
     {
-        $this->playwrightRun(self::network_requireRecording() . 'vars.externalHosts.length = 0;');
+        $this->playwrightRun(self::network_requireRecording() . 'vars.externalRequests.length = 0;');
     }
 
     /**
@@ -53,7 +60,7 @@ trait NetworkTrait
     {
         $this->playwrightRun(self::network_requireRecording() . <<<'JS'
             // the requested hosts in the failure message, not just "false"
-            await expect.poll(() => [...new Set(vars.externalHosts)], {message: %2$s, timeout: %3$s})
+            await expect.poll(() => [...new Set(vars.externalRequests.map((url) => new URL(url).host))], {message: %2$s, timeout: %3$s})
                 .toContainEqual(expect.stringContaining(%1$s));
         JS, $host, sprintf('Requested hosts should include "%s"', $host), $this->playwrightTimeout);
     }
@@ -67,7 +74,7 @@ trait NetworkTrait
     {
         $hosts = $this->playwrightStrings(self::network_requireRecording() . <<<'JS'
             await vars.page.waitForLoadState('networkidle');
-            return [...new Set(vars.externalHosts)];
+            return [...new Set(vars.externalRequests.map((url) => new URL(url).host))];
         JS);
         Assert::assertEmpty(
             array_filter($hosts, static fn (string $requested) => str_contains($requested, $host)),
@@ -103,6 +110,6 @@ trait NetworkTrait
 
     private static function network_requireRecording(): string
     {
-        return 'if (!vars.externalHosts) { throw new Error(\'No requests are recorded - use "requests to other hosts are recorded and blocked" first.\'); }' . "\n";
+        return 'if (!vars.externalRequests) { throw new Error(\'No requests are recorded - use "requests to other hosts are recorded and blocked" first.\'); }' . "\n";
     }
 }

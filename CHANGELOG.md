@@ -3,6 +3,82 @@
 What changed for projects using the package, the newest version first. Versions follow SemVer since 10.0.0 - see
 [Versions](README.md#versions). A major version comes with upgrade notes for the steps and the playwright-bridge.
 
+## 11.0.0
+
+### Upgrading the steps to 11.0
+
+1. Require `"sandstorm/e2etesttools": "^11.0"` in your site package's `composer.json`, `composer update`.
+2. **Renamed steps** - replace them in your `.feature` files (otherwise Behat reports them as undefined):
+
+   | 10.x | 11.0 |
+   |---|---|
+   | `I log into the backend using credentials "admin" "password"` | `I log into the backend as "admin" with password "password"` |
+   | `I log into the backend using credentials "admin" "password" with username placeholder "..." and password placeholder "..."` | `I log into the backend as "admin" with password "password", with username placeholder "..." and password placeholder "..."` |
+   | `the API "weather" should have received "GET" "/forecast" 2 times` | `the API "weather" should have received "GET" "/forecast" exactly 2 times` |
+   | `every image should load the fitting srcset image, except:` | `every image should load the fitting srcset image except:` |
+
+   ```bash
+   # in your site package - review the diff afterwards
+   find Tests -name '*.feature' -exec sed -i.bak -E \
+       -e 's/I log into the backend using credentials ("[^"]*"|'"'"'[^'"'"']*'"'"') ("[^"]*"|'"'"'[^'"'"']*'"'"')( with username placeholder)?/I log into the backend as \1 with password \2\3/' \
+       -e 's/(should have received "[^"]*" "[^"]*") ([0-9]+) times/\1 exactly \2 times/' \
+       -e 's/(["'"'"']) with username placeholder/\1, with username placeholder/' \
+       -e 's/srcset image, except:/srcset image except:/' {} \; -exec rm {}.bak \;
+   ```
+3. **Moved step:** `I load all images of the page` is in `PageHealthTrait` now (was `ResponsiveImageTrait`) - add
+   `use PageHealthTrait;` to your `FeatureContext` if you use `ResponsiveImageTrait` without it.
+4. **`every image should be loaded` no longer loads lazy images** - a step that checks, doesn't change the page. Put
+   `When I load all images of the page` before it, otherwise lazy images outside the viewport fail with "still loading
+   after 15 s".
+5. **Elements: the copy the visitor sees.** `PageAssertionsTrait` and `FormInteractionTrait` ignore hidden copies (e.g.
+   the desktop variant on a mobile viewport) instead of failing in Playwright's strict mode - and no longer check the
+   first of several matches:
+   - two visible matches fail now (`the button "Delete" should be visible` with a button per row) - scope the step to
+     one element (test id) or fix the markup;
+   - `should be hidden` fails when any copy is visible;
+   - `I focus the :role :name` fails with several visible matches instead of focusing the first.
+6. **Mails: the HTML part counts.** `the mail to :recipient should contain :text` checks the HTML part (as visible
+   text) as well as the plain text - the part most mail clients show. A mail whose HTML part lacks the text fails now,
+   e.g. "Label: value" in the text template but a table without colons in the HTML template: write the labels the same
+   way in both templates.
+7. **Navigations to other hosts arrive.** With `requests to other hosts are recorded and blocked`, a link, form,
+   script or iframe navigating to another host gets an empty page instead of failing with `net::ERR_FAILED` (other
+   requests stay blocked). Check where it led with `the URL should start with :url`. A server redirect (302/303) to
+   another host isn't covered - see the README. Own steps that read `vars.externalHosts`: the recorded requests are
+   full URLs in `vars.externalRequests` now - `vars.externalRequests.map((url) => new URL(url).host)`.
+8. `the element with test id :testId should be :state` is one step per state now - the wording stays the same
+   (`visible`, `hidden`, `focused`, `enabled`, `disabled`); an unknown state is an undefined step instead of an error.
+9. The [new steps](#new-in-110) can have the same wording as steps of your project (e.g. `the mail to :recipient
+   should be from :address`, `the radio button :name should be visible`) - Behat reports both as ambiguous. Delete
+   yours - the package's steps match names exactly (see [Notes on the steps](README.md#notes-on-the-steps)).
+
+### Upgrading the playwright-bridge to 11.0
+
+Update your copy as described in [Setup step 5](README.md#5-playwright-playwright-bridge), restart it. Contexts and
+pages a script opens itself (`browser.newContext()`, `browser.newPage()`) wait up to 15 seconds per action or
+navigation, like the scenario's context - with Playwright's 30 s default they hit the 30 s of the request to the bridge
+first, and the step failed with a bare cURL timeout. Without the update everything keeps working, except this.
+
+### New in 11.0
+
+- `the URL should start with :url` (NavigationTrait) - e.g. where a link to a payment provider led.
+- MailpitTrait: `the mail to :recipient should not contain :text`, `... should be from :address`, `... should have no
+  attachments` and `... should have the attachment :fileName of type :contentType`.
+- `the :role :name should ...` also takes the words of the form steps: `field` (a form field by its label) and `radio
+  button` (`the field "Email" should be visible`, `the radio button "Express" should be enabled`) - they failed with
+  an unknown role before.
+- Failures say when only hidden matches were found, or when one of several visible matches is hidden by `opacity: 0`,
+  off-screen positioning or sr-only (Playwright counts these as visible).
+- A request to the bridge that takes too long fails with an explanation (#1761200001) instead of the bare cURL error.
+- `playwrightRunOnVisible()` and `playwrightRoleLocator()` for own steps: a script on the visible copy of a locator
+  (with the same failure hints), a locator by role with the form-step words.
+- `there should not be the text :text in :selector` passes when no element matches visibly (it failed with "element(s)
+  not found" before).
+- `the focus should be inside :selector` passes when any match contains the focus (nested matches are fine) - it
+  checked only the first match before.
+- `the :role :name should be focused` reports an element inside `inert` as "hidden from assistive technology" - since
+  10.0 it failed with Playwright's plain message.
+
 ## 10.1.0 - 2026-10-20
 
 - New `ResponsiveImageTrait` (see README): checks that `sizes` makes the browser load the fitting srcset image, with
@@ -29,7 +105,9 @@ What changed for projects using the package, the newest version first. Versions 
   undefined.
 - `there should be the text ... on the page` moved to `PageAssertionsTrait`.
 - The [new steps](#new-in-100) can have the same wording as steps of your project (e.g. `the button :caption should be
-  disabled`) - Behat reports both as ambiguous. Delete yours, or don't use the trait.
+  disabled`) - Behat reports both as ambiguous. Delete yours, or don't use the trait. Mind: the package's steps find
+  buttons, links and fields by their **exact** name - texts your steps found as a part (a partial label, a missing
+  trailing period) fail now; copy the exact texts from the page.
 
 **Changed behaviour:**
 
@@ -39,7 +117,9 @@ What changed for projects using the package, the newest version first. Versions 
   log) instead of PHPUnit. `$pageAssertions_timeout` still works, but is deprecated.
 - `there should be the text ... on the page` checks the rendered text, like its `not` variant: text in hidden elements
   counts as absent, the case matters, and it waits 5 seconds instead of 15. A step that found hidden text before fails
-  now - check the element that shows the text, or wait for it with another step first.
+  now - check the element that shows the text, or wait for it with another step first. Rendered text also means:
+  `text-transform` applies, line breaks between block and flex items, and form values aren't part of it - see
+  [Notes on the steps](README.md#notes-on-the-steps).
 - `I delete the cookie` keeps the other cookies (before, all were removed and added again).
 - `E2E_TRACE` wins over `setPlaywrightTracingMode()`; an unknown value fails the run.
 

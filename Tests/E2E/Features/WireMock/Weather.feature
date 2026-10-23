@@ -41,5 +41,5 @@ Feature: Mocked third-party API
   Scenario: counting the calls
     When I access the URI path "/"
     And I access the URI path "/"
-    Then the API "weather" should have received "GET" "/forecast" 2 times
-    And the step 'the API "weather" should have received "GET" "/forecast" 3 times' should fail with 'Unexpected number of GET /forecast requests to the API "weather"'
+    Then the API "weather" should have received "GET" "/forecast" exactly 2 times
+    And the step 'the API "weather" should have received "GET" "/forecast" exactly 3 times' should fail with 'Unexpected number of GET /forecast requests to the API "weather"'

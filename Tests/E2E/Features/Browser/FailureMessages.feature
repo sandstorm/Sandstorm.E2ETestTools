@@ -23,10 +23,9 @@ Feature: Failure messages
 
   Scenario: element states
     When I access the URI path "/"
-    Then the step 'the button "Enabled" should be hidden' should fail with "toBeHidden"
+    Then the step 'the button "Enabled" should be hidden' should fail with "Expected: 0"
     And the step 'the button "Hidden button" should be visible' should fail with "toBeVisible"
     And the step 'the button "Disabled" should be enabled' should fail with "toBeEnabled"
-    And the step 'the element with test id "visible-box" should be shiny' should fail with 'Unknown state "shiny" - use one of: visible, hidden, focused, enabled, disabled.'
 
   Scenario: texts
     When I access the URI path "/"

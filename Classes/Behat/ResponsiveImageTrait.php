@@ -27,6 +27,7 @@ use Sandstorm\E2ETestTools\ResponsiveImage\SrcsetVerdict;
  * Only pixels are compared, not bytes - so the image content doesn't matter (generated images showing their id).
  * Images are identified by their alt text. Needs {@see PlaywrightTrait} and {@see PersistentResourceTrait} (used by
  * {@see FusionRenderingTrait}) in the same context. Chromium only, like `the screen is ... with pixel ratio ...`.
+ * Load lazy images before the checks with `I load all images of the page` ({@see PageHealthTrait}).
  */
 trait ResponsiveImageTrait
 {
@@ -85,23 +86,6 @@ trait ResponsiveImageTrait
     }
 
     /**
-     * Images are loaded lazily - switch them to eager (the browser loads them right away, the srcset image it picks
-     * stays the same), then wait until every image is loaded. Faster than scrolling through the page.
-     */
-    #[When('I load all images of the page')]
-    public function iLoadAllImagesOfThePage(): void
-    {
-        $this->playwrightRun(<<<'JS'
-            await vars.page.evaluate(() => document.querySelectorAll('img[loading="lazy"]').forEach((image) => image.loading = 'eager'));
-            // thumbnails are generated on their first request - up to 15 seconds
-            await expect.poll(
-                () => vars.page.evaluate(() => [...document.images].filter((image) => !image.complete).map((image) => image.currentSrc || image.src)),
-                {message: 'Images of the page that are not loaded yet', timeout: 15000, intervals: [50]}
-            ).toEqual([]);
-        JS);
-    }
-
-    /**
      * For debugging (e.g. before `I pause for debugging`): puts the result on every image, judged with the default
      * expectation (fitting or capped). The checks below do it too, so it also shows on the error screenshots.
      */
@@ -138,7 +122,7 @@ trait ResponsiveImageTrait
      *   | teaser    | fitting or one larger  |
      * Results: fitting, one smaller, one larger, capped - the table replaces the default (fitting or capped).
      */
-    #[Then('every image should load the fitting srcset image, except:')]
+    #[Then('every image should load the fitting srcset image except:')]
     public function everyImageShouldLoadTheFittingSrcsetImageExcept(TableNode $exceptions): void
     {
         $expected = [];

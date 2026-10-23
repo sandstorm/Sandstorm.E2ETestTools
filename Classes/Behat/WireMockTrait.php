@@ -100,7 +100,7 @@ trait WireMockTrait
         Assert::assertGreaterThan(0, $count, sprintf('The API "%s" received no %s %s (waited 5 s).', $api, strtoupper($method), $path));
     }
 
-    #[Then('the API :api should have received :method :path :count times')]
+    #[Then('the API :api should have received :method :path exactly :count time(s)')]
     public function theApiShouldHaveReceivedTimes(string $api, string $method, string $path, int $count): void
     {
         $actual = $this->wireMock_requireAdmin()->waitForRequests($method, $this->wireMock_url($api, $path), $count);

@@ -12,23 +12,33 @@ use Behat\Step\Given;
 trait MailFixtureTrait
 {
     /**
-     * Rows: Subject, Text, Reply-To, Attachment (a file name - the file has a short text as content); all optional.
+     * Rows: From, Subject, Text, HTML, Reply-To, Attachment (a file name - the file has a short text as content),
+     * Attachment type (also of the empty attachment), Empty attachment (a file name - no content); all optional. \n in
+     * the HTML becomes a line break.
      */
     #[Given('a mail was sent to :recipient with:')]
     public function aMailWasSentToWith(string $recipient, TableNode $fields): void
     {
         $values = $fields->getRowsHash();
         $mail = [
-            'From' => ['Email' => 'site@example.com'],
+            'From' => ['Email' => $values['From'] ?? 'site@example.com'],
             'To' => [['Email' => $recipient]],
             'Subject' => $values['Subject'] ?? '',
             'Text' => $values['Text'] ?? '',
         ];
+        if (isset($values['HTML'])) {
+            $mail['HTML'] = str_replace('\n', "\n", $values['HTML']);
+        }
         if (isset($values['Reply-To'])) {
             $mail['ReplyTo'] = [['Email' => $values['Reply-To']]];
         }
         if (isset($values['Attachment'])) {
-            $mail['Attachments'] = [['Filename' => $values['Attachment'], 'Content' => base64_encode('attachment')]];
+            $mail['Attachments'][] = ['Filename' => $values['Attachment'], 'Content' => base64_encode('attachment')]
+                + (isset($values['Attachment type']) ? ['ContentType' => $values['Attachment type']] : []);
+        }
+        if (isset($values['Empty attachment'])) {
+            $mail['Attachments'][] = ['Filename' => $values['Empty attachment'], 'Content' => '']
+                + (isset($values['Attachment type']) ? ['ContentType' => $values['Attachment type']] : []);
         }
 
         $baseUrl = getenv('MAILPIT_API_URL');
