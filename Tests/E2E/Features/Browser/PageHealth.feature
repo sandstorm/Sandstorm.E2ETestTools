@@ -18,8 +18,10 @@ Feature: Page health
     When I access the URI path "/"
     Then there should be no JavaScript errors
     And there should be no failed requests
-    # including the lazy image far below
-    And every image should be loaded
+    # the lazy image far below doesn't load by itself - the check doesn't load it (takes 15 s)
+    And the step 'every image should be loaded' should fail with 'a lazy image? "I load all images of the page" first'
+    When I load all images of the page
+    Then every image should be loaded
     And every image should have an alt attribute
 
   Scenario: a broken page

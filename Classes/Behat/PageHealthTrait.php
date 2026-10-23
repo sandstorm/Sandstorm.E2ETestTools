@@ -6,6 +6,7 @@ namespace Sandstorm\E2ETestTools\Behat;
 
 use Behat\Gherkin\Node\TableNode;
 use Behat\Step\Then;
+use Behat\Step\When;
 use PHPUnit\Framework\Assert;
 
 /**
@@ -62,16 +63,33 @@ trait PageHealthTrait
     }
 
     /**
-     * Loads lazy images right away, then waits up to 15 seconds for all images - Neos generates thumbnails on their
-     * first request. Fails with the images the browser can't show (missing, not an image, broken file).
+     * Images are loaded lazily - switch them to eager (the browser loads them right away, the srcset image it picks
+     * stays the same), then wait until every image is loaded. Faster than scrolling through the page.
+     */
+    #[When('I load all images of the page')]
+    public function iLoadAllImagesOfThePage(): void
+    {
+        $this->playwrightRun(<<<'JS'
+            await vars.page.evaluate(() => document.querySelectorAll('img[loading="lazy"]').forEach((image) => image.loading = 'eager'));
+            // thumbnails are generated on their first request - up to 15 seconds
+            await expect.poll(
+                () => vars.page.evaluate(() => [...document.images].filter((image) => !image.complete).map((image) => image.currentSrc || image.src)),
+                {message: 'Images of the page that are not loaded yet', timeout: 15000, intervals: [50]}
+            ).toEqual([]);
+        JS);
+    }
+
+    /**
+     * Waits up to 15 seconds for all images - Neos generates thumbnails on their first request. Fails with the images
+     * the browser can't show (missing, not an image, broken file). Lazy images outside the viewport don't load by
+     * themselves - load them with `I load all images of the page` first.
      */
     #[Then('every image should be loaded')]
     public function everyImageShouldBeLoaded(): void
     {
         $broken = $this->playwrightStrings(self::pageHealth_requirePage() . <<<'JS'
             return await vars.page.evaluate(async () => {
-                document.querySelectorAll('img[loading="lazy"]').forEach((image) => image.loading = 'eager');
-                const timeout = new Promise((resolve) => setTimeout(resolve, 15000, 'still loading after 15 s'));
+                const timeout = new Promise((resolve) => setTimeout(resolve, 15000, 'still loading after 15 s - a lazy image? "I load all images of the page" first'));
                 const problems = await Promise.all([...document.images].map((image) => Promise.race([
                     // decode() waits for the image and fails if it can't be shown - unlike naturalWidth, also fine for SVGs without a size
                     image.decode().then(() => null, () => 'not loaded'),

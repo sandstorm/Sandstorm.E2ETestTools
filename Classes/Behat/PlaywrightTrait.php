@@ -460,6 +460,22 @@ trait PlaywrightTrait
     }
 
     /**
+     * A locator (JS) by ARIA role (button, link, heading, textbox, checkbox, ...) and accessible name - exact. The words
+     * of the form steps work too: "field" finds a form field by its label, "radio button" the role radio.
+     */
+    protected static function playwrightRoleLocator(string $role, string $name, bool $includeHidden = false): string
+    {
+        if ($role === 'field') {
+            return self::playwrightScript('vars.page.getByLabel(%s, {exact: true})', $name);
+        }
+        return self::playwrightScript(
+            'vars.page.getByRole(%s, %s)',
+            $role === 'radio button' ? 'radio' : $role,
+            ['name' => $name, 'exact' => true] + ($includeHidden ? ['includeHidden' => true] : [])
+        );
+    }
+
+    /**
      * The script {@see playwrightRun()} sends.
      */
     protected static function playwrightScript(string $script, mixed ...$values): string

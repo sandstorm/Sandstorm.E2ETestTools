@@ -34,7 +34,7 @@ Feature: Responsive images
     When I access the URI path "/leaning"
     And the screen is 1400 x 900 px with pixel ratio 1
     And I load all images of the page
-    Then every image should load the fitting srcset image, except:
+    Then every image should load the fitting srcset image except:
       | image       | expected               |
       | one larger  | fitting or one larger  |
       | one smaller | fitting or one smaller |

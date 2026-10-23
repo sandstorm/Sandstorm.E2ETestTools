@@ -23,7 +23,7 @@ trait NetworkTrait
      * `I access the URI path` - not a context your own steps open with `browser.newContext()`. Requests to other hosts
      * than the system under test are aborted: the scenarios check whether the site *tries* to load a third party -
      * without real traffic, so they also run without internet access. A navigation to another host (link, redirect,
-     * iframe) gets an empty page instead, so it arrives - check where with `the page URL should start with`.
+     * iframe) gets an empty page instead, so it arrives - check where with `the URL should start with`.
      *
      * The full URLs are in `vars.externalRequests`, for own steps.
      */

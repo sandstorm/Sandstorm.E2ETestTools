@@ -73,8 +73,8 @@ trait PageAssertionsTrait
     }
 
     /**
-     * :role is an ARIA role (button, link, heading, textbox, ...), :name the accessible name - the exact caption or
-     * label. Fails with the element that has the focus instead.
+     * :role is an ARIA role (button, link, heading, textbox, ...) or a word of the form steps (field, radio button),
+     * :name the accessible name - the exact caption or label. Fails with the element that has the focus instead.
      */
     #[Then('the :role :name should be focused')]
     public function theShouldBeFocused(string $role, string $name): void
@@ -136,6 +136,33 @@ trait PageAssertionsTrait
         $this->pageAssertions_expectVisible($this->pageAssertions_role($role, $name), 'toBeDisabled(%s)');
     }
 
+    /**
+     * "radio button" is two words - :role matches one.
+     */
+    #[Then('the radio button :name should be visible')]
+    public function theRadioButtonShouldBeVisible(string $name): void
+    {
+        $this->theShouldBeVisible('radio button', $name);
+    }
+
+    #[Then('the radio button :name should be hidden')]
+    public function theRadioButtonShouldBeHidden(string $name): void
+    {
+        $this->theShouldBeHidden('radio button', $name);
+    }
+
+    #[Then('the radio button :name should be enabled')]
+    public function theRadioButtonShouldBeEnabled(string $name): void
+    {
+        $this->theShouldBeEnabled('radio button', $name);
+    }
+
+    #[Then('the radio button :name should be disabled')]
+    public function theRadioButtonShouldBeDisabled(string $name): void
+    {
+        $this->theShouldBeDisabled('radio button', $name);
+    }
+
     #[Then('the :role :name should be in the viewport')]
     public function theShouldBeInTheViewport(string $role, string $name): void
     {
@@ -148,27 +175,40 @@ trait PageAssertionsTrait
         $this->pageAssertions_expectVisible($this->pageAssertions_role($role, $name), 'not.toBeInViewport(%s)');
     }
 
-    /**
-     * :state is one of visible, hidden, focused, enabled, disabled
-     */
-    #[Then('the element with test id :testId should be :state')]
-    public function theElementWithTestIdShouldBe(string $testId, string $state): void
+    #[Then('the element with test id :testId should be visible')]
+    public function theElementWithTestIdShouldBeVisible(string $testId): void
     {
-        $matchers = [
-            'visible' => 'toBeVisible(%s)',
-            'hidden' => 'toHaveCount(0, %s)',
-            'focused' => 'toBeFocused(%s)',
-            'enabled' => 'toBeEnabled(%s)',
-            'disabled' => 'toBeDisabled(%s)',
-        ];
-        if (!array_key_exists($state, $matchers)) {
-            throw new \InvalidArgumentException(sprintf('Unknown state "%s" - use one of: %s.', $state, implode(', ', array_keys($matchers))));
-        }
-        if ($state === 'focused') {
-            $this->pageAssertions_expectFocused($this->pageAssertions_testId($testId) . '.filter({visible: true})', 'false', '');
-            return;
-        }
-        $this->pageAssertions_expectVisible($this->pageAssertions_testId($testId), $matchers[$state]);
+        $this->pageAssertions_expectVisible($this->pageAssertions_testId($testId), 'toBeVisible(%s)');
+    }
+
+    /**
+     * No visible copy - also passes if there is no such element.
+     */
+    #[Then('the element with test id :testId should be hidden')]
+    public function theElementWithTestIdShouldBeHidden(string $testId): void
+    {
+        $this->pageAssertions_expectVisible($this->pageAssertions_testId($testId), 'toHaveCount(0, %s)');
+    }
+
+    #[Then('the element with test id :testId should be focused')]
+    public function theElementWithTestIdShouldBeFocused(string $testId): void
+    {
+        $this->pageAssertions_expectFocused($this->pageAssertions_testId($testId) . '.filter({visible: true})', 'false', '');
+    }
+
+    #[Then('the element with test id :testId should be enabled')]
+    public function theElementWithTestIdShouldBeEnabled(string $testId): void
+    {
+        $this->pageAssertions_expectVisible($this->pageAssertions_testId($testId), 'toBeEnabled(%s)');
+    }
+
+    /**
+     * Also passes for aria-disabled="true".
+     */
+    #[Then('the element with test id :testId should be disabled')]
+    public function theElementWithTestIdShouldBeDisabled(string $testId): void
+    {
+        $this->pageAssertions_expectVisible($this->pageAssertions_testId($testId), 'toBeDisabled(%s)');
     }
 
     #[Then('the element with test id :testId should be in the viewport')]
@@ -195,11 +235,7 @@ trait PageAssertionsTrait
 
     private function pageAssertions_role(string $role, string $name, bool $includeHidden = false): string
     {
-        return self::playwrightScript(
-            'vars.page.getByRole(%s, %s)',
-            $role,
-            ['name' => $name, 'exact' => true] + ($includeHidden ? ['includeHidden' => true] : [])
-        );
+        return self::playwrightRoleLocator($role, $name, $includeHidden);
     }
 
     private function pageAssertions_timeoutOptions(): string

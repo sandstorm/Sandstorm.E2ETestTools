@@ -42,6 +42,13 @@ Feature: Visible copies
     And the button "Order" should be in the viewport
     And the element with test id "order" should be in the viewport
 
+  Scenario: the words of the form steps as roles
+    Then the field "City" should be visible
+    And the field "City" should be enabled
+    And the radio button "Express" should be visible
+    And the radio button "Express" should be enabled
+    And the field "Hidden only" should be hidden
+
   Scenario: focus inside nested matches
     When I focus the button "Panel button"
     Then the focus should be inside ".panel"

@@ -74,7 +74,7 @@ changes can be released independent of Neos. What changed and how to upgrade: [C
 
 | Package | Neos / Flow | Note |
 |---|---|---|
-| 11.x | 9.1+ | [upgrading from 10.x](CHANGELOG.md#upgrading-to-110) |
+| 11.x | 9.1+ | [upgrading from 10.x](CHANGELOG.md#upgrading-the-steps-to-110) |
 | 10.x | 9.1+ | [upgrading from 9.1](CHANGELOG.md#upgrading-the-steps-to-100) |
 | 9.1.x | 9.1+ | [migrating from Neos 8](CHANGELOG.md#migrating-tests-from-neos-8) |
 | 8.x | 8 | latest 8.3.2 |
@@ -460,7 +460,7 @@ Comes with `FusionRenderingTrait`.
 - `I access the URI path :uriPath` - opens a new page
 - `I reload the page`
 - `the URI path should be :uriPath` - waits for the navigation
-- `the page URL should start with :url` - the full URL, e.g. where a link to a payment provider led; a prefix, so a
+- `the URL should start with :url` - the full URL, e.g. where a link to a payment provider led; a prefix, so a
   token at the end doesn't matter
 - `the response status code should be :status`
 - `the viewport is :width x :height px` - reloads the page
@@ -472,7 +472,7 @@ Comes with `FusionRenderingTrait`.
 ### NeosBackendControlTrait
 
 - `I have a Neos backend user :username with password :password and role :role`
-- `I log into the backend using credentials :username :password [with username placeholder ... and password placeholder ...]`
+- `I log into the backend as :username with password :password[, with username placeholder ... and password placeholder ...]`
 - `I click the main menu item :menuItem`
 - `I click the overview dashboard tile :tileTitle`
 - `I click the document tree entry :documentTitle`
@@ -489,6 +489,8 @@ Comes with `FusionRenderingTrait`.
 - `the :role :name should (not) be in the viewport`
 - `the :role :name should be visible/hidden/enabled/disabled` - `hidden`: no visible copy; it also finds elements
   hidden from assistive technology, and passes if there is no such element
+- :role is an ARIA role (`button`, `link`, `heading`, `textbox`, `checkbox`, ...) or a word of the form steps: `field`
+  (a form field by its label), `radio button`
 - `the element with test id :testId should be visible/hidden/focused/enabled/disabled`
 - `the element with test id :testId should (not) be in the viewport`
 
@@ -523,8 +525,8 @@ Comes with `FusionRenderingTrait`.
 ### NetworkTrait
 
 - `requests to other hosts are recorded and blocked` - before the first visit; the site under test is not blocked. A
-  navigation to another host (link, form, JavaScript, iframe) gets an empty page, so it arrives - check it with `the
-  page URL should start with`. Not covered: a server redirect (302/303) to another host - Playwright doesn't route the
+  navigation to another host (link, form, JavaScript, iframe) gets an empty page, so it arrives - check it with `the URL
+  should start with`. Not covered: a server redirect (302/303) to another host - Playwright doesn't route the
   redirect target, the browser really requests it; make the target configurable for the tests. Also not covered:
   contexts your own steps open (`browser.newContext()`) - the route is on the scenario's context. Own steps find the
   full URLs in `vars.externalRequests`.
@@ -541,8 +543,9 @@ messages, the last 100 requests).
 - `there should be no JavaScript errors` - uncaught errors and `console.error()`
 - `there should be no failed requests [except:]` - requests to the site under test that failed or got 4xx/5xx (other
   hosts are ignored - see `NetworkTrait`); the table's column `URI path` lists known gaps (part of the path)
-- `every image should be loaded` - loads lazy images right away, waits up to 15 seconds (thumbnails are generated on
-  their first request)
+- `I load all images of the page` - lazy images eager, waits until all are loaded (up to 15 seconds)
+- `every image should be loaded` - waits up to 15 seconds (thumbnails are generated on their first request); lazy
+  images outside the viewport don't load by themselves - `I load all images of the page` first
 - `every image should have an alt attribute` - `alt=""` and images hidden from assistive technology pass
 
 ```gherkin
@@ -550,23 +553,25 @@ Scenario: the homepage is healthy
   When I access the URI path "/"
   Then there should be no JavaScript errors
   And there should be no failed requests
-  And every image should be loaded
+  When I load all images of the page
+  Then every image should be loaded
   And every image should have an alt attribute
 ```
 
 ### ResponsiveImageTrait
 
 Checks that every image loads the **fitting srcset image** - i.e. that `sizes` tells the browser the width the image is
-really shown with. Chromium only (like `the screen is ... with pixel ratio ...`). Needs `FusionRenderingTrait` (for the
-assets) and php-vips (`jcupitt/vips` with ext-ffi) or ext-gd to generate the test images.
+really shown with. Chromium only (like `the screen is ... with pixel ratio ...`). Needs `PageHealthTrait` (`I load all
+images of the page`), `FusionRenderingTrait` (for the assets) and php-vips (`jcupitt/vips` with ext-ffi) or ext-gd to
+generate the test images.
 
 - `I have :count generated test images` - 1600 x 1000 JPEGs with the ids `image-1` ... `image-n`, each showing its id
   (also the asset title). Every image has different content: identical files would share their thumbnails, and the
   browser could reuse an already loaded larger image of another slot - give every slot its own image.
 - `I have a generated test image with id :id and aspect ratio :ratio` - e.g. `"3:4"`, the longer side 1600 px
 - `the asset collection :id contains the images :ids` - comma-separated asset ids
-- `I load all images of the page` - lazy images eager, waits until all are loaded (up to 15 seconds)
-- `every image should load the fitting srcset image [, except:]`
+- `every image should load the fitting srcset image [except:]` - load the images first with `I load all images of the
+  page` (PageHealthTrait)
 - `I mark the image sizes on the page`, `I scroll to the image :alt` - for debugging: a badge with the result on every
   image (also on the error screenshot)
 
@@ -594,7 +599,7 @@ Scenario: images on a phone
   When I access the URI path "/images"
   And the screen is 390 x 844 px with pixel ratio 3
   And I load all images of the page
-  Then every image should load the fitting srcset image, except:
+  Then every image should load the fitting srcset image except:
     | image     | expected               |
     | gallery-1 | fitting or one smaller |
     | teaser    | fitting or one larger  |
@@ -638,7 +643,7 @@ No steps - measures the duration of every step and scenario, see "Slow steps" in
 - `the API :api serves :file for :method :path [with status :status]`
 - `I load the stubs :tape of the API :api`
 - `I clear all API stubs`
-- `the API :api should have received :method :path [:count times]`
+- `the API :api should have received :method :path [exactly :count time(s)]`
 
 Setup and details: [Mocked third-party APIs](#mocked-third-party-apis-wiremock).
 
@@ -749,7 +754,7 @@ one directory of mapping files per "tape":
   (`.json` may be omitted); wins over base stubs; a path with query string must match exactly
 - `I load the stubs :tape of the API :api` - imports all mapping files of the tape directory
 - `I clear all API stubs` - back to the base stubs, e.g. when the API's answer changes after an action
-- `the API :api should have received :method :path [:count times]` - asserts an outgoing call, when the call is the
+- `the API :api should have received :method :path [exactly :count time(s)]` - asserts an outgoing call, when the call is the
   feature
 
 While writing a test, `'proxyBaseUrl' => 'https://real.api.example.com'` in the API config forwards unmatched requests

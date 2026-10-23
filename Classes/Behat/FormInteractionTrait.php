@@ -36,13 +36,13 @@ trait FormInteractionTrait
     #[When('I click the button :name')]
     public function iClickTheButton(string $name): void
     {
-        $this->formInteraction_run($this->formInteraction_role('button', $name), 'click()');
+        $this->formInteraction_run(self::playwrightRoleLocator('button', $name), 'click()');
     }
 
     #[When('I click the link :name')]
     public function iClickTheLink(string $name): void
     {
-        $this->formInteraction_run($this->formInteraction_role('link', $name), 'click()');
+        $this->formInteraction_run(self::playwrightRoleLocator('link', $name), 'click()');
     }
 
     #[When('I click the element with test id :testId')]
@@ -164,17 +164,12 @@ trait FormInteractionTrait
     #[When('I focus the :role :name')]
     public function iFocusThe(string $role, string $name): void
     {
-        $this->formInteraction_run($this->formInteraction_role($role, $name), 'focus()');
+        $this->formInteraction_run(self::playwrightRoleLocator($role, $name), 'focus()');
     }
 
     private function formInteraction_label(string $label): string
     {
         return self::playwrightScript('vars.page.getByLabel(%s, {exact: true})', $label);
-    }
-
-    private function formInteraction_role(string $role, string $name): string
-    {
-        return self::playwrightScript('vars.page.getByRole(%s, {name: %s, exact: true})', $role, $name);
     }
 
     /**

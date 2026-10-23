@@ -25,14 +25,14 @@ Feature: Network
     Given requests to other hosts are recorded and blocked
     When I access the URI path "/"
     And I click the link "Pay"
-    Then the page URL should start with "https://example.invalid/pay?amount=10"
+    Then the URL should start with "https://example.invalid/pay?amount=10"
     When I access the URI path "/"
     And I click the button "Pay by script"
-    Then the page URL should start with "https://example.invalid/pay?amount=20"
+    Then the URL should start with "https://example.invalid/pay?amount=20"
     When I access the URI path "/"
     And I click the button "Pay by form"
-    Then the page URL should start with "https://example.invalid/pay?amount=30"
-    And the step 'the page URL should start with "https://example.invalid/checkout"' should fail with "page URL"
+    Then the URL should start with "https://example.invalid/pay?amount=30"
+    And the step 'the URL should start with "https://example.invalid/checkout"' should fail with "page URL"
 
   Scenario: links
     When I access the URI path "/"
