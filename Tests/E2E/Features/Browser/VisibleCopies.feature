@@ -24,11 +24,11 @@ Feature: Visible copies
 
   Scenario: radio button and select on the visible copy
     # the hidden copy has "Express" checked and "M" selected
-    Then the checkbox "Express" should not be checked
+    Then the radio button "Express" should not be checked
     And the field "Size" should have "S" selected
     When I choose the radio button "Express"
     And I select "M" in the field "Size"
-    Then the checkbox "Express" should be checked
+    Then the radio button "Express" should be checked
     And the field "Size" should have "M" selected
     When I click the button "Order"
     Then there should be the text "express yes, size M" in "[data-testid=order-result]"

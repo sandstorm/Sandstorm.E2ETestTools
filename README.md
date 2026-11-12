@@ -502,7 +502,7 @@ Comes with `FusionRenderingTrait`.
 - `I fill :value into the field :label`
 - `the field :label should have the value :value`
 - `I check/uncheck the checkbox :label`
-- `the checkbox :label should (not) be checked`
+- `the checkbox/radio button :label should (not) be checked`
 - `I choose the radio button :label`
 - `I select :option in the field :label`
 - `the field :label should have :option selected`

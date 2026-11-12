@@ -3,7 +3,13 @@
 What changed for projects using the package, the newest version first. Versions follow SemVer since 10.0.0 - see
 [Versions](README.md#versions). A major version comes with upgrade notes for the steps and the playwright-bridge.
 
-## 11.0.0
+## 11.1.0 - 2026-11-12
+
+- `the radio button :label should (not) be checked` (FormInteractionTrait) - the radio wording for `the checkbox
+  :label should (not) be checked`, same lookup and failure message. Have an own step with this wording? Delete it,
+  otherwise Behat reports both as ambiguous.
+
+## 11.0.0 - 2026-10-23
 
 ### Upgrading the steps to 11.0
 

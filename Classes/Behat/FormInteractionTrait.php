@@ -76,12 +76,14 @@ trait FormInteractionTrait
     }
 
     #[Then('the checkbox :label should be checked')]
+    #[Then('the radio button :label should be checked')]
     public function theCheckboxShouldBeChecked(string $label): void
     {
         $this->formInteraction_expect($this->formInteraction_label($label), 'toBeChecked(%s)');
     }
 
     #[Then('the checkbox :label should not be checked')]
+    #[Then('the radio button :label should not be checked')]
     public function theCheckboxShouldNotBeChecked(string $label): void
     {
         $this->formInteraction_expect($this->formInteraction_label($label), 'not.toBeChecked(%s)');
